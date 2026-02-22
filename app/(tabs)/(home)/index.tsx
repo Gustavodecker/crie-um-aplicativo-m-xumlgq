@@ -10,12 +10,14 @@ import {
   RefreshControl,
   Modal,
   TextInput,
+  Platform,
 } from "react-native";
 import { Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -171,6 +173,13 @@ function getMoodLabel(m: string | null) {
   return m ? (map[m] || m) : "-";
 }
 
+function formatDateForDisplay(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 // ─── Screen Types ─────────────────────────────────────────────────────────────
 
 type Screen = 
@@ -187,7 +196,11 @@ export default function HomeScreen() {
   const [errorMessage, setErrorMessage] = useState("");
   const [showError, setShowError] = useState(false);
 
-  const showErr = (msg: string) => { setErrorMessage(msg); setShowError(true); };
+  const showErr = (msg: string) => { 
+    console.log("[Error]", msg);
+    setErrorMessage(msg); 
+    setShowError(true); 
+  };
 
   const renderScreen = () => {
     switch (screen.type) {
@@ -233,6 +246,10 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
   const [objectives, setObjectives] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdBabyId, setCreatedBabyId] = useState("");
+  
+  // Date picker state
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   const loadBabies = useCallback(async () => {
     console.log("[API] Loading babies for consultant");
@@ -251,22 +268,47 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
 
   useEffect(() => { loadBabies(); }, [loadBabies]);
 
+  const handleDateChange = (event: any, date?: Date) => {
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+    }
+    if (date) {
+      setSelectedDate(date);
+      const formattedDate = formatDateForDisplay(date);
+      setBirthDate(formattedDate);
+    }
+  };
+
   const handleAddBaby = async () => {
     if (!babyName || !birthDate || !motherName || !motherPhone || !motherEmail) {
-      showErr("Por favor, preencha todos os campos obrigatórios"); return;
+      showErr("Por favor, preencha todos os campos obrigatórios"); 
+      return;
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) {
-      showErr("Data inválida. Use AAAA-MM-DD"); return;
+      showErr("Data inválida. Use AAAA-MM-DD"); 
+      return;
     }
     setAddLoading(true);
     try {
       console.log("[API] Creating baby:", babyName);
-      const baby = await apiPost<{ id: string }>("/api/babies", { name: babyName, birthDate, motherName, motherPhone, motherEmail, objectives: objectives || null });
+      const baby = await apiPost<{ id: string }>("/api/babies", { 
+        name: babyName, 
+        birthDate, 
+        motherName, 
+        motherPhone, 
+        motherEmail, 
+        objectives: objectives || null 
+      });
       console.log("[API] Baby created:", baby.id);
       setCreatedBabyId(baby.id);
       setShowAddBaby(false);
       setShowSuccessModal(true);
-      setBabyName(""); setBirthDate(""); setMotherName(""); setMotherPhone(""); setMotherEmail(""); setObjectives("");
+      setBabyName(""); 
+      setBirthDate(""); 
+      setMotherName(""); 
+      setMotherPhone(""); 
+      setMotherEmail(""); 
+      setObjectives("");
       loadBabies();
     } catch (error: any) {
       showErr(error.message || "Erro ao cadastrar bebê");
@@ -279,8 +321,17 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Stack.Screen options={{ headerShown: true, title: "Meus Bebês", headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadBabies(); }} />}>
+      <Stack.Screen options={{ 
+        headerShown: true, 
+        title: "Meus Bebês", 
+        headerStyle: { backgroundColor: colors.background }, 
+        headerTintColor: colors.text 
+      }} />
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent} 
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadBabies(); }} />}
+      >
         <View style={styles.header}>
           <Text style={styles.greeting}>Olá, Consultora! 👋</Text>
           <Text style={styles.subtitle}>{babies.length} bebê{babies.length !== 1 ? "s" : ""} cadastrado{babies.length !== 1 ? "s" : ""}</Text>
@@ -322,7 +373,9 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
             return (
               <TouchableOpacity key={baby.id} style={styles.babyCard} onPress={() => { console.log("Tapped baby:", baby.name); onSelectBaby(baby); }}>
                 <View style={styles.babyCardHeader}>
-                  <View style={styles.babyIcon}><IconSymbol ios_icon_name="person.fill" android_material_icon_name="child-care" size={24} color={colors.primary} /></View>
+                  <View style={styles.babyIcon}>
+                    <IconSymbol ios_icon_name="person.fill" android_material_icon_name="child-care" size={24} color={colors.primary} />
+                  </View>
                   <View style={styles.babyInfo}>
                     <Text style={styles.babyName}>{baby.name}</Text>
                     <Text style={styles.motherName}>{baby.motherName}</Text>
@@ -348,24 +401,103 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
         </TouchableOpacity>
       </ScrollView>
 
+      {/* Add Baby Modal */}
       <Modal visible={showAddBaby} transparent animationType="slide" onRequestClose={() => setShowAddBaby(false)}>
         <View style={styles.slideModalOverlay}>
           <View style={styles.slideModalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Cadastrar Bebê</Text>
-              <TouchableOpacity onPress={() => setShowAddBaby(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowAddBaby(false)}>
+                <Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text>
+              </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Text style={styles.formSectionTitle}>Dados do Bebê</Text>
-              <TextInput style={styles.formInput} placeholder="Nome do bebê *" value={babyName} onChangeText={setBabyName} autoCapitalize="words" placeholderTextColor={colors.textSecondary} />
-              <TextInput style={styles.formInput} placeholder="Nascimento * (AAAA-MM-DD)" value={birthDate} onChangeText={setBirthDate} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
+              <TextInput 
+                style={styles.formInput} 
+                placeholder="Nome do bebê *" 
+                value={babyName} 
+                onChangeText={setBabyName} 
+                autoCapitalize="words" 
+                placeholderTextColor={colors.textSecondary} 
+              />
+              
+              {/* Date Picker for Birth Date */}
+              <TouchableOpacity 
+                style={styles.datePickerButton} 
+                onPress={() => setShowDatePicker(true)}
+              >
+                <Text style={[styles.datePickerText, !birthDate && { color: colors.textSecondary }]}>
+                  {birthDate || "Data de Nascimento * (toque para selecionar)"}
+                </Text>
+                <IconSymbol 
+                  ios_icon_name="calendar" 
+                  android_material_icon_name="calendar-today" 
+                  size={20} 
+                  color={colors.primary} 
+                />
+              </TouchableOpacity>
+              
+              {showDatePicker && (
+                <DateTimePicker
+                  value={selectedDate}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  onChange={handleDateChange}
+                  maximumDate={new Date()}
+                />
+              )}
+              
+              {Platform.OS === "ios" && showDatePicker && (
+                <TouchableOpacity 
+                  style={styles.datePickerDoneButton} 
+                  onPress={() => setShowDatePicker(false)}
+                >
+                  <Text style={styles.datePickerDoneText}>Confirmar</Text>
+                </TouchableOpacity>
+              )}
+              
               <Text style={styles.formSectionTitle}>Dados da Mãe</Text>
-              <TextInput style={styles.formInput} placeholder="Nome da mãe *" value={motherName} onChangeText={setMotherName} autoCapitalize="words" placeholderTextColor={colors.textSecondary} />
-              <TextInput style={styles.formInput} placeholder="Telefone *" value={motherPhone} onChangeText={setMotherPhone} keyboardType="phone-pad" placeholderTextColor={colors.textSecondary} />
-              <TextInput style={styles.formInput} placeholder="E-mail *" value={motherEmail} onChangeText={setMotherEmail} autoCapitalize="none" keyboardType="email-address" placeholderTextColor={colors.textSecondary} />
+              <TextInput 
+                style={styles.formInput} 
+                placeholder="Nome da mãe *" 
+                value={motherName} 
+                onChangeText={setMotherName} 
+                autoCapitalize="words" 
+                placeholderTextColor={colors.textSecondary} 
+              />
+              <TextInput 
+                style={styles.formInput} 
+                placeholder="Telefone *" 
+                value={motherPhone} 
+                onChangeText={setMotherPhone} 
+                keyboardType="phone-pad" 
+                placeholderTextColor={colors.textSecondary} 
+              />
+              <TextInput 
+                style={styles.formInput} 
+                placeholder="E-mail *" 
+                value={motherEmail} 
+                onChangeText={setMotherEmail} 
+                autoCapitalize="none" 
+                keyboardType="email-address" 
+                placeholderTextColor={colors.textSecondary} 
+              />
               <Text style={styles.formSectionTitle}>Objetivos</Text>
-              <TextInput style={[styles.formInput, styles.textArea]} placeholder="Objetivos do acompanhamento..." value={objectives} onChangeText={setObjectives} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
-              <TouchableOpacity style={[styles.addButton, addLoading && { opacity: 0.6 }]} onPress={handleAddBaby} disabled={addLoading}>
+              <TextInput 
+                style={[styles.formInput, styles.textArea]} 
+                placeholder="Objetivos do acompanhamento..." 
+                value={objectives} 
+                onChangeText={setObjectives} 
+                multiline 
+                numberOfLines={3} 
+                placeholderTextColor={colors.textSecondary} 
+              />
+              <TouchableOpacity 
+                style={[styles.addButton, addLoading && { opacity: 0.6 }]} 
+                onPress={handleAddBaby} 
+                disabled={addLoading}
+              >
                 {addLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Cadastrar</Text>}
               </TouchableOpacity>
             </ScrollView>
@@ -373,6 +505,7 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
         </View>
       </Modal>
 
+      {/* Success Modal */}
       <Modal visible={showSuccessModal} transparent animationType="fade" onRequestClose={() => setShowSuccessModal(false)}>
         <View style={styles.centeredModalOverlay}>
           <View style={styles.centeredModalContent}>
@@ -381,7 +514,9 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
             </View>
             <Text style={styles.modalTitle}>✅ Bebê Cadastrado!</Text>
             <Text style={styles.modalMessage}>Compartilhe este ID com a mãe para que ela possa fazer login e preencher as rotinas:</Text>
-            <View style={styles.idBox}><Text style={styles.idText}>{createdBabyId}</Text></View>
+            <View style={styles.idBox}>
+              <Text style={styles.idText}>{createdBabyId}</Text>
+            </View>
             <Text style={styles.modalHint}>💡 A mãe deve criar uma conta e usar este ID durante o cadastro</Text>
             <TouchableOpacity style={styles.modalButton} onPress={() => setShowSuccessModal(false)}>
               <Text style={styles.modalButtonText}>Continuar</Text>
@@ -1281,6 +1416,27 @@ const styles = StyleSheet.create({
   roleButtonActive: { borderColor: colors.primary, backgroundColor: colors.primary },
   roleButtonText: { fontSize: 13, fontWeight: "600", color: colors.text },
   roleButtonTextActive: { color: "#FFFFFF" },
+  // Date Picker
+  datePickerButton: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "space-between", 
+    backgroundColor: colors.background, 
+    borderRadius: 10, 
+    padding: 12, 
+    marginBottom: 10, 
+    borderWidth: 1, 
+    borderColor: colors.border 
+  },
+  datePickerText: { fontSize: 15, color: colors.text, flex: 1 },
+  datePickerDoneButton: { 
+    backgroundColor: colors.primary, 
+    borderRadius: 10, 
+    padding: 12, 
+    alignItems: "center", 
+    marginBottom: 10 
+  },
+  datePickerDoneText: { fontSize: 15, fontWeight: "600", color: "#FFFFFF" },
   // Baby Detail
   infoCard: { backgroundColor: colors.card, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
   infoCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
