@@ -285,6 +285,37 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
           <Text style={styles.greeting}>Olá, Consultora! 👋</Text>
           <Text style={styles.subtitle}>{babies.length} bebê{babies.length !== 1 ? "s" : ""} cadastrado{babies.length !== 1 ? "s" : ""}</Text>
         </View>
+
+        {babies.length === 0 && (
+          <View style={styles.welcomeCard}>
+            <View style={styles.welcomeIcon}>
+              <IconSymbol ios_icon_name="moon.stars.fill" android_material_icon_name="bedtime" size={48} color={colors.primary} />
+            </View>
+            <Text style={styles.welcomeTitle}>Bem-vinda ao seu Consultório de Sono! 🌙</Text>
+            <Text style={styles.welcomeText}>
+              Comece cadastrando seu primeiro bebê para iniciar o acompanhamento de rotina de sono.
+            </Text>
+            <View style={styles.featuresList}>
+              <View style={styles.featureItem}>
+                <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={20} color={colors.statusGood} />
+                <Text style={styles.featureText}>Cadastro completo de bebês e contratos</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={20} color={colors.statusGood} />
+                <Text style={styles.featureText}>Registro de rotinas diárias (sonecas e sono noturno)</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={20} color={colors.statusGood} />
+                <Text style={styles.featureText}>Orientações personalizadas para cada bebê</Text>
+              </View>
+              <View style={styles.featureItem}>
+                <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={20} color={colors.statusGood} />
+                <Text style={styles.featureText}>Relatórios e gráficos de evolução</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         <View style={styles.babiesList}>
           {babies.map((baby) => {
             const contractStatus = baby.activeContract?.status || "completed";
@@ -310,7 +341,6 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
               </TouchableOpacity>
             );
           })}
-          {babies.length === 0 && <View style={styles.emptyState}><Text style={styles.emptyStateText}>Nenhum bebê cadastrado</Text><Text style={styles.emptyStateSubtext}>Toque no botão abaixo para cadastrar</Text></View>}
         </View>
         <TouchableOpacity style={styles.addButton} onPress={() => setShowAddBaby(true)}>
           <IconSymbol ios_icon_name="plus.circle.fill" android_material_icon_name="add-circle" size={24} color="#FFF" />
@@ -346,9 +376,13 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
       <Modal visible={showSuccessModal} transparent animationType="fade" onRequestClose={() => setShowSuccessModal(false)}>
         <View style={styles.centeredModalOverlay}>
           <View style={styles.centeredModalContent}>
+            <View style={styles.successIcon}>
+              <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={64} color={colors.statusGood} />
+            </View>
             <Text style={styles.modalTitle}>✅ Bebê Cadastrado!</Text>
-            <Text style={styles.modalMessage}>ID do bebê (para a mãe fazer login):</Text>
+            <Text style={styles.modalMessage}>Compartilhe este ID com a mãe para que ela possa fazer login e preencher as rotinas:</Text>
             <View style={styles.idBox}><Text style={styles.idText}>{createdBabyId}</Text></View>
+            <Text style={styles.modalHint}>💡 A mãe deve criar uma conta e usar este ID durante o cadastro</Text>
             <TouchableOpacity style={styles.modalButton} onPress={() => setShowSuccessModal(false)}>
               <Text style={styles.modalButtonText}>Continuar</Text>
             </TouchableOpacity>
@@ -1198,6 +1232,13 @@ const styles = StyleSheet.create({
   header: { marginBottom: 24 },
   greeting: { fontSize: 28, fontWeight: "bold", color: colors.text, marginBottom: 4 },
   subtitle: { fontSize: 16, color: colors.textSecondary },
+  welcomeCard: { backgroundColor: colors.card, borderRadius: 20, padding: 24, marginBottom: 24, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 },
+  welcomeIcon: { alignSelf: "center", marginBottom: 16 },
+  welcomeTitle: { fontSize: 22, fontWeight: "bold", color: colors.text, textAlign: "center", marginBottom: 12 },
+  welcomeText: { fontSize: 16, color: colors.textSecondary, textAlign: "center", lineHeight: 24, marginBottom: 20 },
+  featuresList: { gap: 12 },
+  featureItem: { flexDirection: "row", alignItems: "center", gap: 12 },
+  featureText: { fontSize: 15, color: colors.text, flex: 1 },
   babiesList: { gap: 12 },
   babyCard: { backgroundColor: colors.card, borderRadius: 16, padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   babyCardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
@@ -1220,19 +1261,21 @@ const styles = StyleSheet.create({
   slideModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   slideModalContent: { backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, maxHeight: "90%" },
   centeredModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
-  centeredModalContent: { backgroundColor: colors.card, borderRadius: 16, padding: 24, width: "100%", maxWidth: 400 },
+  centeredModalContent: { backgroundColor: colors.card, borderRadius: 16, padding: 24, width: "100%", maxWidth: 400, alignItems: "center" },
   modalContent: { backgroundColor: colors.card, borderRadius: 16, padding: 24, width: "100%", maxWidth: 400 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
   modalTitle: { fontSize: 20, fontWeight: "bold", color: colors.text },
-  modalMessage: { fontSize: 16, color: colors.textSecondary, marginBottom: 16 },
-  modalButton: { backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 12, alignItems: "center", marginTop: 8 },
+  modalMessage: { fontSize: 16, color: colors.textSecondary, marginBottom: 16, textAlign: "center" },
+  modalButton: { backgroundColor: colors.primary, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 32, alignItems: "center", marginTop: 8, width: "100%" },
   modalButtonText: { fontSize: 16, fontWeight: "600", color: "#FFFFFF" },
+  modalHint: { fontSize: 13, color: colors.textSecondary, textAlign: "center", marginBottom: 8, fontStyle: "italic" },
+  successIcon: { marginBottom: 16 },
   // Forms
   formSectionTitle: { fontSize: 15, fontWeight: "bold", color: colors.text, marginTop: 8, marginBottom: 6 },
   formInput: { backgroundColor: colors.background, borderRadius: 10, padding: 12, marginBottom: 10, fontSize: 15, borderWidth: 1, borderColor: colors.border, color: colors.text },
   textArea: { height: 80, textAlignVertical: "top" },
-  idBox: { backgroundColor: colors.background, borderRadius: 8, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: colors.border },
-  idText: { fontSize: 13, color: colors.primary, fontWeight: "600" },
+  idBox: { backgroundColor: colors.background, borderRadius: 8, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: colors.border, width: "100%" },
+  idText: { fontSize: 13, color: colors.primary, fontWeight: "600", textAlign: "center" },
   roleButtons: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 8 },
   roleButton: { flex: 1, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", minWidth: 80 },
   roleButtonActive: { borderColor: colors.primary, backgroundColor: colors.primary },
