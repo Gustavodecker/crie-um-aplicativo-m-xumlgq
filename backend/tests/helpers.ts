@@ -117,6 +117,10 @@ export async function deleteTestUser(token: string): Promise<void> {
  * Returns a File object that can be appended to FormData.
  */
 export function createTestFile(filename = "test.txt", content = "test file content", type = "text/plain"): File {
+  // For PDF files, use the correct MIME type
+  if (filename.endsWith(".pdf")) {
+    type = "application/pdf";
+  }
   return new File([content], filename, { type });
 }
 
