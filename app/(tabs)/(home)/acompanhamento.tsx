@@ -208,124 +208,128 @@ export default function AcompanhamentoScreen() {
       }} />
       
       <ScrollView 
-        style={styles.scrollView} 
-        contentContainerStyle={styles.scrollContent}
-        horizontal
-        showsHorizontalScrollIndicator={false}
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={true}
       >
-        {report.dailyEvolution.map((day, index) => {
-          const routine = routines[index];
-          if (!routine) return null;
-          
-          const naps = routine.naps || [];
-          const nightSleep = routine.nightSleep && (routine.nightSleep as any).id ? routine.nightSleep : null;
-          const wakings = nightSleep?.wakings || [];
-          
-          const totalNapDuration = naps.reduce((sum, nap) => {
-            if (nap.fellAsleepTime && nap.wakeUpTime) {
-              return sum + calcTimeDiff(nap.fellAsleepTime, nap.wakeUpTime);
-            }
-            return sum;
-          }, 0);
-          
-          const nightSleepDuration = nightSleep && nightSleep.fellAsleepTime && nightSleep.finalWakeTime
-            ? calcTimeDiff(nightSleep.fellAsleepTime, nightSleep.finalWakeTime)
-            : 0;
-          
-          return (
-            <View key={day.date} style={styles.dayCard}>
-              <View style={styles.dayHeader}>
-                <Text style={styles.dayTitle}>DIA {index + 1}</Text>
-                <Text style={styles.dayDate}>{formatDateToBR(day.date)}</Text>
-              </View>
-              
-              <View style={styles.divider} />
-              
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Acordou</Text>
-                <Text style={styles.sectionValue}>Às {routine.wakeUpTime}h</Text>
-                <Text style={styles.sectionSubValue}>
-                  Janela de {minutesToHM(naps[0] && naps[0].startTryTime ? calcTimeDiff(routine.wakeUpTime, naps[0].startTryTime) : 0)}
-                </Text>
-              </View>
-              
-              <View style={styles.divider} />
-              
-              {naps.map((nap, napIndex) => {
-                const sleepDuration = nap.fellAsleepTime && nap.wakeUpTime 
-                  ? calcTimeDiff(nap.fellAsleepTime, nap.wakeUpTime) 
-                  : 0;
+        <ScrollView 
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {report.dailyEvolution.map((day, index) => {
+            const routine = routines[index];
+            if (!routine) return null;
+            
+            const naps = routine.naps || [];
+            const nightSleep = routine.nightSleep && (routine.nightSleep as any).id ? routine.nightSleep : null;
+            const wakings = nightSleep?.wakings || [];
+            
+            const totalNapDuration = naps.reduce((sum, nap) => {
+              if (nap.fellAsleepTime && nap.wakeUpTime) {
+                return sum + calcTimeDiff(nap.fellAsleepTime, nap.wakeUpTime);
+              }
+              return sum;
+            }, 0);
+            
+            const nightSleepDuration = nightSleep && nightSleep.fellAsleepTime && nightSleep.finalWakeTime
+              ? calcTimeDiff(nightSleep.fellAsleepTime, nightSleep.finalWakeTime)
+              : 0;
+            
+            return (
+              <View key={day.date} style={styles.dayCard}>
+                <View style={styles.dayHeader}>
+                  <Text style={styles.dayTitle}>DIA {index + 1}</Text>
+                  <Text style={styles.dayDate}>{formatDateToBR(day.date)}</Text>
+                </View>
                 
-                const nextNap = naps[napIndex + 1];
-                const windowToNext = nextNap && nap.wakeUpTime && nextNap.startTryTime
-                  ? calcTimeDiff(nap.wakeUpTime, nextNap.startTryTime)
-                  : 0;
+                <View style={styles.divider} />
                 
-                return (
-                  <React.Fragment key={nap.id}>
-                    <View style={styles.section}>
-                      <Text style={styles.sectionLabel}>Soneca {napIndex + 1}</Text>
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>Acordou</Text>
+                  <Text style={styles.sectionValue}>Às {routine.wakeUpTime}h</Text>
+                  <Text style={styles.sectionSubValue}>
+                    Janela de {minutesToHM(naps[0] && naps[0].startTryTime ? calcTimeDiff(routine.wakeUpTime, naps[0].startTryTime) : 0)}
+                  </Text>
+                </View>
+                
+                <View style={styles.divider} />
+                
+                {naps.map((nap, napIndex) => {
+                  const sleepDuration = nap.fellAsleepTime && nap.wakeUpTime 
+                    ? calcTimeDiff(nap.fellAsleepTime, nap.wakeUpTime) 
+                    : 0;
+                  
+                  const nextNap = naps[napIndex + 1];
+                  const windowToNext = nextNap && nap.wakeUpTime && nextNap.startTryTime
+                    ? calcTimeDiff(nap.wakeUpTime, nextNap.startTryTime)
+                    : 0;
+                  
+                  return (
+                    <React.Fragment key={nap.id}>
+                      <View style={styles.section}>
+                        <Text style={styles.sectionLabel}>Soneca {napIndex + 1}</Text>
+                        <Text style={styles.sectionValue}>
+                          Das {nap.fellAsleepTime || "—"} às {nap.wakeUpTime || "—"} h
+                        </Text>
+                        <Text style={styles.sectionSubValue}>
+                          ({minutesToHM(sleepDuration)})
+                        </Text>
+                        {windowToNext > 0 && (
+                          <Text style={styles.sectionSubValue}>
+                            Janela de {minutesToHM(windowToNext)}
+                          </Text>
+                        )}
+                      </View>
+                      <View style={styles.divider} />
+                    </React.Fragment>
+                  );
+                })}
+                
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>Duração do Sono Diurno</Text>
+                  <Text style={styles.sectionValue}>
+                    Somatória das Sonecas {minutesToHM(totalNapDuration)}
+                  </Text>
+                </View>
+                
+                <View style={styles.divider} />
+                
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>Sono Noturno</Text>
+                  {nightSleep ? (
+                    <>
                       <Text style={styles.sectionValue}>
-                        Das {nap.fellAsleepTime || "—"} às {nap.wakeUpTime || "—"} h
+                        Iniciou às {nightSleep.startTryTime || "—"}h
                       </Text>
                       <Text style={styles.sectionSubValue}>
-                        ({minutesToHM(sleepDuration)})
+                        ({minutesToHM(nightSleepDuration)})
                       </Text>
-                      {windowToNext > 0 && (
-                        <Text style={styles.sectionSubValue}>
-                          Janela de {minutesToHM(windowToNext)}
-                        </Text>
-                      )}
-                    </View>
-                    <View style={styles.divider} />
-                  </React.Fragment>
-                );
-              })}
-              
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Duração do Sono Diurno</Text>
-                <Text style={styles.sectionValue}>
-                  Somatória das Sonecas {minutesToHM(totalNapDuration)}
-                </Text>
-              </View>
-              
-              <View style={styles.divider} />
-              
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Sono Noturno</Text>
-                {nightSleep ? (
+                    </>
+                  ) : (
+                    <Text style={styles.sectionValue}>—</Text>
+                  )}
+                </View>
+                
+                {wakings.length > 0 && (
                   <>
-                    <Text style={styles.sectionValue}>
-                      Iniciou às {nightSleep.startTryTime || "—"}h
-                    </Text>
-                    <Text style={styles.sectionSubValue}>
-                      ({minutesToHM(nightSleepDuration)})
-                    </Text>
+                    <View style={styles.divider} />
+                    <View style={styles.section}>
+                      <Text style={styles.sectionLabel}>Despertares:</Text>
+                      {wakings.map((waking, wakingIndex) => {
+                        const duration = calcTimeDiff(waking.startTime, waking.endTime);
+                        return (
+                          <Text key={waking.id} style={styles.sectionValue}>
+                            {wakingIndex + 1}º → {waking.startTime} - {waking.endTime} ({minutesToHM(duration)})
+                          </Text>
+                        );
+                      })}
+                    </View>
                   </>
-                ) : (
-                  <Text style={styles.sectionValue}>—</Text>
                 )}
               </View>
-              
-              {wakings.length > 0 && (
-                <>
-                  <View style={styles.divider} />
-                  <View style={styles.section}>
-                    <Text style={styles.sectionLabel}>Despertares:</Text>
-                    {wakings.map((waking, wakingIndex) => {
-                      const duration = calcTimeDiff(waking.startTime, waking.endTime);
-                      return (
-                        <Text key={waking.id} style={styles.sectionValue}>
-                          {wakingIndex + 1}º → {waking.startTime} - {waking.endTime} ({minutesToHM(duration)})
-                        </Text>
-                      );
-                    })}
-                  </View>
-                </>
-              )}
-            </View>
-          );
-        })}
+            );
+          })}
+        </ScrollView>
       </ScrollView>
     </SafeAreaView>
   );
@@ -363,54 +367,54 @@ const styles = StyleSheet.create({
   
   dayCard: {
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 12,
+    padding: 16,
     marginRight: 16,
-    width: 380,
+    width: 320,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   
   dayHeader: {
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 10,
   },
   dayTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "bold",
     color: colors.primary,
   },
   dayDate: {
-    fontSize: 16,
+    fontSize: 14,
     color: colors.textSecondary,
-    marginTop: 4,
+    marginTop: 2,
   },
   
   divider: {
     height: 1,
     backgroundColor: colors.border,
-    marginVertical: 12,
+    marginVertical: 10,
   },
   
   section: {
     marginBottom: 4,
   },
   sectionLabel: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "600",
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: 3,
   },
   sectionValue: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
     marginLeft: 8,
   },
   sectionSubValue: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.textSecondary,
     marginLeft: 16,
     fontStyle: "italic",
