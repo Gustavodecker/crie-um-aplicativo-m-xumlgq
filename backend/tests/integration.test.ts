@@ -7,6 +7,7 @@ describe("API Integration Tests", () => {
   let userId: string;
   let userEmail: string;
   let babyId: string;
+  let babyToken: string;
   let contractId: string;
   let routineId: string;
   let napId: string;
@@ -80,6 +81,11 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Get consultant profile without auth returns 401", async () => {
+    const res = await api("/api/consultant/profile");
+    await expectStatus(res, 401);
+  });
+
   // ===== Babies =====
 
   test("Create baby", async () => {
@@ -98,9 +104,11 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 201);
     const data = await res.json();
     babyId = data.id;
+    babyToken = data.token;
     expect(data.name).toBe("Baby Test");
     expect(data.motherName).toBe("Mother Test");
     expect(data.consultantId).toBe(consultantId);
+    expect(data.token).toBeDefined();
   });
 
   test("Get baby by ID", async () => {
@@ -141,6 +149,21 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Update baby with nonexistent UUID returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/babies/00000000-0000-0000-0000-000000000000",
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Nonexistent Baby",
+        }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
   test("Create baby without required fields returns 400", async () => {
     const res = await authenticatedApi("/api/babies", authToken, {
       method: "POST",
@@ -150,6 +173,21 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 400);
+  });
+
+  test("Create baby without auth returns 401", async () => {
+    const res = await api("/api/babies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby",
+        birthDate: "2024-01-15",
+        motherName: "Mother",
+        motherPhone: "+1234567890",
+        motherEmail: "test@example.com",
+      }),
+    });
+    await expectStatus(res, 401);
   });
 
   test("Get consultant babies list", async () => {
@@ -256,6 +294,20 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Create contract without auth returns 401", async () => {
+    const res = await api("/api/contracts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyId: babyId,
+        startDate: "2026-02-22",
+        durationDays: 30,
+        status: "active",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
   // ===== Routines =====
 
   test("Create routine", async () => {
@@ -322,6 +374,47 @@ describe("API Integration Tests", () => {
       authToken
     );
     await expectStatus(res, 404);
+  });
+
+  test("Update routine with nonexistent ID returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/routines/00000000-0000-0000-0000-000000000000",
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wakeUpTime: "08:00",
+        }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Create routine with nonexistent baby returns 404", async () => {
+    const res = await authenticatedApi("/api/routines", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyId: "00000000-0000-0000-0000-000000000000",
+        date: "2026-02-23",
+        wakeUpTime: "07:00",
+      }),
+    });
+    await expectStatus(res, 404);
+  });
+
+  test("Create routine without auth returns 401", async () => {
+    const res = await api("/api/routines", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyId: babyId,
+        date: "2026-02-23",
+        wakeUpTime: "07:00",
+      }),
+    });
+    await expectStatus(res, 401);
   });
 
   // ===== Naps =====
@@ -392,6 +485,34 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Create nap without auth returns 401", async () => {
+    const res = await api("/api/naps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        routineId: routineId,
+        napNumber: 1,
+        startTryTime: "09:00",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Update nap with nonexistent ID returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/naps/00000000-0000-0000-0000-000000000000",
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wakeUpMood: "fussy",
+        }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
   // ===== Night Sleep =====
 
   test("Create night sleep", async () => {
@@ -448,6 +569,30 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Create night sleep with nonexistent routine returns 404", async () => {
+    const res = await authenticatedApi("/api/night-sleep", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        routineId: "00000000-0000-0000-0000-000000000000",
+        startTryTime: "20:30",
+      }),
+    });
+    await expectStatus(res, 404);
+  });
+
+  test("Create night sleep without auth returns 401", async () => {
+    const res = await api("/api/night-sleep", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        routineId: routineId,
+        startTryTime: "20:30",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
   // ===== Night Wakings =====
 
   test("Create night waking", async () => {
@@ -495,6 +640,19 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 404);
+  });
+
+  test("Create night waking without auth returns 401", async () => {
+    const res = await api("/api/night-wakings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nightSleepId: nightSleepId,
+        startTime: "23:00",
+        endTime: "23:15",
+      }),
+    });
+    await expectStatus(res, 401);
   });
 
   // ===== Orientations =====
@@ -576,6 +734,19 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Create orientation without auth returns 401", async () => {
+    const res = await api("/api/orientations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyId: babyId,
+        date: "2026-02-22",
+        orientationText: "Test orientation",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
   // ===== Sleep Windows =====
 
   test("Create sleep window", async () => {
@@ -636,6 +807,19 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Create sleep window without auth returns 401", async () => {
+    const res = await api("/api/sleep-windows", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ageMonthsMin: 3,
+        ageMonthsMax: 6,
+        windowMinutes: 60,
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
   // ===== Reports =====
 
   test("Get sleep report for baby", async () => {
@@ -663,6 +847,11 @@ describe("API Integration Tests", () => {
     expect(data.endDate).toBe("2026-02-28");
   });
 
+  test("Get sleep report without auth returns 401", async () => {
+    const res = await api(`/api/reports/baby/${babyId}`);
+    await expectStatus(res, 401);
+  });
+
   // ===== File Upload =====
 
   test("Upload contract PDF", async () => {
@@ -681,6 +870,17 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(typeof data.url).toBe("string");
     expect(typeof data.filename).toBe("string");
+  });
+
+  test("Upload contract without auth returns 401", async () => {
+    const form = new FormData();
+    const file = createTestFile("test-contract.pdf", "PDF content");
+    form.append("file", file);
+    const res = await api("/api/upload/contract", {
+      method: "POST",
+      body: form,
+    });
+    await expectStatus(res, 401);
   });
 
   // ===== Authentication & Authorization =====
@@ -705,7 +905,7 @@ describe("API Integration Tests", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        babyId: babyId,
+        token: babyToken,
       }),
     });
     await expectStatus(res, 200);
@@ -714,14 +914,25 @@ describe("API Integration Tests", () => {
     expect(data.motherUserId).toBe(userId);
   });
 
-  test("Register mother with nonexistent baby returns 404", async () => {
+  test("Register mother with nonexistent token returns 404", async () => {
     const res = await authenticatedApi("/api/init/mother", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        babyId: "00000000-0000-0000-0000-000000000000",
+        token: "XXXX",
       }),
     });
     await expectStatus(res, 404);
+  });
+
+  test("Register mother without auth returns 401", async () => {
+    const res = await api("/api/init/mother", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: babyToken,
+      }),
+    });
+    await expectStatus(res, 401);
   });
 });

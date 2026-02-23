@@ -112,6 +112,7 @@ export function registerConsultantRoutes(app: App) {
             type: 'object',
             properties: {
               id: { type: 'string', format: 'uuid' },
+              token: { type: ['string', 'null'] },
               name: { type: 'string' },
               birthDate: { type: 'string', format: 'date' },
               motherName: { type: 'string' },
