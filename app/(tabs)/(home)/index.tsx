@@ -1023,16 +1023,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const handleAddOrUpdateNightSleep = async () => {
     try {
       if (routine.nightSleep) {
-        console.log("[API] Updating night sleep:", routine.nightSleep.id);
-        await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, {
-          startTryTime: routine.nightSleep.startTryTime,
-          fellAsleepTime: routine.nightSleep.fellAsleepTime,
-          finalWakeTime: routine.nightSleep.finalWakeTime,
-          sleepMethod: routine.nightSleep.sleepMethod,
-          environment: routine.nightSleep.environment,
-          wakeUpMood: routine.nightSleep.wakeUpMood,
-          observations: routine.nightSleep.observations
-        });
+        console.log("[API] Night sleep already exists:", routine.nightSleep.id);
+        return;
       } else {
         console.log("[API] Creating night sleep for routine:", routine.id);
         await apiPost("/api/night-sleep", {
@@ -1053,18 +1045,27 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   };
 
   const handleUpdateNightSleep = async (updates: Partial<NightSleep>) => {
-    if (!routine.nightSleep) return;
+    if (!routine.nightSleep || !routine.nightSleep.id) {
+      console.error("[API] Cannot update night sleep - nightSleep or nightSleep.id is undefined");
+      showErr("Erro: Sono noturno não encontrado");
+      return;
+    }
     try {
-      console.log("[API] Updating night sleep:", routine.nightSleep.id);
+      console.log("[API] Updating night sleep:", routine.nightSleep.id, "with updates:", updates);
       await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, updates);
       loadRoutine();
     } catch (error: any) {
+      console.error("[API] Error updating night sleep:", error);
       showErr(error.message || "Erro ao atualizar sono noturno");
     }
   };
 
   const handleAddWaking = async () => {
-    if (!routine.nightSleep) return;
+    if (!routine.nightSleep || !routine.nightSleep.id) {
+      console.error("[API] Cannot add waking - nightSleep or nightSleep.id is undefined");
+      showErr("Erro: Sono noturno não encontrado. Crie o sono noturno primeiro.");
+      return;
+    }
     try {
       console.log("[API] Adding night waking");
       await apiPost("/api/night-wakings", {
@@ -1074,6 +1075,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       });
       loadRoutine();
     } catch (error: any) {
+      console.error("[API] Error adding waking:", error);
       showErr(error.message || "Erro ao adicionar despertar");
     }
   };
@@ -1116,7 +1118,10 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       console.log("[API] Updating waking:", wakingId, field, value);
       const waking = routine.nightSleep?.wakings?.find(w => w.id === wakingId);
-      if (!waking) return;
+      if (!waking) {
+        console.error("[API] Waking not found:", wakingId);
+        return;
+      }
       
       const updates = {
         startTime: field === "startTime" ? value : waking.startTime,
@@ -1126,6 +1131,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       await apiPut(`/api/night-wakings/${wakingId}`, updates);
       loadRoutine();
     } catch (error: any) {
+      console.error("[API] Error updating waking:", error);
       showErr(error.message || "Erro ao atualizar despertar");
     }
   };
