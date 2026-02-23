@@ -216,14 +216,18 @@ export default function AcompanhamentoScreen() {
     const dayNumber = index + 1;
     const wakeUpTime = routine.wakeUpTime;
     
-    const firstNapWindow = naps[0] && naps[0].fellAsleepTime 
-      ? calcTimeDiff(wakeUpTime, naps[0].fellAsleepTime) 
-      : 0;
-    
     const dayNumberText = `DIA ${dayNumber}`;
     const dateText = formatDateToBR(routine.date);
     const wakeUpText = `ACORDOU ÀS ${wakeUpTime}`;
-    const windowText = firstNapWindow > 0 ? `JANELA DE: ${minutesToHM(firstNapWindow)}` : "";
+    
+    let totalSleepWindowText = "";
+    if (nightSleep && nightSleep.fellAsleepTime && wakeUpTime) {
+      const totalWindow = calcTimeDiff(nightSleep.fellAsleepTime, wakeUpTime);
+      const netWindow = totalWindow - totalWakingDuration;
+      totalSleepWindowText = `JANELA DE: ${minutesToHM(netWindow)}`;
+    }
+    
+    const totalNapDurationText = `Somatória das sonecas: ${minutesToHM(totalNapDuration)}`;
     
     return (
       <View key={routine.id} style={styles.dayCard}>
@@ -237,8 +241,8 @@ export default function AcompanhamentoScreen() {
           
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{wakeUpText}</Text>
-            {windowText !== "" && (
-              <Text style={styles.sectionValue}>{windowText}</Text>
+            {totalSleepWindowText !== "" && (
+              <Text style={styles.sectionValue}>{totalSleepWindowText}</Text>
             )}
           </View>
           
@@ -259,9 +263,8 @@ export default function AcompanhamentoScreen() {
             
             const napLabel = `Soneca ${napIndex + 1}`;
             const napTimeText = nap.fellAsleepTime && nap.wakeUpTime 
-              ? `Das ${nap.fellAsleepTime} às ${nap.wakeUpTime}`
+              ? `Das ${nap.fellAsleepTime} às ${nap.wakeUpTime} (${minutesToHM(sleepDuration)})`
               : "";
-            const napDurationText = sleepDuration > 0 ? `(${minutesToHM(sleepDuration)})` : "";
             const napWindowText = windowToThisNap > 0 ? `Janela de ${minutesToHM(windowToThisNap)}` : "";
             
             return (
@@ -270,9 +273,6 @@ export default function AcompanhamentoScreen() {
                   <Text style={styles.sectionLabel}>{napLabel}</Text>
                   {napTimeText !== "" && (
                     <Text style={styles.sectionValue}>{napTimeText}</Text>
-                  )}
-                  {napDurationText !== "" && (
-                    <Text style={styles.sectionSubValue}>{napDurationText}</Text>
                   )}
                   {napWindowText !== "" && (
                     <Text style={styles.sectionSubValue}>{napWindowText}</Text>
@@ -285,9 +285,7 @@ export default function AcompanhamentoScreen() {
           
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Duração sono diurno:</Text>
-            <Text style={styles.sectionValue}>
-              Somatória das sonecas: {minutesToHM(totalNapDuration)}
-            </Text>
+            <Text style={styles.sectionValue}>{totalNapDurationText}</Text>
           </View>
           
           <View style={styles.divider} />
@@ -297,13 +295,8 @@ export default function AcompanhamentoScreen() {
             {nightSleep && nightSleep.fellAsleepTime ? (
               <>
                 <Text style={styles.sectionValue}>
-                  Iniciou às {nightSleep.fellAsleepTime}
+                  Iniciou às {nightSleep.fellAsleepTime} (Total {minutesToHM(nightSleepDuration)})
                 </Text>
-                {nightSleepDuration > 0 && (
-                  <Text style={styles.sectionSubValue}>
-                    (Total {minutesToHM(nightSleepDuration)})
-                  </Text>
-                )}
               </>
             ) : (
               <Text style={styles.sectionValue}>Não registrado</Text>
