@@ -368,6 +368,14 @@ describe("API Integration Tests", () => {
     expect(routine).toBeDefined();
   });
 
+  test("Get routine with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/routines/invalid-uuid",
+      authToken
+    );
+    await expectStatus(res, 400);
+  });
+
   test("Get routine with nonexistent ID returns 404", async () => {
     const res = await authenticatedApi(
       "/api/routines/00000000-0000-0000-0000-000000000000",
@@ -389,6 +397,21 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Update routine with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/routines/invalid-uuid",
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wakeUpTime: "08:00",
+        }),
+      }
+    );
+    await expectStatus(res, 400);
   });
 
   test("Create routine with nonexistent baby returns 404", async () => {
@@ -472,6 +495,15 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Delete nap with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/naps/invalid-uuid",
+      authToken,
+      { method: "DELETE" }
+    );
+    await expectStatus(res, 400);
+  });
+
   test("Create nap with nonexistent routine returns 404", async () => {
     const res = await authenticatedApi("/api/naps", authToken, {
       method: "POST",
@@ -511,6 +543,21 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Update nap with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/naps/invalid-uuid",
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wakeUpMood: "fussy",
+        }),
+      }
+    );
+    await expectStatus(res, 400);
   });
 
   // ===== Night Sleep =====
@@ -567,6 +614,21 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Update night sleep with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/night-sleep/invalid-uuid",
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wakeUpMood: "happy",
+        }),
+      }
+    );
+    await expectStatus(res, 400);
   });
 
   test("Create night sleep with nonexistent routine returns 404", async () => {
@@ -627,6 +689,15 @@ describe("API Integration Tests", () => {
       { method: "DELETE" }
     );
     await expectStatus(res, 404);
+  });
+
+  test("Delete night waking with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/night-wakings/invalid-uuid",
+      authToken,
+      { method: "DELETE" }
+    );
+    await expectStatus(res, 400);
   });
 
   test("Create night waking with nonexistent sleep record returns 404", async () => {
@@ -721,6 +792,21 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Update orientation with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/orientations/invalid-uuid",
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orientationText: "test",
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
   test("Create orientation with nonexistent baby returns 404", async () => {
     const res = await authenticatedApi("/api/orientations", authToken, {
       method: "POST",
@@ -807,6 +893,21 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Update sleep window with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/sleep-windows/invalid-uuid",
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          windowMinutes: 30,
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
   test("Create sleep window without auth returns 401", async () => {
     const res = await api("/api/sleep-windows", {
       method: "POST",
@@ -850,6 +951,14 @@ describe("API Integration Tests", () => {
   test("Get sleep report without auth returns 401", async () => {
     const res = await api(`/api/reports/baby/${babyId}`);
     await expectStatus(res, 401);
+  });
+
+  test("Get sleep report with invalid baby UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      `/api/reports/baby/invalid-uuid`,
+      authToken
+    );
+    await expectStatus(res, 400);
   });
 
   // ===== File Upload =====
@@ -933,6 +1042,25 @@ describe("API Integration Tests", () => {
         token: babyToken,
       }),
     });
+    await expectStatus(res, 401);
+  });
+
+  // ===== Mother Baby Access =====
+
+  test("Get baby linked to mother", async () => {
+    const res = await authenticatedApi("/api/mother/baby", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBe(babyId);
+    expect(data.motherUserId).toBe(userId);
+    expect(data.ageMonths).toBeGreaterThanOrEqual(0);
+    expect(data.ageDays).toBeGreaterThanOrEqual(0);
+    expect(data.token).toBeDefined();
+    expect(data.activeContract).toBeDefined();
+  });
+
+  test("Get mother baby without auth returns 401", async () => {
+    const res = await api("/api/mother/baby");
     await expectStatus(res, 401);
   });
 });

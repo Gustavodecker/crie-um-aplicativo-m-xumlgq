@@ -5,6 +5,7 @@ import * as authSchema from './db/schema/auth-schema.js';
 // Import route registration functions
 import { registerInitRoutes } from './routes/init.js';
 import { registerConsultantRoutes } from './routes/consultant.js';
+import { registerMotherRoutes } from './routes/mother.js';
 import { registerBabiesRoutes } from './routes/babies.js';
 import { registerContractsRoutes } from './routes/contracts.js';
 import { registerRoutinesRoutes } from './routes/routines.js';
@@ -33,6 +34,7 @@ app.withStorage();
 // Register all routes
 registerInitRoutes(app);
 registerConsultantRoutes(app);
+registerMotherRoutes(app);
 registerBabiesRoutes(app);
 registerContractsRoutes(app);
 registerRoutinesRoutes(app);
