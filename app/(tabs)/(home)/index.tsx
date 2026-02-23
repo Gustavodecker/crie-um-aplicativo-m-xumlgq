@@ -935,11 +935,13 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       console.log("[API] Loading routine:", initialRoutine.id);
       const data = await apiGet<Routine>(`/api/routines/${initialRoutine.id}`);
+      console.log("[API] Routine loaded successfully:", data.id);
       setRoutine(data);
       setConsultantComments(data.consultantComments || "");
       setWakeUpObs(data.motherObservations || "");
       setWakeUpTime(data.wakeUpTime || "07:00");
     } catch (error: any) {
+      console.error("[API] Error loading routine:", error);
       showErr(error.message || "Erro ao carregar rotina");
     } finally {
       setLoading(false);
@@ -956,7 +958,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         wakeUpTime, 
         motherObservations: wakeUpObs 
       });
-      loadRoutine();
+      await loadRoutine();
     } catch (error: any) {
       showErr(error.message || "Erro ao salvar observações");
     } finally {
@@ -970,7 +972,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       console.log("[API] Saving consultant comments for routine:", routine.id);
       await apiPut(`/api/routines/${routine.id}`, { consultantComments });
       showErr("✅ Comentários salvos com sucesso!");
-      loadRoutine();
+      await loadRoutine();
     } catch (error: any) {
       showErr(error.message || "Erro ao salvar comentários");
     } finally {
@@ -993,7 +995,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         wakeUpMood: null,
         observations: null
       });
-      loadRoutine();
+      await loadRoutine();
       setExpandedNaps({ ...expandedNaps, [napNumber]: true });
     } catch (error: any) {
       showErr(error.message || "Erro ao adicionar soneca");
@@ -1002,10 +1004,21 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
   const handleUpdateNap = async (napId: string, updates: Partial<Nap>) => {
     try {
-      console.log("[API] Updating nap:", napId);
+      console.log("[API] Updating nap:", napId, "with updates:", updates);
       await apiPut(`/api/naps/${napId}`, updates);
-      loadRoutine();
+      
+      // Update local state immediately for better UX
+      setRoutine(prev => ({
+        ...prev,
+        naps: prev.naps?.map(nap => 
+          nap.id === napId ? { ...nap, ...updates } : nap
+        )
+      }));
+      
+      // Then reload to ensure consistency
+      await loadRoutine();
     } catch (error: any) {
+      console.error("[API] Error updating nap:", error);
       showErr(error.message || "Erro ao atualizar soneca");
     }
   };
@@ -1014,7 +1027,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       console.log("[API] Deleting nap:", napId);
       await apiDelete(`/api/naps/${napId}`);
-      loadRoutine();
+      await loadRoutine();
     } catch (error: any) {
       showErr(error.message || "Erro ao excluir soneca");
     }
@@ -1027,7 +1040,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         return;
       } else {
         console.log("[API] Creating night sleep for routine:", routine.id);
-        await apiPost("/api/night-sleep", {
+        const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
           routineId: routine.id,
           startTryTime: "20:00",
           fellAsleepTime: null,
@@ -1037,8 +1050,11 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           wakeUpMood: null,
           observations: null
         });
+        
+        // Update local state immediately
+        setRoutine(prev => ({ ...prev, nightSleep: newNightSleep }));
       }
-      loadRoutine();
+      await loadRoutine();
     } catch (error: any) {
       showErr(error.message || "Erro ao salvar sono noturno");
     }
@@ -1052,6 +1068,12 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       if (currentNightSleep && typeof currentNightSleep === 'object' && Object.keys(currentNightSleep).length > 0 && currentNightSleep.id) {
         console.log("[API] Updating existing night sleep:", currentNightSleep.id, "with updates:", updates);
         await apiPut(`/api/night-sleep/${currentNightSleep.id}`, updates);
+        
+        // Update local state immediately for better UX
+        setRoutine(prev => ({
+          ...prev,
+          nightSleep: prev.nightSleep ? { ...prev.nightSleep, ...updates } : null
+        }));
       } else {
         console.log("[API] Night sleep doesn't exist yet, creating it with initial data");
         const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
@@ -1066,10 +1088,12 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           ...updates
         });
         console.log("[API] Night sleep created with ID:", newNightSleep.id);
+        
         // Update local state immediately with the new night sleep
         setRoutine(prev => ({ ...prev, nightSleep: newNightSleep }));
       }
       
+      // Reload to ensure consistency
       await loadRoutine();
     } catch (error: any) {
       console.error("[API] Error processing night sleep:", error);
@@ -1116,33 +1140,45 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       console.log("[API] Deleting night waking:", wakingId);
       await apiDelete(`/api/night-wakings/${wakingId}`);
-      loadRoutine();
+      await loadRoutine();
     } catch (error: any) {
       showErr(error.message || "Erro ao excluir despertar");
     }
   };
 
-  const handleTimeChange = (event: any, date?: Date) => {
+  const handleTimeChange = async (event: any, date?: Date) => {
     if (Platform.OS === "android") {
       setShowTimePicker(false);
     }
+    
     if (date && currentTimeField) {
       const hours = String(date.getHours()).padStart(2, "0");
       const minutes = String(date.getMinutes()).padStart(2, "0");
       const timeString = `${hours}:${minutes}`;
       
-      if (currentTimeField === "wakeUpTime") {
-        setWakeUpTime(timeString);
-      } else if (currentTimeField.startsWith("nap_") && currentNapId) {
-        const field = currentTimeField.split("_")[1];
-        handleUpdateNap(currentNapId, { [field]: timeString });
-      } else if (currentTimeField.startsWith("nightSleep_")) {
-        const field = currentTimeField.split("_")[1];
-        handleUpdateNightSleep({ [field]: timeString });
-      } else if (currentTimeField.startsWith("waking_") && currentWakingId) {
-        const field = currentTimeField.split("_")[1];
-        handleUpdateWaking(currentWakingId, field, timeString);
+      console.log("[Time Picker] Selected time:", timeString, "for field:", currentTimeField);
+      
+      try {
+        if (currentTimeField === "wakeUpTime") {
+          setWakeUpTime(timeString);
+        } else if (currentTimeField.startsWith("nap_") && currentNapId) {
+          const field = currentTimeField.split("_")[1];
+          await handleUpdateNap(currentNapId, { [field]: timeString });
+        } else if (currentTimeField.startsWith("nightSleep_")) {
+          const field = currentTimeField.split("_")[1];
+          await handleUpdateNightSleep({ [field]: timeString });
+        } else if (currentTimeField.startsWith("waking_") && currentWakingId) {
+          const field = currentTimeField.split("_")[1];
+          await handleUpdateWaking(currentWakingId, field, timeString);
+        }
+      } catch (error: any) {
+        console.error("[Time Picker] Error updating time:", error);
+        showErr(error.message || "Erro ao atualizar horário");
       }
+    }
+    
+    if (Platform.OS === "ios") {
+      // Keep picker open on iOS
     }
   };
 
@@ -1161,7 +1197,20 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       };
       
       await apiPut(`/api/night-wakings/${wakingId}`, updates);
-      loadRoutine();
+      
+      // Update local state immediately
+      setRoutine(prev => ({
+        ...prev,
+        nightSleep: prev.nightSleep ? {
+          ...prev.nightSleep,
+          wakings: prev.nightSleep.wakings?.map(w => 
+            w.id === wakingId ? { ...w, ...updates } : w
+          )
+        } : null
+      }));
+      
+      // Then reload to ensure consistency
+      await loadRoutine();
     } catch (error: any) {
       console.error("[API] Error updating waking:", error);
       showErr(error.message || "Erro ao atualizar despertar");
@@ -1169,9 +1218,45 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   };
 
   const openTimePicker = (field: string, napId?: string, wakingId?: string) => {
+    console.log("[Time Picker] Opening for field:", field, "napId:", napId, "wakingId:", wakingId);
     setCurrentTimeField(field);
     setCurrentNapId(napId || null);
     setCurrentWakingId(wakingId || null);
+    
+    // Set initial time based on current value
+    let initialTime = new Date();
+    initialTime.setSeconds(0);
+    initialTime.setMilliseconds(0);
+    
+    if (field === "wakeUpTime") {
+      const [h, m] = wakeUpTime.split(":").map(Number);
+      initialTime.setHours(h, m);
+    } else if (field.startsWith("nap_") && napId) {
+      const nap = routine.naps?.find(n => n.id === napId);
+      const napField = field.split("_")[1];
+      const timeValue = nap?.[napField as keyof Nap];
+      if (timeValue && typeof timeValue === "string") {
+        const [h, m] = timeValue.split(":").map(Number);
+        initialTime.setHours(h, m);
+      }
+    } else if (field.startsWith("nightSleep_")) {
+      const nsField = field.split("_")[1];
+      const timeValue = routine.nightSleep?.[nsField as keyof NightSleep];
+      if (timeValue && typeof timeValue === "string") {
+        const [h, m] = timeValue.split(":").map(Number);
+        initialTime.setHours(h, m);
+      }
+    } else if (field.startsWith("waking_") && wakingId) {
+      const waking = routine.nightSleep?.wakings?.find(w => w.id === wakingId);
+      const wakingField = field.split("_")[1];
+      const timeValue = waking?.[wakingField as keyof NightWaking];
+      if (timeValue && typeof timeValue === "string") {
+        const [h, m] = timeValue.split(":").map(Number);
+        initialTime.setHours(h, m);
+      }
+    }
+    
+    setSelectedTime(initialTime);
     setShowTimePicker(true);
   };
 
@@ -1554,12 +1639,26 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       </ScrollView>
 
       {showTimePicker && (
-        <DateTimePicker
-          value={selectedTime}
-          mode="time"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={handleTimeChange}
-        />
+        <>
+          <DateTimePicker
+            value={selectedTime}
+            mode="time"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            onChange={handleTimeChange}
+          />
+          {Platform.OS === "ios" && (
+            <View style={styles.timePickerOverlay}>
+              <View style={styles.timePickerContainer}>
+                <TouchableOpacity 
+                  style={styles.timePickerDoneButton} 
+                  onPress={() => setShowTimePicker(false)}
+                >
+                  <Text style={styles.timePickerDoneText}>Confirmar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </>
       )}
     </SafeAreaView>
   );
@@ -1956,6 +2055,8 @@ const styles = StyleSheet.create({
   reportDayStats: { flexDirection: "row", gap: 16 },
   reportDayStat: { fontSize: 13, color: colors.textSecondary },
   dateRow: { flexDirection: "row", gap: 8 },
+  timePickerOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: colors.card, padding: 16, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  timePickerContainer: { alignItems: "center" },
 });
 
 export default HomeScreen;
