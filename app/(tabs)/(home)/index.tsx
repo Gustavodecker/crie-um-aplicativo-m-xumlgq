@@ -11,6 +11,7 @@ import {
   Modal,
   TextInput,
   Platform,
+  Switch,
 } from "react-native";
 import { Stack } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -135,14 +136,16 @@ interface Report {
 function minutesToHM(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return `${h}h${m.toString().padStart(2, "0")}m`;
+  const hText = `${h}h`;
+  const mText = `${m.toString().padStart(2, "0")}m`;
+  return `${hText}${mText}`;
 }
 
 function calcTimeDiff(start: string, end: string): number {
   const [sh, sm] = start.split(":").map(Number);
   const [eh, em] = end.split(":").map(Number);
   let diff = (eh * 60 + em) - (sh * 60 + sm);
-  if (diff < 0) diff += 24 * 60; // overnight
+  if (diff < 0) diff += 24 * 60;
   return diff;
 }
 
@@ -158,26 +161,16 @@ function getStatusText(status: string) {
   return "Concluído";
 }
 
-function getSleepMethodLabel(m: string | null) {
-  const map: Record<string, string> = { colo: "Colo", embalo: "Embalo", mamando: "Mamando", sozinho_berco: "Sozinho no berço" };
-  return m ? (map[m] || m) : "-";
-}
-
-function getEnvironmentLabel(e: string | null) {
-  const map: Record<string, string> = { adequado: "Adequado", parcialmente_adequado: "Parcialmente adequado", inadequado: "Inadequado" };
-  return e ? (map[e] || e) : "-";
-}
-
-function getMoodLabel(m: string | null) {
-  const map: Record<string, string> = { bom_humor: "Bom humor", sorrindo: "Sorrindo", choroso: "Choroso", muito_irritado: "Muito irritado" };
-  return m ? (map[m] || m) : "-";
-}
-
 function formatDateForDisplay(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function formatDateToBR(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-");
+  return `${day}/${month}/${year}`;
 }
 
 // ─── Screen Types ─────────────────────────────────────────────────────────────
@@ -247,7 +240,6 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdBabyId, setCreatedBabyId] = useState("");
   
-  // Date picker state
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
@@ -323,7 +315,7 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
     <SafeAreaView style={styles.container} edges={["top"]}>
       <Stack.Screen options={{ 
         headerShown: true, 
-        title: "Meus Bebês", 
+        title: "Bebês", 
         headerStyle: { backgroundColor: colors.background }, 
         headerTintColor: colors.text 
       }} />
@@ -346,24 +338,6 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
             <Text style={styles.welcomeText}>
               Comece cadastrando seu primeiro bebê para iniciar o acompanhamento de rotina de sono.
             </Text>
-            <View style={styles.featuresList}>
-              <View style={styles.featureItem}>
-                <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={20} color={colors.statusGood} />
-                <Text style={styles.featureText}>Cadastro completo de bebês e contratos</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={20} color={colors.statusGood} />
-                <Text style={styles.featureText}>Registro de rotinas diárias (sonecas e sono noturno)</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={20} color={colors.statusGood} />
-                <Text style={styles.featureText}>Orientações personalizadas para cada bebê</Text>
-              </View>
-              <View style={styles.featureItem}>
-                <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={20} color={colors.statusGood} />
-                <Text style={styles.featureText}>Relatórios e gráficos de evolução</Text>
-              </View>
-            </View>
           </View>
         )}
 
@@ -401,7 +375,6 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Add Baby Modal */}
       <Modal visible={showAddBaby} transparent animationType="slide" onRequestClose={() => setShowAddBaby(false)}>
         <View style={styles.slideModalOverlay}>
           <View style={styles.slideModalContent}>
@@ -422,7 +395,6 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
                 placeholderTextColor={colors.textSecondary} 
               />
               
-              {/* Date Picker for Birth Date */}
               <TouchableOpacity 
                 style={styles.datePickerButton} 
                 onPress={() => setShowDatePicker(true)}
@@ -505,7 +477,6 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
         </View>
       </Modal>
 
-      {/* Success Modal */}
       <Modal visible={showSuccessModal} transparent animationType="fade" onRequestClose={() => setShowSuccessModal(false)}>
         <View style={styles.centeredModalOverlay}>
           <View style={styles.centeredModalContent}>
@@ -545,12 +516,10 @@ function BabyDetailScreen({ baby, onBack, onOpenRoutine, onOpenOrientations, onO
   const [routineDate, setRoutineDate] = useState(new Date().toISOString().split("T")[0]);
   const [routineWakeTime, setRoutineWakeTime] = useState("07:00");
   const [routineObs, setRoutineObs] = useState("");
-  // Contract form
   const [contractStartDate, setContractStartDate] = useState(contract?.startDate || new Date().toISOString().split("T")[0]);
   const [contractDuration, setContractDuration] = useState(String(contract?.durationDays || 21));
   const [contractStatus, setContractStatus] = useState(contract?.status || "active");
   const [contractLoading, setContractLoading] = useState(false);
-  // Edit baby
   const [editName, setEditName] = useState(baby.name);
   const [editObjectives, setEditObjectives] = useState(baby.objectives || "");
   const [editConclusion, setEditConclusion] = useState(baby.conclusion || "");
@@ -641,7 +610,6 @@ function BabyDetailScreen({ baby, onBack, onOpenRoutine, onOpenOrientations, onO
       )}} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(); }} />}>
         
-        {/* Baby Info Card */}
         <View style={styles.infoCard}>
           <View style={styles.infoCardHeader}>
             <View>
@@ -656,7 +624,6 @@ function BabyDetailScreen({ baby, onBack, onOpenRoutine, onOpenOrientations, onO
           {baby.conclusion && <Text style={styles.infoCardText}>✅ {baby.conclusion}</Text>}
         </View>
 
-        {/* Contract Card */}
         <TouchableOpacity style={[styles.contractCard, { borderColor: contract ? getStatusColor(contract.status) : colors.border }]} onPress={() => { setContractStartDate(contract?.startDate || new Date().toISOString().split("T")[0]); setContractDuration(String(contract?.durationDays || 21)); setContractStatus(contract?.status || "active"); setShowContractModal(true); }}>
           <View style={styles.contractCardHeader}>
             <IconSymbol ios_icon_name="doc.text.fill" android_material_icon_name="description" size={20} color={contract ? getStatusColor(contract.status) : colors.textSecondary} />
@@ -664,13 +631,12 @@ function BabyDetailScreen({ baby, onBack, onOpenRoutine, onOpenOrientations, onO
             {contract && <View style={[styles.statusBadge, { backgroundColor: getStatusColor(contract.status) }]}><Text style={styles.statusText}>{getStatusText(contract.status)}</Text></View>}
           </View>
           {contract ? (
-            <Text style={styles.contractCardText}>Início: {contract.startDate} • {contract.durationDays} dias</Text>
+            <Text style={styles.contractCardText}>Início: {formatDateToBR(contract.startDate)} • {contract.durationDays} dias</Text>
           ) : (
             <Text style={styles.contractCardText}>Toque para adicionar contrato</Text>
           )}
         </TouchableOpacity>
 
-        {/* Quick Actions */}
         <View style={styles.quickActions}>
           <TouchableOpacity style={styles.quickActionBtn} onPress={onOpenOrientations}>
             <IconSymbol ios_icon_name="list.bullet.clipboard.fill" android_material_icon_name="assignment" size={24} color={colors.primary} />
@@ -678,17 +644,16 @@ function BabyDetailScreen({ baby, onBack, onOpenRoutine, onOpenOrientations, onO
           </TouchableOpacity>
           <TouchableOpacity style={styles.quickActionBtn} onPress={onOpenReports}>
             <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar-chart" size={24} color={colors.secondary} />
-            <Text style={styles.quickActionText}>Relatórios</Text>
+            <Text style={styles.quickActionText}>Acompanhamento</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Routines Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Rotinas Diárias</Text>
+          <Text style={styles.sectionTitle}>Rotina Vigente</Text>
           {contractActive && (
             <TouchableOpacity style={styles.addSmallBtn} onPress={() => setShowAddRoutine(true)}>
               <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
-              <Text style={styles.addSmallBtnText}>Nova</Text>
+              <Text style={styles.addSmallBtnText}>Novo Dia</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -696,22 +661,32 @@ function BabyDetailScreen({ baby, onBack, onOpenRoutine, onOpenOrientations, onO
         {routines.length === 0 ? (
           <View style={styles.emptyState}><Text style={styles.emptyStateText}>Nenhuma rotina registrada</Text></View>
         ) : (
-          routines.map((routine) => (
-            <TouchableOpacity key={routine.id} style={styles.routineCard} onPress={() => { console.log("Opening routine:", routine.id); onOpenRoutine(routine); }}>
-              <View style={styles.routineCardHeader}>
-                <Text style={styles.routineDate}>{routine.date}</Text>
-                <Text style={styles.routineWakeTime}>Acordou: {routine.wakeUpTime}</Text>
-              </View>
-              {routine.consultantComments && <Text style={styles.routineComment} numberOfLines={1}>💬 {routine.consultantComments}</Text>}
-              <View style={{ alignItems: "flex-end", marginTop: 4 }}>
-                <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={colors.textSecondary} />
-              </View>
-            </TouchableOpacity>
-          ))
+          routines.map((routine, index) => {
+            const dayNumber = routines.length - index;
+            const routineStatus = routine.consultantComments ? "Concluído" : "Em Preenchimento";
+            const statusColor = routine.consultantComments ? colors.statusGood : colors.statusMedium;
+            
+            return (
+              <TouchableOpacity key={routine.id} style={styles.routineCard} onPress={() => { console.log("Opening routine:", routine.id); onOpenRoutine(routine); }}>
+                <View style={styles.routineCardHeader}>
+                  <View>
+                    <Text style={styles.routineDayNumber}>Dia {dayNumber}</Text>
+                    <Text style={styles.routineDate}>{formatDateToBR(routine.date)}</Text>
+                  </View>
+                  <View style={[styles.routineStatusBadge, { backgroundColor: statusColor }]}>
+                    <Text style={styles.routineStatusText}>{routineStatus}</Text>
+                  </View>
+                </View>
+                {routine.consultantComments && <Text style={styles.routineComment} numberOfLines={2}>💬 {routine.consultantComments}</Text>}
+                <View style={{ alignItems: "flex-end", marginTop: 4 }}>
+                  <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={colors.textSecondary} />
+                </View>
+              </TouchableOpacity>
+            );
+          })
         )}
       </ScrollView>
 
-      {/* Add Routine Modal */}
       <Modal visible={showAddRoutine} transparent animationType="slide" onRequestClose={() => setShowAddRoutine(false)}>
         <View style={styles.slideModalOverlay}>
           <View style={styles.slideModalContent}>
@@ -729,7 +704,6 @@ function BabyDetailScreen({ baby, onBack, onOpenRoutine, onOpenOrientations, onO
         </View>
       </Modal>
 
-      {/* Contract Modal */}
       <Modal visible={showContractModal} transparent animationType="slide" onRequestClose={() => setShowContractModal(false)}>
         <View style={styles.slideModalOverlay}>
           <View style={styles.slideModalContent}>
@@ -754,7 +728,6 @@ function BabyDetailScreen({ baby, onBack, onOpenRoutine, onOpenOrientations, onO
         </View>
       </Modal>
 
-      {/* Edit Baby Modal */}
       <Modal visible={showEditBaby} transparent animationType="slide" onRequestClose={() => setShowEditBaby(false)}>
         <View style={styles.slideModalOverlay}>
           <View style={styles.slideModalContent}>
@@ -790,24 +763,14 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
   const [napLoading, setNapLoading] = useState(false);
   const [nightSleepLoading, setNightSleepLoading] = useState(false);
   const [wakingLoading, setWakingLoading] = useState(false);
-  // Nap form
-  const [napNumber, setNapNumber] = useState("1");
   const [napStartTry, setNapStartTry] = useState("");
   const [napFellAsleep, setNapFellAsleep] = useState("");
   const [napWakeUp, setNapWakeUp] = useState("");
-  const [napMethod, setNapMethod] = useState("");
-  const [napEnv, setNapEnv] = useState("");
-  const [napMood, setNapMood] = useState("");
   const [napObs, setNapObs] = useState("");
-  // Night sleep form
   const [nsStartTry, setNsStartTry] = useState("");
   const [nsFellAsleep, setNsFellAsleep] = useState("");
   const [nsFinalWake, setNsFinalWake] = useState("");
-  const [nsMethod, setNsMethod] = useState("");
-  const [nsEnv, setNsEnv] = useState("");
-  const [nsMood, setNsMood] = useState("");
   const [nsObs, setNsObs] = useState("");
-  // Night waking form
   const [wakingStart, setWakingStart] = useState("");
   const [wakingEnd, setWakingEnd] = useState("");
 
@@ -844,9 +807,10 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
     setNapLoading(true);
     try {
       console.log("[API] Adding nap to routine:", routine.id);
-      await apiPost("/api/naps", { routineId: routine.id, napNumber: parseInt(napNumber), startTryTime: napStartTry, fellAsleepTime: napFellAsleep || null, wakeUpTime: napWakeUp || null, sleepMethod: napMethod || null, environment: napEnv || null, wakeUpMood: napMood || null, observations: napObs || null });
+      const napNumber = (routine.naps || []).length + 1;
+      await apiPost("/api/naps", { routineId: routine.id, napNumber, startTryTime: napStartTry, fellAsleepTime: napFellAsleep || null, wakeUpTime: napWakeUp || null, observations: napObs || null });
       setShowAddNap(false);
-      setNapNumber("1"); setNapStartTry(""); setNapFellAsleep(""); setNapWakeUp(""); setNapMethod(""); setNapEnv(""); setNapMood(""); setNapObs("");
+      setNapStartTry(""); setNapFellAsleep(""); setNapWakeUp(""); setNapObs("");
       loadRoutine();
     } catch (error: any) {
       showErr(error.message || "Erro ao adicionar soneca");
@@ -871,9 +835,9 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
     try {
       console.log("[API] Adding night sleep to routine:", routine.id);
       if (routine.nightSleep) {
-        await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, { startTryTime: nsStartTry, fellAsleepTime: nsFellAsleep || null, finalWakeTime: nsFinalWake || null, sleepMethod: nsMethod || null, environment: nsEnv || null, wakeUpMood: nsMood || null, observations: nsObs || null });
+        await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, { startTryTime: nsStartTry, fellAsleepTime: nsFellAsleep || null, finalWakeTime: nsFinalWake || null, observations: nsObs || null });
       } else {
-        await apiPost("/api/night-sleep", { routineId: routine.id, startTryTime: nsStartTry, fellAsleepTime: nsFellAsleep || null, finalWakeTime: nsFinalWake || null, sleepMethod: nsMethod || null, environment: nsEnv || null, wakeUpMood: nsMood || null, observations: nsObs || null });
+        await apiPost("/api/night-sleep", { routineId: routine.id, startTryTime: nsStartTry, fellAsleepTime: nsFellAsleep || null, finalWakeTime: nsFinalWake || null, observations: nsObs || null });
       }
       setShowAddNightSleep(false);
       loadRoutine();
@@ -917,18 +881,16 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Stack.Screen options={{ headerShown: true, title: `Rotina ${routine.date}`, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerLeft: () => (
+      <Stack.Screen options={{ headerShown: true, title: `Dia ${formatDateToBR(routine.date)}`, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerLeft: () => (
         <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}><IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} /></TouchableOpacity>
       )}} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         
-        {/* Wake up time */}
         <View style={styles.infoCard}>
           <Text style={styles.infoCardTitle}>☀️ Acordou às {routine.wakeUpTime}</Text>
           {routine.motherObservations && <Text style={styles.infoCardText}>Obs: {routine.motherObservations}</Text>}
         </View>
 
-        {/* Consultant Comments */}
         <View style={styles.infoCard}>
           <Text style={styles.formSectionTitle}>💬 Comentários da Consultora</Text>
           <TextInput style={[styles.formInput, styles.textArea]} placeholder="Adicione comentários..." value={consultantComments} onChangeText={setConsultantComments} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
@@ -937,11 +899,10 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
           </TouchableOpacity>
         </View>
 
-        {/* Naps Section */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>😴 Sonecas ({naps.length})</Text>
           {naps.length < 6 && (
-            <TouchableOpacity style={styles.addSmallBtn} onPress={() => { setNapNumber(String(naps.length + 1)); setShowAddNap(true); }}>
+            <TouchableOpacity style={styles.addSmallBtn} onPress={() => setShowAddNap(true)}>
               <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
               <Text style={styles.addSmallBtnText}>Adicionar</Text>
             </TouchableOpacity>
@@ -960,26 +921,33 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
                 </TouchableOpacity>
               </View>
               <View style={styles.napTimes}>
-                <Text style={styles.napTimeText}>Tentativa: {nap.startTryTime}</Text>
-                {nap.fellAsleepTime && <Text style={styles.napTimeText}>Dormiu: {nap.fellAsleepTime}</Text>}
-                {nap.wakeUpTime && <Text style={styles.napTimeText}>Acordou: {nap.wakeUpTime}</Text>}
+                <View style={styles.napTimeRow}>
+                  <Text style={styles.napTimeLabel}>Início:</Text>
+                  <Text style={styles.napTimeValue}>{nap.startTryTime}</Text>
+                </View>
+                {nap.fellAsleepTime && (
+                  <View style={styles.napTimeRow}>
+                    <Text style={styles.napTimeLabel}>Dormiu:</Text>
+                    <Text style={styles.napTimeValue}>{nap.fellAsleepTime}</Text>
+                  </View>
+                )}
+                {nap.wakeUpTime && (
+                  <View style={styles.napTimeRow}>
+                    <Text style={styles.napTimeLabel}>Acordou:</Text>
+                    <Text style={styles.napTimeValue}>{nap.wakeUpTime}</Text>
+                  </View>
+                )}
               </View>
               {timeToSleep !== null && <Text style={styles.napCalc}>⏱ Tempo para dormir: {minutesToHM(timeToSleep)}</Text>}
               {sleepDuration !== null && <Text style={styles.napCalc}>💤 Dormiu: {minutesToHM(sleepDuration)}</Text>}
-              <View style={styles.napDetails}>
-                <Text style={styles.napDetailText}>Método: {getSleepMethodLabel(nap.sleepMethod)}</Text>
-                <Text style={styles.napDetailText}>Ambiente: {getEnvironmentLabel(nap.environment)}</Text>
-                <Text style={styles.napDetailText}>Humor: {getMoodLabel(nap.wakeUpMood)}</Text>
-              </View>
               {nap.observations && <Text style={styles.napObs}>📝 {nap.observations}</Text>}
             </View>
           );
         })}
 
-        {/* Night Sleep Section */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>🌙 Sono Noturno</Text>
-          <TouchableOpacity style={styles.addSmallBtn} onPress={() => { if (nightSleep) { setNsStartTry(nightSleep.startTryTime); setNsFellAsleep(nightSleep.fellAsleepTime || ""); setNsFinalWake(nightSleep.finalWakeTime || ""); setNsMethod(nightSleep.sleepMethod || ""); setNsEnv(nightSleep.environment || ""); setNsMood(nightSleep.wakeUpMood || ""); setNsObs(nightSleep.observations || ""); } setShowAddNightSleep(true); }}>
+          <TouchableOpacity style={styles.addSmallBtn} onPress={() => { if (nightSleep) { setNsStartTry(nightSleep.startTryTime); setNsFellAsleep(nightSleep.fellAsleepTime || ""); setNsFinalWake(nightSleep.finalWakeTime || ""); setNsObs(nightSleep.observations || ""); } setShowAddNightSleep(true); }}>
             <IconSymbol ios_icon_name="pencil" android_material_icon_name="edit" size={18} color="#FFF" />
             <Text style={styles.addSmallBtnText}>{nightSleep ? "Editar" : "Adicionar"}</Text>
           </TouchableOpacity>
@@ -988,21 +956,28 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
         {nightSleep ? (
           <View style={styles.napCard}>
             <View style={styles.napTimes}>
-              <Text style={styles.napTimeText}>Tentativa: {nightSleep.startTryTime}</Text>
-              {nightSleep.fellAsleepTime && <Text style={styles.napTimeText}>Dormiu: {nightSleep.fellAsleepTime}</Text>}
-              {nightSleep.finalWakeTime && <Text style={styles.napTimeText}>Acordou: {nightSleep.finalWakeTime}</Text>}
+              <View style={styles.napTimeRow}>
+                <Text style={styles.napTimeLabel}>Início:</Text>
+                <Text style={styles.napTimeValue}>{nightSleep.startTryTime}</Text>
+              </View>
+              {nightSleep.fellAsleepTime && (
+                <View style={styles.napTimeRow}>
+                  <Text style={styles.napTimeLabel}>Dormiu:</Text>
+                  <Text style={styles.napTimeValue}>{nightSleep.fellAsleepTime}</Text>
+                </View>
+              )}
+              {nightSleep.finalWakeTime && (
+                <View style={styles.napTimeRow}>
+                  <Text style={styles.napTimeLabel}>Acordou:</Text>
+                  <Text style={styles.napTimeValue}>{nightSleep.finalWakeTime}</Text>
+                </View>
+              )}
             </View>
             {nightSleep.fellAsleepTime && nightSleep.finalWakeTime && (
               <Text style={styles.napCalc}>💤 Total: {minutesToHM(calcTimeDiff(nightSleep.fellAsleepTime, nightSleep.finalWakeTime))}</Text>
             )}
-            <View style={styles.napDetails}>
-              <Text style={styles.napDetailText}>Método: {getSleepMethodLabel(nightSleep.sleepMethod)}</Text>
-              <Text style={styles.napDetailText}>Ambiente: {getEnvironmentLabel(nightSleep.environment)}</Text>
-              <Text style={styles.napDetailText}>Humor: {getMoodLabel(nightSleep.wakeUpMood)}</Text>
-            </View>
             {nightSleep.observations && <Text style={styles.napObs}>📝 {nightSleep.observations}</Text>}
             
-            {/* Night Wakings */}
             <View style={[styles.sectionHeader, { marginTop: 12 }]}>
               <Text style={styles.formSectionTitle}>Despertares Noturnos</Text>
               <TouchableOpacity style={styles.addSmallBtn} onPress={() => setShowAddWaking(true)}>
@@ -1023,7 +998,6 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
         )}
       </ScrollView>
 
-      {/* Add Nap Modal */}
       <Modal visible={showAddNap} transparent animationType="slide" onRequestClose={() => setShowAddNap(false)}>
         <View style={styles.slideModalOverlay}>
           <View style={styles.slideModalContent}>
@@ -1032,34 +1006,9 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
               <TouchableOpacity onPress={() => setShowAddNap(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <TextInput style={styles.formInput} placeholder="Nº da soneca (1-6)" value={napNumber} onChangeText={setNapNumber} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
               <TextInput style={styles.formInput} placeholder="Início tentativa * (HH:MM)" value={napStartTry} onChangeText={setNapStartTry} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
               <TextInput style={styles.formInput} placeholder="Dormiu (HH:MM)" value={napFellAsleep} onChangeText={setNapFellAsleep} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
               <TextInput style={styles.formInput} placeholder="Acordou (HH:MM)" value={napWakeUp} onChangeText={setNapWakeUp} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-              <Text style={styles.formSectionTitle}>Como dormiu</Text>
-              <View style={styles.chipRow}>
-                {["colo", "embalo", "mamando", "sozinho_berco"].map((m) => (
-                  <TouchableOpacity key={m} style={[styles.chip, napMethod === m && styles.chipActive]} onPress={() => setNapMethod(napMethod === m ? "" : m)}>
-                    <Text style={[styles.chipText, napMethod === m && styles.chipTextActive]}>{getSleepMethodLabel(m)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={styles.formSectionTitle}>Ambiente</Text>
-              <View style={styles.chipRow}>
-                {["adequado", "parcialmente_adequado", "inadequado"].map((e) => (
-                  <TouchableOpacity key={e} style={[styles.chip, napEnv === e && styles.chipActive]} onPress={() => setNapEnv(napEnv === e ? "" : e)}>
-                    <Text style={[styles.chipText, napEnv === e && styles.chipTextActive]}>{getEnvironmentLabel(e)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={styles.formSectionTitle}>Como acordou</Text>
-              <View style={styles.chipRow}>
-                {["bom_humor", "sorrindo", "choroso", "muito_irritado"].map((m) => (
-                  <TouchableOpacity key={m} style={[styles.chip, napMood === m && styles.chipActive]} onPress={() => setNapMood(napMood === m ? "" : m)}>
-                    <Text style={[styles.chipText, napMood === m && styles.chipTextActive]}>{getMoodLabel(m)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
               <TextInput style={[styles.formInput, styles.textArea]} placeholder="Observações..." value={napObs} onChangeText={setNapObs} multiline numberOfLines={2} placeholderTextColor={colors.textSecondary} />
               <TouchableOpacity style={[styles.addButton, napLoading && { opacity: 0.6 }]} onPress={handleAddNap} disabled={napLoading}>
                 {napLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Adicionar Soneca</Text>}
@@ -1069,7 +1018,6 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
         </View>
       </Modal>
 
-      {/* Night Sleep Modal */}
       <Modal visible={showAddNightSleep} transparent animationType="slide" onRequestClose={() => setShowAddNightSleep(false)}>
         <View style={styles.slideModalOverlay}>
           <View style={styles.slideModalContent}>
@@ -1081,30 +1029,6 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
               <TextInput style={styles.formInput} placeholder="Início tentativa * (HH:MM)" value={nsStartTry} onChangeText={setNsStartTry} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
               <TextInput style={styles.formInput} placeholder="Dormiu (HH:MM)" value={nsFellAsleep} onChangeText={setNsFellAsleep} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
               <TextInput style={styles.formInput} placeholder="Acordou final (HH:MM)" value={nsFinalWake} onChangeText={setNsFinalWake} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-              <Text style={styles.formSectionTitle}>Como dormiu</Text>
-              <View style={styles.chipRow}>
-                {["colo", "embalo", "mamando", "sozinho_berco"].map((m) => (
-                  <TouchableOpacity key={m} style={[styles.chip, nsMethod === m && styles.chipActive]} onPress={() => setNsMethod(nsMethod === m ? "" : m)}>
-                    <Text style={[styles.chipText, nsMethod === m && styles.chipTextActive]}>{getSleepMethodLabel(m)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={styles.formSectionTitle}>Ambiente</Text>
-              <View style={styles.chipRow}>
-                {["adequado", "parcialmente_adequado", "inadequado"].map((e) => (
-                  <TouchableOpacity key={e} style={[styles.chip, nsEnv === e && styles.chipActive]} onPress={() => setNsEnv(nsEnv === e ? "" : e)}>
-                    <Text style={[styles.chipText, nsEnv === e && styles.chipTextActive]}>{getEnvironmentLabel(e)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={styles.formSectionTitle}>Como acordou</Text>
-              <View style={styles.chipRow}>
-                {["bom_humor", "sorrindo", "choroso", "muito_irritado"].map((m) => (
-                  <TouchableOpacity key={m} style={[styles.chip, nsMood === m && styles.chipActive]} onPress={() => setNsMood(nsMood === m ? "" : m)}>
-                    <Text style={[styles.chipText, nsMood === m && styles.chipTextActive]}>{getMoodLabel(m)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
               <TextInput style={[styles.formInput, styles.textArea]} placeholder="Observações..." value={nsObs} onChangeText={setNsObs} multiline numberOfLines={2} placeholderTextColor={colors.textSecondary} />
               <TouchableOpacity style={[styles.addButton, nightSleepLoading && { opacity: 0.6 }]} onPress={handleAddNightSleep} disabled={nightSleepLoading}>
                 {nightSleepLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar Sono Noturno</Text>}
@@ -1114,7 +1038,6 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
         </View>
       </Modal>
 
-      {/* Add Waking Modal */}
       <Modal visible={showAddWaking} transparent animationType="slide" onRequestClose={() => setShowAddWaking(false)}>
         <View style={styles.slideModalOverlay}>
           <View style={styles.slideModalContent}>
@@ -1212,7 +1135,7 @@ function OrientationsScreen({ baby, onBack, showErr }: { baby: Baby; onBack: () 
           orientations.map((o) => (
             <View key={o.id} style={styles.orientationCard}>
               <View style={styles.orientationHeader}>
-                <Text style={styles.orientationDate}>{o.date}</Text>
+                <Text style={styles.orientationDate}>{formatDateToBR(o.date)}</Text>
                 <TouchableOpacity onPress={() => { setText(o.orientationText); setResults(o.results || ""); setShowEdit(o); }}>
                   <IconSymbol ios_icon_name="pencil" android_material_icon_name="edit" size={18} color={colors.primary} />
                 </TouchableOpacity>
@@ -1295,7 +1218,7 @@ function ReportsScreen({ baby, onBack, showErr }: { baby: Baby; onBack: () => vo
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Stack.Screen options={{ headerShown: true, title: `Relatórios - ${baby.name}`, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerLeft: () => (
+      <Stack.Screen options={{ headerShown: true, title: `Acompanhamento - ${baby.name}`, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerLeft: () => (
         <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}><IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} /></TouchableOpacity>
       )}} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -1340,7 +1263,7 @@ function ReportsScreen({ baby, onBack, showErr }: { baby: Baby; onBack: () => vo
             {report.dailyEvolution.map((day) => (
               <View key={day.date} style={[styles.reportDayCard, { borderLeftColor: getIndicatorColor(day.indicator), borderLeftWidth: 4 }]}>
                 <View style={styles.reportDayHeader}>
-                  <Text style={styles.reportDayDate}>{day.date}</Text>
+                  <Text style={styles.reportDayDate}>{formatDateToBR(day.date)}</Text>
                   <View style={[styles.indicatorDot, { backgroundColor: getIndicatorColor(day.indicator) }]} />
                 </View>
                 <View style={styles.reportDayStats}>
@@ -1371,9 +1294,6 @@ const styles = StyleSheet.create({
   welcomeIcon: { alignSelf: "center", marginBottom: 16 },
   welcomeTitle: { fontSize: 22, fontWeight: "bold", color: colors.text, textAlign: "center", marginBottom: 12 },
   welcomeText: { fontSize: 16, color: colors.textSecondary, textAlign: "center", lineHeight: 24, marginBottom: 20 },
-  featuresList: { gap: 12 },
-  featureItem: { flexDirection: "row", alignItems: "center", gap: 12 },
-  featureText: { fontSize: 15, color: colors.text, flex: 1 },
   babiesList: { gap: 12 },
   babyCard: { backgroundColor: colors.card, borderRadius: 16, padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   babyCardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
@@ -1391,7 +1311,6 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: "center", paddingVertical: 40 },
   emptyStateText: { fontSize: 18, fontWeight: "600", color: colors.text, marginBottom: 8 },
   emptyStateSubtext: { fontSize: 14, color: colors.textSecondary },
-  // Modals
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
   slideModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   slideModalContent: { backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, maxHeight: "90%" },
@@ -1405,7 +1324,6 @@ const styles = StyleSheet.create({
   modalButtonText: { fontSize: 16, fontWeight: "600", color: "#FFFFFF" },
   modalHint: { fontSize: 13, color: colors.textSecondary, textAlign: "center", marginBottom: 8, fontStyle: "italic" },
   successIcon: { marginBottom: 16 },
-  // Forms
   formSectionTitle: { fontSize: 15, fontWeight: "bold", color: colors.text, marginTop: 8, marginBottom: 6 },
   formInput: { backgroundColor: colors.background, borderRadius: 10, padding: 12, marginBottom: 10, fontSize: 15, borderWidth: 1, borderColor: colors.border, color: colors.text },
   textArea: { height: 80, textAlignVertical: "top" },
@@ -1416,7 +1334,6 @@ const styles = StyleSheet.create({
   roleButtonActive: { borderColor: colors.primary, backgroundColor: colors.primary },
   roleButtonText: { fontSize: 13, fontWeight: "600", color: colors.text },
   roleButtonTextActive: { color: "#FFFFFF" },
-  // Date Picker
   datePickerButton: { 
     flexDirection: "row", 
     alignItems: "center", 
@@ -1437,7 +1354,6 @@ const styles = StyleSheet.create({
     marginBottom: 10 
   },
   datePickerDoneText: { fontSize: 15, fontWeight: "600", color: "#FFFFFF" },
-  // Baby Detail
   infoCard: { backgroundColor: colors.card, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
   infoCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 },
   infoCardTitle: { fontSize: 20, fontWeight: "bold", color: colors.text },
@@ -1456,29 +1372,23 @@ const styles = StyleSheet.create({
   addSmallBtn: { flexDirection: "row", alignItems: "center", backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, gap: 4 },
   addSmallBtnText: { fontSize: 13, fontWeight: "600", color: "#FFF" },
   routineCard: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
-  routineCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
-  routineDate: { fontSize: 16, fontWeight: "bold", color: colors.text },
-  routineWakeTime: { fontSize: 14, color: colors.textSecondary },
-  routineComment: { fontSize: 13, color: colors.primary, marginTop: 4 },
-  // Naps
+  routineCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  routineDayNumber: { fontSize: 18, fontWeight: "bold", color: colors.primary },
+  routineDate: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
+  routineStatusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  routineStatusText: { fontSize: 11, fontWeight: "600", color: "#FFF" },
+  routineComment: { fontSize: 13, color: colors.text, marginTop: 4, fontStyle: "italic" },
   napCard: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
   napCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   napTitle: { fontSize: 16, fontWeight: "bold", color: colors.text },
-  napTimes: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 6 },
-  napTimeText: { fontSize: 13, color: colors.textSecondary, backgroundColor: colors.background, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  napTimes: { gap: 6, marginBottom: 6 },
+  napTimeRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: colors.background, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
+  napTimeLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: "600" },
+  napTimeValue: { fontSize: 14, color: colors.text, fontWeight: "bold" },
   napCalc: { fontSize: 13, color: colors.primary, marginBottom: 4 },
-  napDetails: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
-  napDetailText: { fontSize: 12, color: colors.textSecondary },
   napObs: { fontSize: 13, color: colors.text, marginTop: 6, fontStyle: "italic" },
   wakingRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.border },
   wakingText: { fontSize: 13, color: colors.textSecondary },
-  // Chips
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
-  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
-  chipActive: { borderColor: colors.primary, backgroundColor: colors.primary },
-  chipText: { fontSize: 13, color: colors.text },
-  chipTextActive: { color: "#FFF" },
-  // Orientations
   orientationCard: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 8 },
   orientationHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   orientationDate: { fontSize: 14, fontWeight: "bold", color: colors.primary },
@@ -1486,7 +1396,6 @@ const styles = StyleSheet.create({
   resultsBox: { marginTop: 10, backgroundColor: colors.background, borderRadius: 8, padding: 10 },
   resultsLabel: { fontSize: 12, fontWeight: "bold", color: colors.textSecondary, marginBottom: 4 },
   resultsText: { fontSize: 14, color: colors.text },
-  // Reports
   reportSummary: { backgroundColor: colors.card, borderRadius: 16, padding: 16, marginBottom: 16 },
   reportSummaryTitle: { fontSize: 18, fontWeight: "bold", color: colors.text, marginBottom: 12 },
   reportGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
