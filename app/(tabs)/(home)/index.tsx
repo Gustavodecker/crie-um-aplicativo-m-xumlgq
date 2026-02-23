@@ -1048,12 +1048,13 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       const currentNightSleep = routine.nightSleep;
       
-      if (currentNightSleep && currentNightSleep.id) {
+      // Check if nightSleep exists and has an id (not just an empty object)
+      if (currentNightSleep && typeof currentNightSleep === 'object' && Object.keys(currentNightSleep).length > 0 && currentNightSleep.id) {
         console.log("[API] Updating existing night sleep:", currentNightSleep.id, "with updates:", updates);
         await apiPut(`/api/night-sleep/${currentNightSleep.id}`, updates);
       } else {
         console.log("[API] Night sleep doesn't exist yet, creating it with initial data");
-        await apiPost("/api/night-sleep", {
+        const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
           routineId: routine.id,
           startTryTime: "20:00",
           fellAsleepTime: null,
@@ -1064,6 +1065,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           observations: null,
           ...updates
         });
+        console.log("[API] Night sleep created with ID:", newNightSleep.id);
+        // Update local state immediately with the new night sleep
+        setRoutine(prev => ({ ...prev, nightSleep: newNightSleep }));
       }
       
       await loadRoutine();
