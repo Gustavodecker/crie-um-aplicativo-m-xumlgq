@@ -763,11 +763,6 @@ function RoutineListScreen({ isConsultant, baby, onBack, onOpenRoutine, showErr 
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showAddRoutine, setShowAddRoutine] = useState(false);
-  const [addRoutineLoading, setAddRoutineLoading] = useState(false);
-  const [routineDate, setRoutineDate] = useState(new Date().toISOString().split("T")[0]);
-  const [routineWakeTime, setRoutineWakeTime] = useState("07:00");
-  const [routineObs, setRoutineObs] = useState("");
 
   const loadRoutines = useCallback(async () => {
     try {
@@ -784,25 +779,6 @@ function RoutineListScreen({ isConsultant, baby, onBack, onOpenRoutine, showErr 
   }, [baby.id]);
 
   useEffect(() => { loadRoutines(); }, [loadRoutines]);
-
-  const handleAddRoutine = async () => {
-    if (!routineDate || !routineWakeTime) { showErr("Preencha data e horário de acordar"); return; }
-    setAddRoutineLoading(true);
-    try {
-      console.log("[API] Creating routine for baby:", baby.id);
-      const routine = await apiPost<Routine>("/api/routines", { babyId: baby.id, date: routineDate, wakeUpTime: routineWakeTime, motherObservations: routineObs || null });
-      console.log("[API] Routine created:", routine.id);
-      setShowAddRoutine(false);
-      setRoutineDate(new Date().toISOString().split("T")[0]);
-      setRoutineWakeTime("07:00");
-      setRoutineObs("");
-      loadRoutines();
-    } catch (error: any) {
-      showErr(error.message || "Erro ao criar rotina");
-    } finally {
-      setAddRoutineLoading(false);
-    }
-  };
 
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
 
@@ -852,12 +828,6 @@ function RoutineListScreen({ isConsultant, baby, onBack, onOpenRoutine, showErr 
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Dias da Rotina</Text>
-          {contractActive && (
-            <TouchableOpacity style={styles.addSmallBtn} onPress={() => setShowAddRoutine(true)}>
-              <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
-              <Text style={styles.addSmallBtnText}>Novo Dia</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {totalDays === 0 ? (
@@ -908,23 +878,6 @@ function RoutineListScreen({ isConsultant, baby, onBack, onOpenRoutine, showErr 
           })
         )}
       </ScrollView>
-
-      <Modal visible={showAddRoutine} transparent animationType="slide" onRequestClose={() => setShowAddRoutine(false)}>
-        <View style={styles.slideModalOverlay}>
-          <View style={styles.slideModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nova Rotina</Text>
-              <TouchableOpacity onPress={() => setShowAddRoutine(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
-            </View>
-            <TextInput style={styles.formInput} placeholder="Data (AAAA-MM-DD)" value={routineDate} onChangeText={setRoutineDate} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-            <TextInput style={styles.formInput} placeholder="Horário que acordou (HH:MM)" value={routineWakeTime} onChangeText={setRoutineWakeTime} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-            <TextInput style={[styles.formInput, styles.textArea]} placeholder="Observações da mãe..." value={routineObs} onChangeText={setRoutineObs} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
-            <TouchableOpacity style={[styles.addButton, addRoutineLoading && { opacity: 0.6 }]} onPress={handleAddRoutine} disabled={addRoutineLoading}>
-              {addRoutineLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Criar Rotina</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -938,22 +891,14 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [consultantComments, setConsultantComments] = useState(initialRoutine.consultantComments || "");
-  const [showAddNap, setShowAddNap] = useState(false);
-  const [showAddNightSleep, setShowAddNightSleep] = useState(false);
-  const [showAddWaking, setShowAddWaking] = useState(false);
-  const [napLoading, setNapLoading] = useState(false);
-  const [nightSleepLoading, setNightSleepLoading] = useState(false);
-  const [wakingLoading, setWakingLoading] = useState(false);
-  const [napStartTry, setNapStartTry] = useState("");
-  const [napFellAsleep, setNapFellAsleep] = useState("");
-  const [napWakeUp, setNapWakeUp] = useState("");
-  const [napObs, setNapObs] = useState("");
-  const [nsStartTry, setNsStartTry] = useState("");
-  const [nsFellAsleep, setNsFellAsleep] = useState("");
-  const [nsFinalWake, setNsFinalWake] = useState("");
-  const [nsObs, setNsObs] = useState("");
-  const [wakingStart, setWakingStart] = useState("");
-  const [wakingEnd, setWakingEnd] = useState("");
+  const [wakeUpObs, setWakeUpObs] = useState(initialRoutine.motherObservations || "");
+  const [expandedNaps, setExpandedNaps] = useState<{ [key: number]: boolean }>({});
+  const [expandedWakings, setExpandedWakings] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [currentTimeField, setCurrentTimeField] = useState<string>("");
+  const [currentNapIndex, setCurrentNapIndex] = useState<number | null>(null);
+  const [selectedTime, setSelectedTime] = useState(new Date());
 
   const loadRoutine = useCallback(async () => {
     try {
@@ -961,6 +906,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       const data = await apiGet<Routine>(`/api/routines/${initialRoutine.id}`);
       setRoutine(data);
       setConsultantComments(data.consultantComments || "");
+      setWakeUpObs(data.motherObservations || "");
     } catch (error: any) {
       showErr(error.message || "Erro ao carregar rotina");
     } finally {
@@ -970,7 +916,20 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
   useEffect(() => { loadRoutine(); }, [loadRoutine]);
 
-  const handleSaveComments = async () => {
+  const handleSaveWakeUp = async () => {
+    setSaving(true);
+    try {
+      console.log("[API] Saving wake up observations for routine:", routine.id);
+      await apiPut(`/api/routines/${routine.id}`, { motherObservations: wakeUpObs });
+      loadRoutine();
+    } catch (error: any) {
+      showErr(error.message || "Erro ao salvar observações");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveConsultantComments = async () => {
     setSaving(true);
     try {
       console.log("[API] Saving consultant comments for routine:", routine.id);
@@ -984,19 +943,34 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   };
 
   const handleAddNap = async () => {
-    if (!napStartTry) { showErr("Informe o horário de início da tentativa"); return; }
-    setNapLoading(true);
     try {
-      console.log("[API] Adding nap to routine:", routine.id);
       const napNumber = (routine.naps || []).length + 1;
-      await apiPost("/api/naps", { routineId: routine.id, napNumber, startTryTime: napStartTry, fellAsleepTime: napFellAsleep || null, wakeUpTime: napWakeUp || null, observations: napObs || null });
-      setShowAddNap(false);
-      setNapStartTry(""); setNapFellAsleep(""); setNapWakeUp(""); setNapObs("");
+      console.log("[API] Adding nap", napNumber, "to routine:", routine.id);
+      await apiPost("/api/naps", { 
+        routineId: routine.id, 
+        napNumber, 
+        startTryTime: "08:00",
+        fellAsleepTime: null,
+        wakeUpTime: null,
+        sleepMethod: null,
+        environment: null,
+        wakeUpMood: null,
+        observations: null
+      });
       loadRoutine();
+      setExpandedNaps({ ...expandedNaps, [napNumber]: true });
     } catch (error: any) {
       showErr(error.message || "Erro ao adicionar soneca");
-    } finally {
-      setNapLoading(false);
+    }
+  };
+
+  const handleUpdateNap = async (napId: string, updates: Partial<Nap>) => {
+    try {
+      console.log("[API] Updating nap:", napId);
+      await apiPut(`/api/naps/${napId}`, updates);
+      loadRoutine();
+    } catch (error: any) {
+      showErr(error.message || "Erro ao atualizar soneca");
     }
   };
 
@@ -1010,38 +984,61 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     }
   };
 
-  const handleAddNightSleep = async () => {
-    if (!nsStartTry) { showErr("Informe o horário de início"); return; }
-    setNightSleepLoading(true);
+  const handleAddOrUpdateNightSleep = async () => {
     try {
-      console.log("[API] Adding night sleep to routine:", routine.id);
       if (routine.nightSleep) {
-        await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, { startTryTime: nsStartTry, fellAsleepTime: nsFellAsleep || null, finalWakeTime: nsFinalWake || null, observations: nsObs || null });
+        console.log("[API] Updating night sleep:", routine.nightSleep.id);
+        await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, {
+          startTryTime: routine.nightSleep.startTryTime,
+          fellAsleepTime: routine.nightSleep.fellAsleepTime,
+          finalWakeTime: routine.nightSleep.finalWakeTime,
+          sleepMethod: routine.nightSleep.sleepMethod,
+          environment: routine.nightSleep.environment,
+          wakeUpMood: routine.nightSleep.wakeUpMood,
+          observations: routine.nightSleep.observations
+        });
       } else {
-        await apiPost("/api/night-sleep", { routineId: routine.id, startTryTime: nsStartTry, fellAsleepTime: nsFellAsleep || null, finalWakeTime: nsFinalWake || null, observations: nsObs || null });
+        console.log("[API] Creating night sleep for routine:", routine.id);
+        await apiPost("/api/night-sleep", {
+          routineId: routine.id,
+          startTryTime: "20:00",
+          fellAsleepTime: null,
+          finalWakeTime: null,
+          sleepMethod: null,
+          environment: null,
+          wakeUpMood: null,
+          observations: null
+        });
       }
-      setShowAddNightSleep(false);
       loadRoutine();
     } catch (error: any) {
       showErr(error.message || "Erro ao salvar sono noturno");
-    } finally {
-      setNightSleepLoading(false);
+    }
+  };
+
+  const handleUpdateNightSleep = async (updates: Partial<NightSleep>) => {
+    if (!routine.nightSleep) return;
+    try {
+      console.log("[API] Updating night sleep:", routine.nightSleep.id);
+      await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, updates);
+      loadRoutine();
+    } catch (error: any) {
+      showErr(error.message || "Erro ao atualizar sono noturno");
     }
   };
 
   const handleAddWaking = async () => {
-    if (!wakingStart || !wakingEnd || !routine.nightSleep) { showErr("Preencha os horários do despertar"); return; }
-    setWakingLoading(true);
+    if (!routine.nightSleep) return;
     try {
       console.log("[API] Adding night waking");
-      await apiPost("/api/night-wakings", { nightSleepId: routine.nightSleep.id, startTime: wakingStart, endTime: wakingEnd });
-      setShowAddWaking(false);
-      setWakingStart(""); setWakingEnd("");
+      await apiPost("/api/night-wakings", {
+        nightSleepId: routine.nightSleep.id,
+        startTime: "02:00",
+        endTime: "02:30"
+      });
       loadRoutine();
     } catch (error: any) {
       showErr(error.message || "Erro ao adicionar despertar");
-    } finally {
-      setWakingLoading(false);
     }
   };
 
@@ -1055,6 +1052,31 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     }
   };
 
+  const handleTimeChange = (event: any, date?: Date) => {
+    if (Platform.OS === "android") {
+      setShowTimePicker(false);
+    }
+    if (date && currentTimeField) {
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      const timeString = `${hours}:${minutes}`;
+      
+      if (currentTimeField === "wakeUpTime") {
+        // Update wake up time via API
+      } else if (currentTimeField.startsWith("nap_")) {
+        const napId = currentTimeField.split("_")[1];
+        const field = currentTimeField.split("_")[2];
+        const nap = routine.naps?.find(n => n.id === napId);
+        if (nap) {
+          handleUpdateNap(napId, { [field]: timeString });
+        }
+      } else if (currentTimeField.startsWith("nightSleep_")) {
+        const field = currentTimeField.split("_")[1];
+        handleUpdateNightSleep({ [field]: timeString });
+      }
+    }
+  };
+
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
 
   const naps = routine.naps || [];
@@ -1064,7 +1086,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     <SafeAreaView style={styles.container} edges={["top"]}>
       <Stack.Screen options={{ 
         headerShown: true, 
-        title: `Dia ${dayNumber} - ${formatDateToBR(routine.date)}`, 
+        title: `Dia ${dayNumber}`, 
         headerStyle: { backgroundColor: colors.background }, 
         headerTintColor: colors.text, 
         headerLeft: () => (
@@ -1075,175 +1097,238 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       }} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         
-        <View style={styles.infoCard}>
-          <Text style={styles.infoCardTitle}>☀️ Acordou às {routine.wakeUpTime}</Text>
-          {routine.motherObservations && <Text style={styles.infoCardText}>Obs: {routine.motherObservations}</Text>}
+        {/* ACORDOU */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionCardTitle}>☀️ Acordou</Text>
+          <View style={styles.fieldRow}>
+            <Text style={styles.fieldLabel}>Horário</Text>
+            <Text style={styles.fieldValue}>{routine.wakeUpTime}</Text>
+          </View>
+          <Text style={styles.fieldLabel}>Observações</Text>
+          <TextInput 
+            style={[styles.formInput, styles.textArea]} 
+            placeholder="Observações da mãe..." 
+            value={wakeUpObs} 
+            onChangeText={setWakeUpObs} 
+            multiline 
+            numberOfLines={2} 
+            placeholderTextColor={colors.textSecondary} 
+          />
+          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSaveWakeUp} disabled={saving}>
+            {saving ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.saveBtnText}>Salvar</Text>}
+          </TouchableOpacity>
+          
+          {isConsultant && (
+            <>
+              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentário da Consultora</Text>
+              <TextInput 
+                style={[styles.formInput, styles.textArea]} 
+                placeholder="Comentários da consultora..." 
+                value={consultantComments} 
+                onChangeText={setConsultantComments} 
+                multiline 
+                numberOfLines={2} 
+                placeholderTextColor={colors.textSecondary} 
+              />
+              <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSaveConsultantComments} disabled={saving}>
+                {saving ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.saveBtnText}>Salvar Comentário</Text>}
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
-        {isConsultant && (
-          <View style={styles.infoCard}>
-            <Text style={styles.formSectionTitle}>💬 Comentários da Consultora</Text>
-            <TextInput style={[styles.formInput, styles.textArea]} placeholder="Adicione comentários..." value={consultantComments} onChangeText={setConsultantComments} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
-            <TouchableOpacity style={[styles.addButton, saving && { opacity: 0.6 }]} onPress={handleSaveComments} disabled={saving}>
-              {saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar Comentários</Text>}
-            </TouchableOpacity>
-          </View>
-        )}
-
+        {/* SONECAS */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>😴 Sonecas ({naps.length})</Text>
+          <Text style={styles.sectionTitle}>😴 Sonecas</Text>
           {naps.length < 6 && (
-            <TouchableOpacity style={styles.addSmallBtn} onPress={() => setShowAddNap(true)}>
+            <TouchableOpacity style={styles.addSmallBtn} onPress={handleAddNap}>
               <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
               <Text style={styles.addSmallBtnText}>Adicionar</Text>
             </TouchableOpacity>
           )}
         </View>
 
-        {naps.map((nap) => {
+        {naps.map((nap, index) => {
+          const isExpanded = expandedNaps[nap.napNumber] || false;
           const sleepDuration = nap.fellAsleepTime && nap.wakeUpTime ? calcTimeDiff(nap.fellAsleepTime, nap.wakeUpTime) : null;
           const timeToSleep = nap.startTryTime && nap.fellAsleepTime ? calcTimeDiff(nap.startTryTime, nap.fellAsleepTime) : null;
+          
           return (
-            <View key={nap.id} style={styles.napCard}>
-              <View style={styles.napCardHeader}>
-                <Text style={styles.napTitle}>Soneca {nap.napNumber}</Text>
-                <TouchableOpacity onPress={() => handleDeleteNap(nap.id)}>
-                  <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={18} color={colors.error} />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.napTimes}>
-                <View style={styles.napTimeRow}>
-                  <Text style={styles.napTimeLabel}>Início:</Text>
-                  <Text style={styles.napTimeValue}>{nap.startTryTime}</Text>
+            <View key={nap.id} style={styles.expandableCard}>
+              <TouchableOpacity 
+                style={styles.expandableHeader} 
+                onPress={() => setExpandedNaps({ ...expandedNaps, [nap.napNumber]: !isExpanded })}
+              >
+                <Text style={styles.expandableTitle}>Soneca {nap.napNumber}</Text>
+                <IconSymbol 
+                  ios_icon_name={isExpanded ? "chevron.up" : "chevron.down"} 
+                  android_material_icon_name={isExpanded ? "expand-less" : "expand-more"} 
+                  size={24} 
+                  color={colors.primary} 
+                />
+              </TouchableOpacity>
+              
+              {isExpanded && (
+                <View style={styles.expandableContent}>
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>Início</Text>
+                    <Text style={styles.fieldValue}>{nap.startTryTime}</Text>
+                  </View>
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>Término</Text>
+                    <Text style={styles.fieldValue}>{nap.wakeUpTime || "—"}</Text>
+                  </View>
+                  {timeToSleep !== null && (
+                    <Text style={styles.calcText}>⏱ Em quanto tempo dormiu: {minutesToHM(timeToSleep)}</Text>
+                  )}
+                  {sleepDuration !== null && (
+                    <Text style={styles.calcText}>💤 Quanto tempo dormiu: {minutesToHM(sleepDuration)}</Text>
+                  )}
+                  
+                  <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Dormiu como</Text>
+                  <View style={styles.choiceButtons}>
+                    {["No colo", "Com embalo", "Mamando", "Sozinho no berço"].map((method) => (
+                      <TouchableOpacity 
+                        key={method} 
+                        style={[styles.choiceBtn, nap.sleepMethod === method && styles.choiceBtnActive]} 
+                        onPress={() => handleUpdateNap(nap.id, { sleepMethod: method })}
+                      >
+                        <Text style={[styles.choiceBtnText, nap.sleepMethod === method && styles.choiceBtnTextActive]}>{method}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  
+                  <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Ambiente</Text>
+                  <View style={styles.choiceButtons}>
+                    {["Adequado", "Não adequado"].map((env) => (
+                      <TouchableOpacity 
+                        key={env} 
+                        style={[styles.choiceBtn, nap.environment === env && styles.choiceBtnActive]} 
+                        onPress={() => handleUpdateNap(nap.id, { environment: env })}
+                      >
+                        <Text style={[styles.choiceBtnText, nap.environment === env && styles.choiceBtnTextActive]}>{env}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  
+                  <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Como acordou</Text>
+                  <View style={styles.choiceButtons}>
+                    {["De bom humor", "Sorrindo", "Choroso"].map((mood) => (
+                      <TouchableOpacity 
+                        key={mood} 
+                        style={[styles.choiceBtn, nap.wakeUpMood === mood && styles.choiceBtnActive]} 
+                        onPress={() => handleUpdateNap(nap.id, { wakeUpMood: mood })}
+                      >
+                        <Text style={[styles.choiceBtnText, nap.wakeUpMood === mood && styles.choiceBtnTextActive]}>{mood}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  
+                  <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações</Text>
+                  <TextInput 
+                    style={[styles.formInput, styles.textArea]} 
+                    placeholder="Observações..." 
+                    value={nap.observations || ""} 
+                    onChangeText={(text) => handleUpdateNap(nap.id, { observations: text })} 
+                    multiline 
+                    numberOfLines={2} 
+                    placeholderTextColor={colors.textSecondary} 
+                  />
+                  
+                  <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteNap(nap.id)}>
+                    <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={18} color="#FFF" />
+                    <Text style={styles.deleteBtnText}>Excluir Soneca</Text>
+                  </TouchableOpacity>
                 </View>
-                {nap.fellAsleepTime && (
-                  <View style={styles.napTimeRow}>
-                    <Text style={styles.napTimeLabel}>Dormiu:</Text>
-                    <Text style={styles.napTimeValue}>{nap.fellAsleepTime}</Text>
-                  </View>
-                )}
-                {nap.wakeUpTime && (
-                  <View style={styles.napTimeRow}>
-                    <Text style={styles.napTimeLabel}>Acordou:</Text>
-                    <Text style={styles.napTimeValue}>{nap.wakeUpTime}</Text>
-                  </View>
-                )}
-              </View>
-              {timeToSleep !== null && <Text style={styles.napCalc}>⏱ Tempo para dormir: {minutesToHM(timeToSleep)}</Text>}
-              {sleepDuration !== null && <Text style={styles.napCalc}>💤 Dormiu: {minutesToHM(sleepDuration)}</Text>}
-              {nap.observations && <Text style={styles.napObs}>📝 {nap.observations}</Text>}
+              )}
             </View>
           );
         })}
 
+        {/* SONO NOTURNO */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>🌙 Sono Noturno</Text>
-          <TouchableOpacity style={styles.addSmallBtn} onPress={() => { if (nightSleep) { setNsStartTry(nightSleep.startTryTime); setNsFellAsleep(nightSleep.fellAsleepTime || ""); setNsFinalWake(nightSleep.finalWakeTime || ""); setNsObs(nightSleep.observations || ""); } setShowAddNightSleep(true); }}>
-            <IconSymbol ios_icon_name="pencil" android_material_icon_name="edit" size={18} color="#FFF" />
-            <Text style={styles.addSmallBtnText}>{nightSleep ? "Editar" : "Adicionar"}</Text>
-          </TouchableOpacity>
+          {!nightSleep && (
+            <TouchableOpacity style={styles.addSmallBtn} onPress={handleAddOrUpdateNightSleep}>
+              <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
+              <Text style={styles.addSmallBtnText}>Adicionar</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
-        {nightSleep ? (
-          <View style={styles.napCard}>
-            <View style={styles.napTimes}>
-              <View style={styles.napTimeRow}>
-                <Text style={styles.napTimeLabel}>Início:</Text>
-                <Text style={styles.napTimeValue}>{nightSleep.startTryTime}</Text>
-              </View>
-              {nightSleep.fellAsleepTime && (
-                <View style={styles.napTimeRow}>
-                  <Text style={styles.napTimeLabel}>Dormiu:</Text>
-                  <Text style={styles.napTimeValue}>{nightSleep.fellAsleepTime}</Text>
-                </View>
-              )}
-              {nightSleep.finalWakeTime && (
-                <View style={styles.napTimeRow}>
-                  <Text style={styles.napTimeLabel}>Acordou:</Text>
-                  <Text style={styles.napTimeValue}>{nightSleep.finalWakeTime}</Text>
-                </View>
-              )}
+        {nightSleep && (
+          <View style={styles.sectionCard}>
+            <View style={styles.fieldRow}>
+              <Text style={styles.fieldLabel}>Início</Text>
+              <Text style={styles.fieldValue}>{nightSleep.startTryTime}</Text>
             </View>
-            {nightSleep.fellAsleepTime && nightSleep.finalWakeTime && (
-              <Text style={styles.napCalc}>💤 Total: {minutesToHM(calcTimeDiff(nightSleep.fellAsleepTime, nightSleep.finalWakeTime))}</Text>
-            )}
-            {nightSleep.observations && <Text style={styles.napObs}>📝 {nightSleep.observations}</Text>}
+            <View style={styles.fieldRow}>
+              <Text style={styles.fieldLabel}>Dormiu</Text>
+              <Text style={styles.fieldValue}>{nightSleep.fellAsleepTime || "—"}</Text>
+            </View>
+            <View style={styles.fieldRow}>
+              <Text style={styles.fieldLabel}>Acordou</Text>
+              <Text style={styles.fieldValue}>{nightSleep.finalWakeTime || "—"}</Text>
+            </View>
             
-            <View style={[styles.sectionHeader, { marginTop: 12 }]}>
-              <Text style={styles.formSectionTitle}>Despertares Noturnos</Text>
-              <TouchableOpacity style={styles.addSmallBtn} onPress={() => setShowAddWaking(true)}>
-                <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={16} color="#FFF" />
+            <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações</Text>
+            <TextInput 
+              style={[styles.formInput, styles.textArea]} 
+              placeholder="Observações..." 
+              value={nightSleep.observations || ""} 
+              onChangeText={(text) => handleUpdateNightSleep({ observations: text })} 
+              multiline 
+              numberOfLines={2} 
+              placeholderTextColor={colors.textSecondary} 
+            />
+          </View>
+        )}
+
+        {/* DESPERTARES */}
+        {nightSleep && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>🌜 Despertares</Text>
+              <TouchableOpacity style={styles.addSmallBtn} onPress={handleAddWaking}>
+                <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
+                <Text style={styles.addSmallBtnText}>Adicionar</Text>
               </TouchableOpacity>
             </View>
-            {(nightSleep.wakings || []).map((w) => (
-              <View key={w.id} style={styles.wakingRow}>
-                <Text style={styles.wakingText}>{w.startTime} → {w.endTime} ({minutesToHM(calcTimeDiff(w.startTime, w.endTime))})</Text>
-                <TouchableOpacity onPress={() => handleDeleteWaking(w.id)}>
-                  <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={16} color={colors.error} />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.emptyState}><Text style={styles.emptyStateSubtext}>Nenhum sono noturno registrado</Text></View>
+
+            {(nightSleep.wakings || []).map((waking, index) => {
+              const duration = calcTimeDiff(waking.startTime, waking.endTime);
+              return (
+                <View key={waking.id} style={styles.wakingCard}>
+                  <View style={styles.wakingHeader}>
+                    <Text style={styles.wakingTitle}>Despertar {index + 1}</Text>
+                    <TouchableOpacity onPress={() => handleDeleteWaking(waking.id)}>
+                      <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={18} color={colors.error} />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>Início</Text>
+                    <Text style={styles.fieldValue}>{waking.startTime}</Text>
+                  </View>
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldLabel}>Término</Text>
+                    <Text style={styles.fieldValue}>{waking.endTime}</Text>
+                  </View>
+                  <Text style={styles.calcText}>⏱ Duração: {minutesToHM(duration)}</Text>
+                </View>
+              );
+            })}
+          </>
         )}
       </ScrollView>
 
-      <Modal visible={showAddNap} transparent animationType="slide" onRequestClose={() => setShowAddNap(false)}>
-        <View style={styles.slideModalOverlay}>
-          <View style={styles.slideModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Adicionar Soneca</Text>
-              <TouchableOpacity onPress={() => setShowAddNap(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <TextInput style={styles.formInput} placeholder="Início tentativa * (HH:MM)" value={napStartTry} onChangeText={setNapStartTry} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-              <TextInput style={styles.formInput} placeholder="Dormiu (HH:MM)" value={napFellAsleep} onChangeText={setNapFellAsleep} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-              <TextInput style={styles.formInput} placeholder="Acordou (HH:MM)" value={napWakeUp} onChangeText={setNapWakeUp} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-              <TextInput style={[styles.formInput, styles.textArea]} placeholder="Observações..." value={napObs} onChangeText={setNapObs} multiline numberOfLines={2} placeholderTextColor={colors.textSecondary} />
-              <TouchableOpacity style={[styles.addButton, napLoading && { opacity: 0.6 }]} onPress={handleAddNap} disabled={napLoading}>
-                {napLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Adicionar Soneca</Text>}
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={showAddNightSleep} transparent animationType="slide" onRequestClose={() => setShowAddNightSleep(false)}>
-        <View style={styles.slideModalOverlay}>
-          <View style={styles.slideModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Sono Noturno</Text>
-              <TouchableOpacity onPress={() => setShowAddNightSleep(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <TextInput style={styles.formInput} placeholder="Início tentativa * (HH:MM)" value={nsStartTry} onChangeText={setNsStartTry} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-              <TextInput style={styles.formInput} placeholder="Dormiu (HH:MM)" value={nsFellAsleep} onChangeText={setNsFellAsleep} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-              <TextInput style={styles.formInput} placeholder="Acordou final (HH:MM)" value={nsFinalWake} onChangeText={setNsFinalWake} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-              <TextInput style={[styles.formInput, styles.textArea]} placeholder="Observações..." value={nsObs} onChangeText={setNsObs} multiline numberOfLines={2} placeholderTextColor={colors.textSecondary} />
-              <TouchableOpacity style={[styles.addButton, nightSleepLoading && { opacity: 0.6 }]} onPress={handleAddNightSleep} disabled={nightSleepLoading}>
-                {nightSleepLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar Sono Noturno</Text>}
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={showAddWaking} transparent animationType="slide" onRequestClose={() => setShowAddWaking(false)}>
-        <View style={styles.slideModalOverlay}>
-          <View style={styles.slideModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Despertar Noturno</Text>
-              <TouchableOpacity onPress={() => setShowAddWaking(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
-            </View>
-            <TextInput style={styles.formInput} placeholder="Início (HH:MM)" value={wakingStart} onChangeText={setWakingStart} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-            <TextInput style={styles.formInput} placeholder="Fim (HH:MM)" value={wakingEnd} onChangeText={setWakingEnd} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-            <TouchableOpacity style={[styles.addButton, wakingLoading && { opacity: 0.6 }]} onPress={handleAddWaking} disabled={wakingLoading}>
-              {wakingLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Adicionar Despertar</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {showTimePicker && (
+        <DateTimePicker
+          value={selectedTime}
+          mode="time"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={handleTimeChange}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -1583,17 +1668,28 @@ const styles = StyleSheet.create({
   routineStatusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   routineStatusText: { fontSize: 11, fontWeight: "600", color: "#FFF" },
   routineComment: { fontSize: 13, color: colors.text, marginTop: 4, fontStyle: "italic" },
-  napCard: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
-  napCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  napTitle: { fontSize: 16, fontWeight: "bold", color: colors.text },
-  napTimes: { gap: 6, marginBottom: 6 },
-  napTimeRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: colors.background, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
-  napTimeLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: "600" },
-  napTimeValue: { fontSize: 14, color: colors.text, fontWeight: "bold" },
-  napCalc: { fontSize: 13, color: colors.primary, marginBottom: 4 },
-  napObs: { fontSize: 13, color: colors.text, marginTop: 6, fontStyle: "italic" },
-  wakingRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 6, borderTopWidth: 1, borderTopColor: colors.border },
-  wakingText: { fontSize: 13, color: colors.textSecondary },
+  sectionCard: { backgroundColor: colors.card, borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
+  sectionCardTitle: { fontSize: 18, fontWeight: "bold", color: colors.text, marginBottom: 12 },
+  fieldRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  fieldLabel: { fontSize: 14, fontWeight: "600", color: colors.textSecondary },
+  fieldValue: { fontSize: 15, fontWeight: "bold", color: colors.text },
+  saveBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, alignItems: "center", marginTop: 8 },
+  saveBtnText: { fontSize: 14, fontWeight: "600", color: "#FFF" },
+  expandableCard: { backgroundColor: colors.card, borderRadius: 12, marginBottom: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
+  expandableHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 14 },
+  expandableTitle: { fontSize: 16, fontWeight: "bold", color: colors.text },
+  expandableContent: { padding: 14, paddingTop: 0 },
+  calcText: { fontSize: 13, color: colors.primary, marginTop: 6, fontWeight: "600" },
+  choiceButtons: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
+  choiceBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.background },
+  choiceBtnActive: { borderColor: colors.primary, backgroundColor: colors.primary },
+  choiceBtnText: { fontSize: 13, fontWeight: "600", color: colors.text },
+  choiceBtnTextActive: { color: "#FFF" },
+  deleteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.error, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, marginTop: 12, gap: 6 },
+  deleteBtnText: { fontSize: 14, fontWeight: "600", color: "#FFF" },
+  wakingCard: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
+  wakingHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  wakingTitle: { fontSize: 15, fontWeight: "bold", color: colors.text },
   orientationCard: { backgroundColor: colors.card, borderRadius: 12, padding: 14, marginBottom: 8 },
   orientationHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   orientationDate: { fontSize: 14, fontWeight: "bold", color: colors.primary },
