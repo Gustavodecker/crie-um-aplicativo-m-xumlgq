@@ -23,6 +23,7 @@ export function registerNightSleepRoutes(app: App) {
           environment: { type: ['string', 'null'] },
           wakeUpMood: { type: ['string', 'null'] },
           observations: { type: ['string', 'null'] },
+          consultantComments: { type: ['string', 'null'] },
         },
       },
       response: {
@@ -38,6 +39,7 @@ export function registerNightSleepRoutes(app: App) {
             environment: { type: ['string', 'null'] },
             wakeUpMood: { type: ['string', 'null'] },
             observations: { type: ['string', 'null'] },
+            consultantComments: { type: ['string', 'null'] },
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
@@ -45,7 +47,7 @@ export function registerNightSleepRoutes(app: App) {
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: { routineId: string; startTryTime: string; fellAsleepTime?: string | null; finalWakeTime?: string | null; sleepMethod?: string | null; environment?: string | null; wakeUpMood?: string | null; observations?: string | null } }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: { routineId: string; startTryTime: string; fellAsleepTime?: string | null; finalWakeTime?: string | null; sleepMethod?: string | null; environment?: string | null; wakeUpMood?: string | null; observations?: string | null; consultantComments?: string | null } }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
@@ -82,6 +84,7 @@ export function registerNightSleepRoutes(app: App) {
       environment: request.body.environment || null,
       wakeUpMood: request.body.wakeUpMood || null,
       observations: request.body.observations || null,
+      consultantComments: request.body.consultantComments || null,
     }).returning();
 
     app.logger.info({ nightSleepId: nightSleepRecord.id, routineId: request.body.routineId }, 'Night sleep record created successfully');
@@ -110,6 +113,7 @@ export function registerNightSleepRoutes(app: App) {
           environment: { type: ['string', 'null'] },
           wakeUpMood: { type: ['string', 'null'] },
           observations: { type: ['string', 'null'] },
+          consultantComments: { type: ['string', 'null'] },
         },
       },
       response: {
@@ -125,6 +129,7 @@ export function registerNightSleepRoutes(app: App) {
             environment: { type: ['string', 'null'] },
             wakeUpMood: { type: ['string', 'null'] },
             observations: { type: ['string', 'null'] },
+            consultantComments: { type: ['string', 'null'] },
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
@@ -132,7 +137,7 @@ export function registerNightSleepRoutes(app: App) {
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Params: { id: string }; Body: Partial<{ startTryTime: string; fellAsleepTime: string | null; finalWakeTime: string | null; sleepMethod: string | null; environment: string | null; wakeUpMood: string | null; observations: string | null }> }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Params: { id: string }; Body: Partial<{ startTryTime: string; fellAsleepTime: string | null; finalWakeTime: string | null; sleepMethod: string | null; environment: string | null; wakeUpMood: string | null; observations: string | null; consultantComments: string | null }> }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 

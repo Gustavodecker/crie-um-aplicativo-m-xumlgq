@@ -74,6 +74,7 @@ export const naps = pgTable('naps', {
   environment: text('environment'), // 'adequado', 'parcialmente_adequado', 'inadequado'
   wakeUpMood: text('wake_up_mood'), // 'bom_humor', 'sorrindo', 'choroso', 'muito_irritado'
   observations: text('observations'),
+  consultantComments: text('consultant_comments'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('naps_routine_id_idx').on(table.routineId),
@@ -90,6 +91,7 @@ export const nightSleep = pgTable('night_sleep', {
   environment: text('environment'),
   wakeUpMood: text('wake_up_mood'),
   observations: text('observations'),
+  consultantComments: text('consultant_comments'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('night_sleep_routine_id_idx').on(table.routineId),
