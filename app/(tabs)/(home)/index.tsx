@@ -49,7 +49,7 @@ interface Baby {
   ageMonths: number;
   ageDays: number;
   activeContract: Contract | null;
-  token?: string; // Short 4-character token
+  token?: string;
 }
 
 interface Nap {
@@ -134,6 +134,13 @@ interface Report {
   dailyEvolution: ReportDay[];
 }
 
+type Screen = 
+  | { type: "list" }
+  | { type: "baby"; baby: Baby }
+  | { type: "routine"; baby: Baby; routine: Routine }
+  | { type: "orientations"; baby: Baby }
+  | { type: "reports"; baby: Baby };
+
 // ─── Helper Functions ─────────────────────────────────────────────────────────
 
 function minutesToHM(minutes: number): string {
@@ -176,18 +183,9 @@ function formatDateToBR(dateStr: string): string {
   return `${day}/${month}/${year}`;
 }
 
-// ─── Screen Types ─────────────────────────────────────────────────────────────
-
-type Screen = 
-  | { type: "list" }
-  | { type: "baby"; baby: Baby }
-  | { type: "routine"; baby: Baby; routine: Routine }
-  | { type: "orientations"; baby: Baby }
-  | { type: "reports"; baby: Baby };
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function HomeScreen() {
+function HomeScreen() {
   const { user } = useAuth();
   const [screen, setScreen] = useState<Screen>({ type: "list" });
   const [errorMessage, setErrorMessage] = useState("");
@@ -228,11 +226,16 @@ export default function HomeScreen() {
 
   const renderScreen = () => {
     switch (screen.type) {
-      case "list": return <BabiesListScreen isConsultant={isConsultant} onSelectBaby={(b) => setScreen({ type: "baby", baby: b })} showErr={showErr} />;
-      case "baby": return <BabyDetailScreen isConsultant={isConsultant} baby={screen.baby} onBack={() => setScreen({ type: "list" })} onOpenRoutine={(r) => setScreen({ type: "routine", baby: screen.baby, routine: r })} onOpenOrientations={() => setScreen({ type: "orientations", baby: screen.baby })} onOpenReports={() => setScreen({ type: "reports", baby: screen.baby })} showErr={showErr} />;
-      case "routine": return <RoutineDetailScreen isConsultant={isConsultant} baby={screen.baby} routine={screen.routine} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
-      case "orientations": return <OrientationsScreen isConsultant={isConsultant} baby={screen.baby} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
-      case "reports": return <ReportsScreen baby={screen.baby} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
+      case "list": 
+        return <BabiesListScreen isConsultant={isConsultant} onSelectBaby={(b) => setScreen({ type: "baby", baby: b })} showErr={showErr} />;
+      case "baby": 
+        return <BabyDetailScreen isConsultant={isConsultant} baby={screen.baby} onBack={() => setScreen({ type: "list" })} onOpenRoutine={(r) => setScreen({ type: "routine", baby: screen.baby, routine: r })} onOpenOrientations={() => setScreen({ type: "orientations", baby: screen.baby })} onOpenReports={() => setScreen({ type: "reports", baby: screen.baby })} showErr={showErr} />;
+      case "routine": 
+        return <RoutineDetailScreen isConsultant={isConsultant} baby={screen.baby} routine={screen.routine} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
+      case "orientations": 
+        return <OrientationsScreen isConsultant={isConsultant} baby={screen.baby} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
+      case "reports": 
+        return <ReportsScreen baby={screen.baby} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
     }
   };
 
@@ -277,8 +280,6 @@ function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultan
   const loadBabies = useCallback(async () => {
     console.log("[API] Loading babies");
     if (!isConsultant) {
-      // Mothers do not have access to /api/consultant/babies
-      // Their baby data is managed by the consultant
       console.log("[API] User is a mother - skipping consultant babies endpoint");
       setLoading(false);
       setRefreshing(false);
@@ -1365,6 +1366,8 @@ function ReportsScreen({ baby, onBack, showErr }: { baby: Baby; onBack: () => vo
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background },
@@ -1497,3 +1500,5 @@ const styles = StyleSheet.create({
   reportDayStat: { fontSize: 13, color: colors.textSecondary },
   dateRow: { flexDirection: "row", gap: 8 },
 });
+
+export default HomeScreen;
