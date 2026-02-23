@@ -13,7 +13,7 @@ import {
   Platform,
   Switch,
 } from "react-native";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -191,6 +191,7 @@ function formatDateToBR(dateStr: string): string {
 
 function HomeScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const [screen, setScreen] = useState<Screen>({ type: "list" });
   const [errorMessage, setErrorMessage] = useState("");
   const [showError, setShowError] = useState(false);
@@ -588,6 +589,7 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutineList, onOpe
   isConsultant: boolean; baby: Baby; onBack: () => void; onOpenRoutineList: () => void;
   onOpenOrientations: () => void; onOpenReports: () => void; showErr: (m: string) => void;
 }) {
+  const router = useRouter();
   const [contract, setContract] = useState<Contract | null>(baby.activeContract);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -653,6 +655,14 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutineList, onOpe
     }
   };
 
+  const handleOpenLandscapeReports = () => {
+    console.log("[Navigation] Opening landscape reports for baby:", baby.id, baby.name);
+    router.push({
+      pathname: "/(tabs)/(home)/reports-landscape",
+      params: { babyId: baby.id, babyName: baby.name },
+    });
+  };
+
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
 
   return (
@@ -702,7 +712,7 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutineList, onOpe
             <IconSymbol ios_icon_name="list.bullet.clipboard.fill" android_material_icon_name="assignment" size={24} color={colors.secondary} />
             <Text style={styles.quickActionText}>Orientações</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionBtn} onPress={onOpenReports}>
+          <TouchableOpacity style={styles.quickActionBtn} onPress={handleOpenLandscapeReports}>
             <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar-chart" size={24} color={colors.success} />
             <Text style={styles.quickActionText}>Acompanhamento</Text>
           </TouchableOpacity>
