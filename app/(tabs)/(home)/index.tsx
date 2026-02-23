@@ -1074,8 +1074,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
   const handleAddOrUpdateNightSleep = async () => {
     try {
+      // Check if night sleep already exists with a valid ID
       if (routine.nightSleep && routine.nightSleep.id) {
-        console.log("[API] Night sleep already exists:", routine.nightSleep.id);
+        console.log("[API] Night sleep already exists:", routine.nightSleep.id, "- just expanding");
         // Already exists, just expand the section
         setExpandedNightSleep(true);
         return;
@@ -1096,13 +1097,14 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       
       console.log("[API] Night sleep created/upserted with ID:", newNightSleep.id);
       
-      // Update local state immediately
+      // Update local state immediately and expand
       setRoutine(prev => ({ ...prev, nightSleep: newNightSleep }));
       setNightSleepObservations("");
       setNightSleepConsultantComments("");
       setExpandedNightSleep(true);
       
-      await loadRoutine();
+      // Reload to ensure consistency
+      await loadRoutine(true);
     } catch (error: any) {
       console.error("[API] Error creating night sleep:", error);
       showErr(error.message || "Erro ao salvar sono noturno");
