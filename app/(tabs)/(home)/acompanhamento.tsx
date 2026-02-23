@@ -144,7 +144,7 @@ export default function AcompanhamentoScreen() {
       const filledRoutines = routinesData.filter(r => {
         const hasNaps = r.naps && r.naps.length > 0;
         const hasNightSleep = r.nightSleep && (r.nightSleep as any).id;
-        const hasWakeUpTime = r.wakeUpTime && r.wakeUpTime !== "07:00";
+        const hasWakeUpTime = r.wakeUpTime && r.wakeUpTime.trim() !== "";
         return hasNaps || hasNightSleep || hasWakeUpTime;
       });
       
