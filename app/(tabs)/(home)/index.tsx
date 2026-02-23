@@ -930,8 +930,14 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const [currentNapId, setCurrentNapId] = useState<string | null>(null);
   const [currentWakingId, setCurrentWakingId] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState(new Date());
+  
+  // Local state for text inputs to prevent clearing while typing
+  const [napObservations, setNapObservations] = useState<{ [key: string]: string }>({});
+  const [napConsultantComments, setNapConsultantComments] = useState<{ [key: string]: string }>({});
+  const [nightSleepObservations, setNightSleepObservations] = useState("");
+  const [nightSleepConsultantComments, setNightSleepConsultantComments] = useState("");
 
-  const loadRoutine = useCallback(async () => {
+  const loadRoutine = useCallback(async (skipTextUpdate = false) => {
     try {
       console.log("[API] Loading routine:", initialRoutine.id);
       const data = await apiGet<Routine>(`/api/routines/${initialRoutine.id}`);
@@ -940,6 +946,21 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       setConsultantComments(data.consultantComments || "");
       setWakeUpObs(data.motherObservations || "");
       setWakeUpTime(data.wakeUpTime || "07:00");
+      
+      // Only update local text state if not skipping (to prevent clearing while typing)
+      if (!skipTextUpdate) {
+        const napObs: { [key: string]: string } = {};
+        const napComments: { [key: string]: string } = {};
+        data.naps?.forEach(nap => {
+          napObs[nap.id] = nap.observations || "";
+          napComments[nap.id] = nap.consultantComments || "";
+        });
+        setNapObservations(napObs);
+        setNapConsultantComments(napComments);
+        
+        setNightSleepObservations(data.nightSleep?.observations || "");
+        setNightSleepConsultantComments(data.nightSleep?.consultantComments || "");
+      }
     } catch (error: any) {
       console.error("[API] Error loading routine:", error);
       showErr(error.message || "Erro ao carregar rotina");
@@ -984,7 +1005,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       const napNumber = (routine.naps || []).length + 1;
       console.log("[API] Adding nap", napNumber, "to routine:", routine.id);
-      await apiPost("/api/naps", { 
+      const newNap = await apiPost<Nap>("/api/naps", { 
         routineId: routine.id, 
         napNumber, 
         startTryTime: "08:00",
@@ -995,6 +1016,11 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         wakeUpMood: null,
         observations: null
       });
+      
+      // Initialize local text state for new nap
+      setNapObservations(prev => ({ ...prev, [newNap.id]: "" }));
+      setNapConsultantComments(prev => ({ ...prev, [newNap.id]: "" }));
+      
       await loadRoutine();
       setExpandedNaps({ ...expandedNaps, [napNumber]: true });
     } catch (error: any) {
@@ -1015,8 +1041,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         )
       }));
       
-      // Then reload to ensure consistency
-      await loadRoutine();
+      // Reload but skip text update to prevent clearing
+      await loadRoutine(true);
     } catch (error: any) {
       console.error("[API] Error updating nap:", error);
       showErr(error.message || "Erro ao atualizar soneca");
@@ -1027,6 +1053,19 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       console.log("[API] Deleting nap:", napId);
       await apiDelete(`/api/naps/${napId}`);
+      
+      // Clean up local text state
+      setNapObservations(prev => {
+        const newState = { ...prev };
+        delete newState[napId];
+        return newState;
+      });
+      setNapConsultantComments(prev => {
+        const newState = { ...prev };
+        delete newState[napId];
+        return newState;
+      });
+      
       await loadRoutine();
     } catch (error: any) {
       showErr(error.message || "Erro ao excluir soneca");
@@ -1053,6 +1092,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         
         // Update local state immediately
         setRoutine(prev => ({ ...prev, nightSleep: newNightSleep }));
+        setNightSleepObservations("");
+        setNightSleepConsultantComments("");
       }
       await loadRoutine();
     } catch (error: any) {
@@ -1060,19 +1101,20 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     }
   };
 
-  const handleUpdateNightSleep = async (updates: Partial<NightSleep>) => {
+  const handleUpdateNightSleep = async (field: string, value: string) => {
     try {
       const currentNightSleep = routine.nightSleep;
       
       // Check if nightSleep exists and has an id (not just an empty object)
       if (currentNightSleep && typeof currentNightSleep === 'object' && Object.keys(currentNightSleep).length > 0 && currentNightSleep.id) {
-        console.log("[API] Updating existing night sleep:", currentNightSleep.id, "with updates:", updates);
-        await apiPut(`/api/night-sleep/${currentNightSleep.id}`, updates);
+        console.log("[API] Updating existing night sleep:", currentNightSleep.id, "field:", field, "value:", value);
+        const updates = { [field]: value };
+        const updatedNightSleep = await apiPut<NightSleep>(`/api/night-sleep/${currentNightSleep.id}`, updates);
         
         // Update local state immediately for better UX
         setRoutine(prev => ({
           ...prev,
-          nightSleep: prev.nightSleep ? { ...prev.nightSleep, ...updates } : null
+          nightSleep: updatedNightSleep
         }));
       } else {
         console.log("[API] Night sleep doesn't exist yet, creating it with initial data");
@@ -1085,7 +1127,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           environment: null,
           wakeUpMood: null,
           observations: null,
-          ...updates
+          [field]: value
         });
         console.log("[API] Night sleep created with ID:", newNightSleep.id);
         
@@ -1093,8 +1135,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         setRoutine(prev => ({ ...prev, nightSleep: newNightSleep }));
       }
       
-      // Reload to ensure consistency
-      await loadRoutine();
+      // Reload but skip text update to prevent clearing
+      await loadRoutine(true);
     } catch (error: any) {
       console.error("[API] Error processing night sleep:", error);
       showErr(error.message || "Erro ao processar sono noturno");
@@ -1163,10 +1205,28 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           setWakeUpTime(timeString);
         } else if (currentTimeField.startsWith("nap_") && currentNapId) {
           const field = currentTimeField.split("_")[1];
+          
+          // Update local state immediately
+          setRoutine(prev => ({
+            ...prev,
+            naps: prev.naps?.map(nap => 
+              nap.id === currentNapId ? { ...nap, [field]: timeString } : nap
+            )
+          }));
+          
+          // Then save to backend
           await handleUpdateNap(currentNapId, { [field]: timeString });
         } else if (currentTimeField.startsWith("nightSleep_")) {
           const field = currentTimeField.split("_")[1];
-          await handleUpdateNightSleep({ [field]: timeString });
+          
+          // Update local state immediately
+          setRoutine(prev => ({
+            ...prev,
+            nightSleep: prev.nightSleep ? { ...prev.nightSleep, [field]: timeString } : null
+          }));
+          
+          // Then save to backend
+          await handleUpdateNightSleep(field, timeString);
         } else if (currentTimeField.startsWith("waking_") && currentWakingId) {
           const field = currentTimeField.split("_")[1];
           await handleUpdateWaking(currentWakingId, field, timeString);
@@ -1209,8 +1269,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         } : null
       }));
       
-      // Then reload to ensure consistency
-      await loadRoutine();
+      // Reload but skip text update
+      await loadRoutine(true);
     } catch (error: any) {
       console.error("[API] Error updating waking:", error);
       showErr(error.message || "Erro ao atualizar despertar");
@@ -1258,6 +1318,47 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     
     setSelectedTime(initialTime);
     setShowTimePicker(true);
+  };
+
+  // Debounced save functions for text inputs
+  const saveNapObservations = async (napId: string, text: string) => {
+    try {
+      await apiPut(`/api/naps/${napId}`, { observations: text });
+      console.log("[API] Nap observations saved for:", napId);
+    } catch (error: any) {
+      console.error("[API] Error saving nap observations:", error);
+    }
+  };
+
+  const saveNapConsultantComments = async (napId: string, text: string) => {
+    try {
+      await apiPut(`/api/naps/${napId}`, { consultantComments: text });
+      console.log("[API] Nap consultant comments saved for:", napId);
+    } catch (error: any) {
+      console.error("[API] Error saving nap consultant comments:", error);
+    }
+  };
+
+  const saveNightSleepObservations = async (text: string) => {
+    try {
+      if (routine.nightSleep?.id) {
+        await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, { observations: text });
+        console.log("[API] Night sleep observations saved");
+      }
+    } catch (error: any) {
+      console.error("[API] Error saving night sleep observations:", error);
+    }
+  };
+
+  const saveNightSleepConsultantComments = async (text: string) => {
+    try {
+      if (routine.nightSleep?.id) {
+        await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, { consultantComments: text });
+        console.log("[API] Night sleep consultant comments saved");
+      }
+    } catch (error: any) {
+      console.error("[API] Error saving night sleep consultant comments:", error);
+    }
   };
 
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
@@ -1441,8 +1542,11 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   <TextInput 
                     style={[styles.formInput, styles.textArea]} 
                     placeholder="Observações..." 
-                    value={nap.observations || ""} 
-                    onChangeText={(text) => handleUpdateNap(nap.id, { observations: text })} 
+                    value={napObservations[nap.id] || ""} 
+                    onChangeText={(text) => {
+                      setNapObservations(prev => ({ ...prev, [nap.id]: text }));
+                    }}
+                    onBlur={() => saveNapObservations(nap.id, napObservations[nap.id] || "")}
                     multiline 
                     numberOfLines={2} 
                     placeholderTextColor={colors.textSecondary} 
@@ -1454,8 +1558,11 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                       <TextInput 
                         style={[styles.formInput, styles.textArea]} 
                         placeholder="Comentários da consultora..." 
-                        value={nap.consultantComments || ""} 
-                        onChangeText={(text) => handleUpdateNap(nap.id, { consultantComments: text })} 
+                        value={napConsultantComments[nap.id] || ""} 
+                        onChangeText={(text) => {
+                          setNapConsultantComments(prev => ({ ...prev, [nap.id]: text }));
+                        }}
+                        onBlur={() => saveNapConsultantComments(nap.id, napConsultantComments[nap.id] || "")}
                         multiline 
                         numberOfLines={2} 
                         placeholderTextColor={colors.textSecondary} 
@@ -1539,8 +1646,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                 <TextInput 
                   style={[styles.formInput, styles.textArea]} 
                   placeholder="Observações..." 
-                  value={nightSleep.observations || ""} 
-                  onChangeText={(text) => handleUpdateNightSleep({ observations: text })} 
+                  value={nightSleepObservations} 
+                  onChangeText={setNightSleepObservations}
+                  onBlur={() => saveNightSleepObservations(nightSleepObservations)}
                   multiline 
                   numberOfLines={2} 
                   placeholderTextColor={colors.textSecondary} 
@@ -1552,8 +1660,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                     <TextInput 
                       style={[styles.formInput, styles.textArea]} 
                       placeholder="Comentários da consultora..." 
-                      value={nightSleep.consultantComments || ""} 
-                      onChangeText={(text) => handleUpdateNightSleep({ consultantComments: text })} 
+                      value={nightSleepConsultantComments} 
+                      onChangeText={setNightSleepConsultantComments}
+                      onBlur={() => saveNightSleepConsultantComments(nightSleepConsultantComments)}
                       multiline 
                       numberOfLines={2} 
                       placeholderTextColor={colors.textSecondary} 
