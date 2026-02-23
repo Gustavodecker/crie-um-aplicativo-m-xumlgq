@@ -25,7 +25,7 @@ export default function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [babyId, setBabyId] = useState("");
+  const [babyToken, setBabyToken] = useState("");
   const [role, setRole] = useState<UserRole>("consultant");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -45,6 +45,16 @@ export default function AuthScreen() {
       return;
     }
 
+    if (!isLogin && role === "mother" && !babyToken) {
+      showErrorModal("Por favor, insira o código do bebê fornecido pela consultora");
+      return;
+    }
+
+    if (!isLogin && role === "mother" && babyToken.length !== 4) {
+      showErrorModal("O código do bebê deve ter 4 caracteres");
+      return;
+    }
+
     setLoading(true);
     try {
       if (isLogin) {
@@ -54,24 +64,24 @@ export default function AuthScreen() {
         router.replace("/(tabs)/(home)");
       } else {
         console.log("Attempting sign up with email:", email, "role:", role);
-        // Register user via Better Auth with role in metadata
         await signUpWithEmail(email, password, name);
-        // After signup, initialize profile based on role
+        
         if (role === "consultant") {
-          // Initialize consultant profile
           console.log("[API] Initializing consultant profile");
           try {
             await apiPost("/api/init/consultant", { name });
           } catch (initErr) {
             console.warn("[API] Consultant init error (may already exist):", initErr);
           }
-        } else if (role === "mother" && babyId) {
-          // Link mother to baby
-          console.log("[API] Linking mother to baby:", babyId);
+        } else if (role === "mother" && babyToken) {
+          console.log("[API] Linking mother to baby with token:", babyToken);
           try {
-            await apiPost("/api/init/mother", { babyId });
-          } catch (initErr) {
-            console.warn("[API] Mother init error:", initErr);
+            await apiPost("/api/init/mother", { token: babyToken.toUpperCase() });
+          } catch (initErr: any) {
+            console.error("[API] Mother init error:", initErr);
+            showErrorModal(initErr.message || "Erro ao vincular bebê. Verifique o código.");
+            setLoading(false);
+            return;
           }
         }
         console.log("Sign up successful, navigating to home");
@@ -155,14 +165,20 @@ export default function AuthScreen() {
                 />
 
                 {role === "mother" && (
-                  <TextInput
-                    style={styles.input}
-                    placeholder="ID do bebê (fornecido pela consultora)"
-                    value={babyId}
-                    onChangeText={setBabyId}
-                    autoCapitalize="none"
-                    placeholderTextColor={colors.textSecondary}
-                  />
+                  <View style={styles.tokenInputContainer}>
+                    <TextInput
+                      style={[styles.input, styles.tokenInput]}
+                      placeholder="Código do bebê (4 caracteres)"
+                      value={babyToken}
+                      onChangeText={(text) => setBabyToken(text.toUpperCase())}
+                      autoCapitalize="characters"
+                      maxLength={4}
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                    <Text style={styles.tokenHint}>
+                      💡 Código fornecido pela consultora
+                    </Text>
+                  </View>
                 )}
               </>
             )}
@@ -308,6 +324,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     color: colors.text,
+  },
+  tokenInputContainer: {
+    marginBottom: 16,
+  },
+  tokenInput: {
+    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: "bold",
+    letterSpacing: 4,
+    textAlign: "center",
+  },
+  tokenHint: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontStyle: "italic",
+    textAlign: "center",
   },
   button: {
     marginTop: 8,

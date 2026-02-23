@@ -19,6 +19,8 @@ import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import Clipboard from "@react-native-clipboard/clipboard";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,7 @@ interface Baby {
   ageMonths: number;
   ageDays: number;
   activeContract: Contract | null;
+  token?: string; // Short 4-character token
 }
 
 interface Nap {
@@ -185,9 +188,29 @@ type Screen =
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
+  const { user } = useAuth();
   const [screen, setScreen] = useState<Screen>({ type: "list" });
   const [errorMessage, setErrorMessage] = useState("");
   const [showError, setShowError] = useState(false);
+  const [isConsultant, setIsConsultant] = useState(false);
+  const [checkingRole, setCheckingRole] = useState(true);
+
+  useEffect(() => {
+    const checkRole = async () => {
+      try {
+        console.log("[Role Check] Checking if user is consultant");
+        const profile = await apiGet("/api/consultant/profile");
+        console.log("[Role Check] User is a consultant");
+        setIsConsultant(true);
+      } catch (error) {
+        console.log("[Role Check] User is NOT a consultant (mother)");
+        setIsConsultant(false);
+      } finally {
+        setCheckingRole(false);
+      }
+    };
+    checkRole();
+  }, []);
 
   const showErr = (msg: string) => { 
     console.log("[Error]", msg);
@@ -195,12 +218,20 @@ export default function HomeScreen() {
     setShowError(true); 
   };
 
+  if (checkingRole) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   const renderScreen = () => {
     switch (screen.type) {
-      case "list": return <BabiesListScreen onSelectBaby={(b) => setScreen({ type: "baby", baby: b })} showErr={showErr} />;
-      case "baby": return <BabyDetailScreen baby={screen.baby} onBack={() => setScreen({ type: "list" })} onOpenRoutine={(r) => setScreen({ type: "routine", baby: screen.baby, routine: r })} onOpenOrientations={() => setScreen({ type: "orientations", baby: screen.baby })} onOpenReports={() => setScreen({ type: "reports", baby: screen.baby })} showErr={showErr} />;
-      case "routine": return <RoutineDetailScreen baby={screen.baby} routine={screen.routine} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
-      case "orientations": return <OrientationsScreen baby={screen.baby} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
+      case "list": return <BabiesListScreen isConsultant={isConsultant} onSelectBaby={(b) => setScreen({ type: "baby", baby: b })} showErr={showErr} />;
+      case "baby": return <BabyDetailScreen isConsultant={isConsultant} baby={screen.baby} onBack={() => setScreen({ type: "list" })} onOpenRoutine={(r) => setScreen({ type: "routine", baby: screen.baby, routine: r })} onOpenOrientations={() => setScreen({ type: "orientations", baby: screen.baby })} onOpenReports={() => setScreen({ type: "reports", baby: screen.baby })} showErr={showErr} />;
+      case "routine": return <RoutineDetailScreen isConsultant={isConsultant} baby={screen.baby} routine={screen.routine} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
+      case "orientations": return <OrientationsScreen isConsultant={isConsultant} baby={screen.baby} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
       case "reports": return <ReportsScreen baby={screen.baby} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
     }
   };
@@ -225,7 +256,7 @@ export default function HomeScreen() {
 
 // ─── Babies List Screen ───────────────────────────────────────────────────────
 
-function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) => void; showErr: (m: string) => void }) {
+function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultant: boolean; onSelectBaby: (b: Baby) => void; showErr: (m: string) => void }) {
   const [babies, setBabies] = useState<Baby[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -238,13 +269,21 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
   const [motherEmail, setMotherEmail] = useState("");
   const [objectives, setObjectives] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [createdBabyId, setCreatedBabyId] = useState("");
+  const [createdBabyToken, setCreatedBabyToken] = useState("");
   
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   const loadBabies = useCallback(async () => {
-    console.log("[API] Loading babies for consultant");
+    console.log("[API] Loading babies");
+    if (!isConsultant) {
+      // Mothers do not have access to /api/consultant/babies
+      // Their baby data is managed by the consultant
+      console.log("[API] User is a mother - skipping consultant babies endpoint");
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       const data = await apiGet<Baby[]>("/api/consultant/babies");
       console.log("[API] Babies loaded:", data.length);
@@ -256,7 +295,7 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [isConsultant]);
 
   useEffect(() => { loadBabies(); }, [loadBabies]);
 
@@ -283,7 +322,7 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
     setAddLoading(true);
     try {
       console.log("[API] Creating baby:", babyName);
-      const baby = await apiPost<{ id: string }>("/api/babies", { 
+      const baby = await apiPost<Baby>("/api/babies", { 
         name: babyName, 
         birthDate, 
         motherName, 
@@ -291,8 +330,8 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
         motherEmail, 
         objectives: objectives || null 
       });
-      console.log("[API] Baby created:", baby.id);
-      setCreatedBabyId(baby.id);
+      console.log("[API] Baby created with token:", baby.token);
+      setCreatedBabyToken(baby.token || baby.id);
       setShowAddBaby(false);
       setShowSuccessModal(true);
       setBabyName(""); 
@@ -307,6 +346,12 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
     } finally {
       setAddLoading(false);
     }
+  };
+
+  const handleCopyToken = () => {
+    Clipboard.setString(createdBabyToken);
+    console.log("[Clipboard] Token copied:", createdBabyToken);
+    showErr("✅ Código copiado para a área de transferência!");
   };
 
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
@@ -325,7 +370,7 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadBabies(); }} />}
       >
         <View style={styles.header}>
-          <Text style={styles.greeting}>Olá, Consultora! 👋</Text>
+          <Text style={styles.greeting}>Olá, {isConsultant ? "Consultora" : "Mamãe"}! 👋</Text>
           <Text style={styles.subtitle}>{babies.length} bebê{babies.length !== 1 ? "s" : ""} cadastrado{babies.length !== 1 ? "s" : ""}</Text>
         </View>
 
@@ -334,10 +379,21 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
             <View style={styles.welcomeIcon}>
               <IconSymbol ios_icon_name="moon.stars.fill" android_material_icon_name="bedtime" size={48} color={colors.primary} />
             </View>
-            <Text style={styles.welcomeTitle}>Bem-vinda ao seu Consultório de Sono! 🌙</Text>
-            <Text style={styles.welcomeText}>
-              Comece cadastrando seu primeiro bebê para iniciar o acompanhamento de rotina de sono.
+            <Text style={styles.welcomeTitle}>
+              {isConsultant ? "Bem-vinda ao seu Consultório de Sono! 🌙" : "Bem-vinda, Mamãe! 🌙"}
             </Text>
+            <Text style={styles.welcomeText}>
+              {isConsultant 
+                ? "Comece cadastrando seu primeiro bebê para iniciar o acompanhamento de rotina de sono."
+                : "Sua consultora de sono irá cadastrar o bebê e gerenciar as rotinas. Você receberá as orientações e poderá acompanhar o progresso aqui."}
+            </Text>
+            {!isConsultant && (
+              <View style={styles.motherInfoBox}>
+                <Text style={styles.motherInfoText}>
+                  💡 Caso ainda não tenha vinculado sua conta ao bebê, saia e crie uma nova conta usando o código de 4 caracteres fornecido pela consultora.
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -369,113 +425,118 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
             );
           })}
         </View>
-        <TouchableOpacity style={styles.addButton} onPress={() => setShowAddBaby(true)}>
-          <IconSymbol ios_icon_name="plus.circle.fill" android_material_icon_name="add-circle" size={24} color="#FFF" />
-          <Text style={styles.addButtonText}>Cadastrar Novo Bebê</Text>
-        </TouchableOpacity>
+        
+        {isConsultant && (
+          <TouchableOpacity style={styles.addButton} onPress={() => setShowAddBaby(true)}>
+            <IconSymbol ios_icon_name="plus.circle.fill" android_material_icon_name="add-circle" size={24} color="#FFF" />
+            <Text style={styles.addButtonText}>Cadastrar Novo Bebê</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
 
-      <Modal visible={showAddBaby} transparent animationType="slide" onRequestClose={() => setShowAddBaby(false)}>
-        <View style={styles.slideModalOverlay}>
-          <View style={styles.slideModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Cadastrar Bebê</Text>
-              <TouchableOpacity onPress={() => setShowAddBaby(false)}>
-                <Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <Text style={styles.formSectionTitle}>Dados do Bebê</Text>
-              <TextInput 
-                style={styles.formInput} 
-                placeholder="Nome do bebê *" 
-                value={babyName} 
-                onChangeText={setBabyName} 
-                autoCapitalize="words" 
-                placeholderTextColor={colors.textSecondary} 
-              />
-              
-              <TouchableOpacity 
-                style={styles.datePickerButton} 
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={[styles.datePickerText, !birthDate && { color: colors.textSecondary }]}>
-                  {birthDate || "Data de Nascimento * (toque para selecionar)"}
-                </Text>
-                <IconSymbol 
-                  ios_icon_name="calendar" 
-                  android_material_icon_name="calendar-today" 
-                  size={20} 
-                  color={colors.primary} 
-                />
-              </TouchableOpacity>
-              
-              {showDatePicker && (
-                <DateTimePicker
-                  value={selectedDate}
-                  mode="date"
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
-                  onChange={handleDateChange}
-                  maximumDate={new Date()}
-                />
-              )}
-              
-              {Platform.OS === "ios" && showDatePicker && (
-                <TouchableOpacity 
-                  style={styles.datePickerDoneButton} 
-                  onPress={() => setShowDatePicker(false)}
-                >
-                  <Text style={styles.datePickerDoneText}>Confirmar</Text>
+      {isConsultant && (
+        <Modal visible={showAddBaby} transparent animationType="slide" onRequestClose={() => setShowAddBaby(false)}>
+          <View style={styles.slideModalOverlay}>
+            <View style={styles.slideModalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Cadastrar Bebê</Text>
+                <TouchableOpacity onPress={() => setShowAddBaby(false)}>
+                  <Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text>
                 </TouchableOpacity>
-              )}
-              
-              <Text style={styles.formSectionTitle}>Dados da Mãe</Text>
-              <TextInput 
-                style={styles.formInput} 
-                placeholder="Nome da mãe *" 
-                value={motherName} 
-                onChangeText={setMotherName} 
-                autoCapitalize="words" 
-                placeholderTextColor={colors.textSecondary} 
-              />
-              <TextInput 
-                style={styles.formInput} 
-                placeholder="Telefone *" 
-                value={motherPhone} 
-                onChangeText={setMotherPhone} 
-                keyboardType="phone-pad" 
-                placeholderTextColor={colors.textSecondary} 
-              />
-              <TextInput 
-                style={styles.formInput} 
-                placeholder="E-mail *" 
-                value={motherEmail} 
-                onChangeText={setMotherEmail} 
-                autoCapitalize="none" 
-                keyboardType="email-address" 
-                placeholderTextColor={colors.textSecondary} 
-              />
-              <Text style={styles.formSectionTitle}>Objetivos</Text>
-              <TextInput 
-                style={[styles.formInput, styles.textArea]} 
-                placeholder="Objetivos do acompanhamento..." 
-                value={objectives} 
-                onChangeText={setObjectives} 
-                multiline 
-                numberOfLines={3} 
-                placeholderTextColor={colors.textSecondary} 
-              />
-              <TouchableOpacity 
-                style={[styles.addButton, addLoading && { opacity: 0.6 }]} 
-                onPress={handleAddBaby} 
-                disabled={addLoading}
-              >
-                {addLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Cadastrar</Text>}
-              </TouchableOpacity>
-            </ScrollView>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={styles.formSectionTitle}>Dados do Bebê</Text>
+                <TextInput 
+                  style={styles.formInput} 
+                  placeholder="Nome do bebê *" 
+                  value={babyName} 
+                  onChangeText={setBabyName} 
+                  autoCapitalize="words" 
+                  placeholderTextColor={colors.textSecondary} 
+                />
+                
+                <TouchableOpacity 
+                  style={styles.datePickerButton} 
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={[styles.datePickerText, !birthDate && { color: colors.textSecondary }]}>
+                    {birthDate || "Data de Nascimento * (toque para selecionar)"}
+                  </Text>
+                  <IconSymbol 
+                    ios_icon_name="calendar" 
+                    android_material_icon_name="calendar-today" 
+                    size={20} 
+                    color={colors.primary} 
+                  />
+                </TouchableOpacity>
+                
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="date"
+                    display={Platform.OS === "ios" ? "spinner" : "default"}
+                    onChange={handleDateChange}
+                    maximumDate={new Date()}
+                  />
+                )}
+                
+                {Platform.OS === "ios" && showDatePicker && (
+                  <TouchableOpacity 
+                    style={styles.datePickerDoneButton} 
+                    onPress={() => setShowDatePicker(false)}
+                  >
+                    <Text style={styles.datePickerDoneText}>Confirmar</Text>
+                  </TouchableOpacity>
+                )}
+                
+                <Text style={styles.formSectionTitle}>Dados da Mãe</Text>
+                <TextInput 
+                  style={styles.formInput} 
+                  placeholder="Nome da mãe *" 
+                  value={motherName} 
+                  onChangeText={setMotherName} 
+                  autoCapitalize="words" 
+                  placeholderTextColor={colors.textSecondary} 
+                />
+                <TextInput 
+                  style={styles.formInput} 
+                  placeholder="Telefone *" 
+                  value={motherPhone} 
+                  onChangeText={setMotherPhone} 
+                  keyboardType="phone-pad" 
+                  placeholderTextColor={colors.textSecondary} 
+                />
+                <TextInput 
+                  style={styles.formInput} 
+                  placeholder="E-mail *" 
+                  value={motherEmail} 
+                  onChangeText={setMotherEmail} 
+                  autoCapitalize="none" 
+                  keyboardType="email-address" 
+                  placeholderTextColor={colors.textSecondary} 
+                />
+                <Text style={styles.formSectionTitle}>Objetivos</Text>
+                <TextInput 
+                  style={[styles.formInput, styles.textArea]} 
+                  placeholder="Objetivos do acompanhamento..." 
+                  value={objectives} 
+                  onChangeText={setObjectives} 
+                  multiline 
+                  numberOfLines={3} 
+                  placeholderTextColor={colors.textSecondary} 
+                />
+                <TouchableOpacity 
+                  style={[styles.addButton, addLoading && { opacity: 0.6 }]} 
+                  onPress={handleAddBaby} 
+                  disabled={addLoading}
+                >
+                  {addLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Cadastrar</Text>}
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      )}
 
       <Modal visible={showSuccessModal} transparent animationType="fade" onRequestClose={() => setShowSuccessModal(false)}>
         <View style={styles.centeredModalOverlay}>
@@ -484,11 +545,15 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
               <IconSymbol ios_icon_name="checkmark.circle.fill" android_material_icon_name="check-circle" size={64} color={colors.statusGood} />
             </View>
             <Text style={styles.modalTitle}>✅ Bebê Cadastrado!</Text>
-            <Text style={styles.modalMessage}>Compartilhe este ID com a mãe para que ela possa fazer login e preencher as rotinas:</Text>
-            <View style={styles.idBox}>
-              <Text style={styles.idText}>{createdBabyId}</Text>
+            <Text style={styles.modalMessage}>Compartilhe este código com a mãe:</Text>
+            <View style={styles.tokenBox}>
+              <Text style={styles.tokenText}>{createdBabyToken}</Text>
             </View>
-            <Text style={styles.modalHint}>💡 A mãe deve criar uma conta e usar este ID durante o cadastro</Text>
+            <TouchableOpacity style={styles.copyButton} onPress={handleCopyToken}>
+              <IconSymbol ios_icon_name="doc.on.clipboard" android_material_icon_name="content-copy" size={20} color="#FFF" />
+              <Text style={styles.copyButtonText}>Copiar Código</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalHint}>💡 A mãe deve criar uma conta e usar este código durante o cadastro</Text>
             <TouchableOpacity style={styles.modalButton} onPress={() => setShowSuccessModal(false)}>
               <Text style={styles.modalButtonText}>Continuar</Text>
             </TouchableOpacity>
@@ -501,8 +566,8 @@ function BabiesListScreen({ onSelectBaby, showErr }: { onSelectBaby: (b: Baby) =
 
 // ─── Baby Detail Screen ───────────────────────────────────────────────────────
 
-function BabyDetailScreen({ baby, onBack, onOpenRoutine, onOpenOrientations, onOpenReports, showErr }: {
-  baby: Baby; onBack: () => void; onOpenRoutine: (r: Routine) => void;
+function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutine, onOpenOrientations, onOpenReports, showErr }: {
+  isConsultant: boolean; baby: Baby; onBack: () => void; onOpenRoutine: (r: Routine) => void;
   onOpenOrientations: () => void; onOpenReports: () => void; showErr: (m: string) => void;
 }) {
   const [routines, setRoutines] = useState<Routine[]>([]);
@@ -616,26 +681,30 @@ function BabyDetailScreen({ baby, onBack, onOpenRoutine, onOpenOrientations, onO
               <Text style={styles.infoCardTitle}>{baby.name}</Text>
               <Text style={styles.infoCardSubtitle}>{baby.ageMonths}m {baby.ageDays}d • {baby.motherName}</Text>
             </View>
-            <TouchableOpacity style={styles.editBtn} onPress={() => setShowEditBaby(true)}>
-              <IconSymbol ios_icon_name="pencil" android_material_icon_name="edit" size={18} color={colors.primary} />
-            </TouchableOpacity>
+            {isConsultant && (
+              <TouchableOpacity style={styles.editBtn} onPress={() => setShowEditBaby(true)}>
+                <IconSymbol ios_icon_name="pencil" android_material_icon_name="edit" size={18} color={colors.primary} />
+              </TouchableOpacity>
+            )}
           </View>
           {baby.objectives && <Text style={styles.infoCardText}>🎯 {baby.objectives}</Text>}
           {baby.conclusion && <Text style={styles.infoCardText}>✅ {baby.conclusion}</Text>}
         </View>
 
-        <TouchableOpacity style={[styles.contractCard, { borderColor: contract ? getStatusColor(contract.status) : colors.border }]} onPress={() => { setContractStartDate(contract?.startDate || new Date().toISOString().split("T")[0]); setContractDuration(String(contract?.durationDays || 21)); setContractStatus(contract?.status || "active"); setShowContractModal(true); }}>
-          <View style={styles.contractCardHeader}>
-            <IconSymbol ios_icon_name="doc.text.fill" android_material_icon_name="description" size={20} color={contract ? getStatusColor(contract.status) : colors.textSecondary} />
-            <Text style={styles.contractCardTitle}>Contrato</Text>
-            {contract && <View style={[styles.statusBadge, { backgroundColor: getStatusColor(contract.status) }]}><Text style={styles.statusText}>{getStatusText(contract.status)}</Text></View>}
-          </View>
-          {contract ? (
-            <Text style={styles.contractCardText}>Início: {formatDateToBR(contract.startDate)} • {contract.durationDays} dias</Text>
-          ) : (
-            <Text style={styles.contractCardText}>Toque para adicionar contrato</Text>
-          )}
-        </TouchableOpacity>
+        {isConsultant && (
+          <TouchableOpacity style={[styles.contractCard, { borderColor: contract ? getStatusColor(contract.status) : colors.border }]} onPress={() => { setContractStartDate(contract?.startDate || new Date().toISOString().split("T")[0]); setContractDuration(String(contract?.durationDays || 21)); setContractStatus(contract?.status || "active"); setShowContractModal(true); }}>
+            <View style={styles.contractCardHeader}>
+              <IconSymbol ios_icon_name="doc.text.fill" android_material_icon_name="description" size={20} color={contract ? getStatusColor(contract.status) : colors.textSecondary} />
+              <Text style={styles.contractCardTitle}>Contrato</Text>
+              {contract && <View style={[styles.statusBadge, { backgroundColor: getStatusColor(contract.status) }]}><Text style={styles.statusText}>{getStatusText(contract.status)}</Text></View>}
+            </View>
+            {contract ? (
+              <Text style={styles.contractCardText}>Início: {formatDateToBR(contract.startDate)} • {contract.durationDays} dias</Text>
+            ) : (
+              <Text style={styles.contractCardText}>Toque para adicionar contrato</Text>
+            )}
+          </TouchableOpacity>
+        )}
 
         <View style={styles.quickActions}>
           <TouchableOpacity style={styles.quickActionBtn} onPress={onOpenOrientations}>
@@ -704,54 +773,58 @@ function BabyDetailScreen({ baby, onBack, onOpenRoutine, onOpenOrientations, onO
         </View>
       </Modal>
 
-      <Modal visible={showContractModal} transparent animationType="slide" onRequestClose={() => setShowContractModal(false)}>
-        <View style={styles.slideModalOverlay}>
-          <View style={styles.slideModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{contract ? "Editar Contrato" : "Novo Contrato"}</Text>
-              <TouchableOpacity onPress={() => setShowContractModal(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
-            </View>
-            <TextInput style={styles.formInput} placeholder="Data de início (AAAA-MM-DD)" value={contractStartDate} onChangeText={setContractStartDate} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-            <TextInput style={styles.formInput} placeholder="Duração em dias" value={contractDuration} onChangeText={setContractDuration} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-            <Text style={styles.formSectionTitle}>Status</Text>
-            <View style={styles.roleButtons}>
-              {["active", "paused", "completed"].map((s) => (
-                <TouchableOpacity key={s} style={[styles.roleButton, contractStatus === s && styles.roleButtonActive]} onPress={() => setContractStatus(s)}>
-                  <Text style={[styles.roleButtonText, contractStatus === s && styles.roleButtonTextActive]}>{getStatusText(s)}</Text>
+      {isConsultant && (
+        <>
+          <Modal visible={showContractModal} transparent animationType="slide" onRequestClose={() => setShowContractModal(false)}>
+            <View style={styles.slideModalOverlay}>
+              <View style={styles.slideModalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{contract ? "Editar Contrato" : "Novo Contrato"}</Text>
+                  <TouchableOpacity onPress={() => setShowContractModal(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
+                </View>
+                <TextInput style={styles.formInput} placeholder="Data de início (AAAA-MM-DD)" value={contractStartDate} onChangeText={setContractStartDate} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
+                <TextInput style={styles.formInput} placeholder="Duração em dias" value={contractDuration} onChangeText={setContractDuration} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
+                <Text style={styles.formSectionTitle}>Status</Text>
+                <View style={styles.roleButtons}>
+                  {["active", "paused", "completed"].map((s) => (
+                    <TouchableOpacity key={s} style={[styles.roleButton, contractStatus === s && styles.roleButtonActive]} onPress={() => setContractStatus(s)}>
+                      <Text style={[styles.roleButtonText, contractStatus === s && styles.roleButtonTextActive]}>{getStatusText(s)}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TouchableOpacity style={[styles.addButton, { marginTop: 16 }, contractLoading && { opacity: 0.6 }]} onPress={handleSaveContract} disabled={contractLoading}>
+                  {contractLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar Contrato</Text>}
                 </TouchableOpacity>
-              ))}
+              </View>
             </View>
-            <TouchableOpacity style={[styles.addButton, { marginTop: 16 }, contractLoading && { opacity: 0.6 }]} onPress={handleSaveContract} disabled={contractLoading}>
-              {contractLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar Contrato</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </Modal>
 
-      <Modal visible={showEditBaby} transparent animationType="slide" onRequestClose={() => setShowEditBaby(false)}>
-        <View style={styles.slideModalOverlay}>
-          <View style={styles.slideModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Editar Bebê</Text>
-              <TouchableOpacity onPress={() => setShowEditBaby(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
+          <Modal visible={showEditBaby} transparent animationType="slide" onRequestClose={() => setShowEditBaby(false)}>
+            <View style={styles.slideModalOverlay}>
+              <View style={styles.slideModalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Editar Bebê</Text>
+                  <TouchableOpacity onPress={() => setShowEditBaby(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
+                </View>
+                <TextInput style={styles.formInput} placeholder="Nome" value={editName} onChangeText={setEditName} autoCapitalize="words" placeholderTextColor={colors.textSecondary} />
+                <TextInput style={[styles.formInput, styles.textArea]} placeholder="Objetivos..." value={editObjectives} onChangeText={setEditObjectives} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
+                <TextInput style={[styles.formInput, styles.textArea]} placeholder="Conclusão do trabalho (consultora)..." value={editConclusion} onChangeText={setEditConclusion} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
+                <TouchableOpacity style={[styles.addButton, editLoading && { opacity: 0.6 }]} onPress={handleEditBaby} disabled={editLoading}>
+                  {editLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar</Text>}
+                </TouchableOpacity>
+              </View>
             </View>
-            <TextInput style={styles.formInput} placeholder="Nome" value={editName} onChangeText={setEditName} autoCapitalize="words" placeholderTextColor={colors.textSecondary} />
-            <TextInput style={[styles.formInput, styles.textArea]} placeholder="Objetivos..." value={editObjectives} onChangeText={setEditObjectives} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
-            <TextInput style={[styles.formInput, styles.textArea]} placeholder="Conclusão do trabalho (consultora)..." value={editConclusion} onChangeText={setEditConclusion} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
-            <TouchableOpacity style={[styles.addButton, editLoading && { opacity: 0.6 }]} onPress={handleEditBaby} disabled={editLoading}>
-              {editLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </Modal>
+        </>
+      )}
     </SafeAreaView>
   );
 }
 
 // ─── Routine Detail Screen ────────────────────────────────────────────────────
 
-function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }: {
-  baby: Baby; routine: Routine; onBack: () => void; showErr: (m: string) => void;
+function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, onBack, showErr }: {
+  isConsultant: boolean; baby: Baby; routine: Routine; onBack: () => void; showErr: (m: string) => void;
 }) {
   const [routine, setRoutine] = useState<Routine>(initialRoutine);
   const [loading, setLoading] = useState(true);
@@ -891,13 +964,15 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
           {routine.motherObservations && <Text style={styles.infoCardText}>Obs: {routine.motherObservations}</Text>}
         </View>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.formSectionTitle}>💬 Comentários da Consultora</Text>
-          <TextInput style={[styles.formInput, styles.textArea]} placeholder="Adicione comentários..." value={consultantComments} onChangeText={setConsultantComments} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
-          <TouchableOpacity style={[styles.addButton, saving && { opacity: 0.6 }]} onPress={handleSaveComments} disabled={saving}>
-            {saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar Comentários</Text>}
-          </TouchableOpacity>
-        </View>
+        {isConsultant && (
+          <View style={styles.infoCard}>
+            <Text style={styles.formSectionTitle}>💬 Comentários da Consultora</Text>
+            <TextInput style={[styles.formInput, styles.textArea]} placeholder="Adicione comentários..." value={consultantComments} onChangeText={setConsultantComments} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
+            <TouchableOpacity style={[styles.addButton, saving && { opacity: 0.6 }]} onPress={handleSaveComments} disabled={saving}>
+              {saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar Comentários</Text>}
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>😴 Sonecas ({naps.length})</Text>
@@ -1059,7 +1134,7 @@ function RoutineDetailScreen({ baby, routine: initialRoutine, onBack, showErr }:
 
 // ─── Orientations Screen ──────────────────────────────────────────────────────
 
-function OrientationsScreen({ baby, onBack, showErr }: { baby: Baby; onBack: () => void; showErr: (m: string) => void }) {
+function OrientationsScreen({ isConsultant, baby, onBack, showErr }: { isConsultant: boolean; baby: Baby; onBack: () => void; showErr: (m: string) => void }) {
   const [orientations, setOrientations] = useState<Orientation[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -1124,10 +1199,12 @@ function OrientationsScreen({ baby, onBack, showErr }: { baby: Baby; onBack: () 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Orientações</Text>
-          <TouchableOpacity style={styles.addSmallBtn} onPress={() => { setDate(new Date().toISOString().split("T")[0]); setText(""); setResults(""); setShowAdd(true); }}>
-            <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
-            <Text style={styles.addSmallBtnText}>Nova</Text>
-          </TouchableOpacity>
+          {isConsultant && (
+            <TouchableOpacity style={styles.addSmallBtn} onPress={() => { setDate(new Date().toISOString().split("T")[0]); setText(""); setResults(""); setShowAdd(true); }}>
+              <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
+              <Text style={styles.addSmallBtnText}>Nova</Text>
+            </TouchableOpacity>
+          )}
         </View>
         {orientations.length === 0 ? (
           <View style={styles.emptyState}><Text style={styles.emptyStateText}>Nenhuma orientação registrada</Text></View>
@@ -1136,9 +1213,11 @@ function OrientationsScreen({ baby, onBack, showErr }: { baby: Baby; onBack: () 
             <View key={o.id} style={styles.orientationCard}>
               <View style={styles.orientationHeader}>
                 <Text style={styles.orientationDate}>{formatDateToBR(o.date)}</Text>
-                <TouchableOpacity onPress={() => { setText(o.orientationText); setResults(o.results || ""); setShowEdit(o); }}>
-                  <IconSymbol ios_icon_name="pencil" android_material_icon_name="edit" size={18} color={colors.primary} />
-                </TouchableOpacity>
+                {isConsultant && (
+                  <TouchableOpacity onPress={() => { setText(o.orientationText); setResults(o.results || ""); setShowEdit(o); }}>
+                    <IconSymbol ios_icon_name="pencil" android_material_icon_name="edit" size={18} color={colors.primary} />
+                  </TouchableOpacity>
+                )}
               </View>
               <Text style={styles.orientationText}>{o.orientationText}</Text>
               {o.results && <View style={styles.resultsBox}><Text style={styles.resultsLabel}>Resultados:</Text><Text style={styles.resultsText}>{o.results}</Text></View>}
@@ -1147,38 +1226,42 @@ function OrientationsScreen({ baby, onBack, showErr }: { baby: Baby; onBack: () 
         )}
       </ScrollView>
 
-      <Modal visible={showAdd} transparent animationType="slide" onRequestClose={() => setShowAdd(false)}>
-        <View style={styles.slideModalOverlay}>
-          <View style={styles.slideModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nova Orientação</Text>
-              <TouchableOpacity onPress={() => setShowAdd(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
+      {isConsultant && (
+        <>
+          <Modal visible={showAdd} transparent animationType="slide" onRequestClose={() => setShowAdd(false)}>
+            <View style={styles.slideModalOverlay}>
+              <View style={styles.slideModalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Nova Orientação</Text>
+                  <TouchableOpacity onPress={() => setShowAdd(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
+                </View>
+                <TextInput style={styles.formInput} placeholder="Data (AAAA-MM-DD)" value={date} onChangeText={setDate} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
+                <TextInput style={[styles.formInput, styles.textArea]} placeholder="Orientação *" value={text} onChangeText={setText} multiline numberOfLines={4} placeholderTextColor={colors.textSecondary} />
+                <TextInput style={[styles.formInput, styles.textArea]} placeholder="Resultados..." value={results} onChangeText={setResults} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
+                <TouchableOpacity style={[styles.addButton, addLoading && { opacity: 0.6 }]} onPress={handleAdd} disabled={addLoading}>
+                  {addLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar</Text>}
+                </TouchableOpacity>
+              </View>
             </View>
-            <TextInput style={styles.formInput} placeholder="Data (AAAA-MM-DD)" value={date} onChangeText={setDate} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-            <TextInput style={[styles.formInput, styles.textArea]} placeholder="Orientação *" value={text} onChangeText={setText} multiline numberOfLines={4} placeholderTextColor={colors.textSecondary} />
-            <TextInput style={[styles.formInput, styles.textArea]} placeholder="Resultados..." value={results} onChangeText={setResults} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
-            <TouchableOpacity style={[styles.addButton, addLoading && { opacity: 0.6 }]} onPress={handleAdd} disabled={addLoading}>
-              {addLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </Modal>
 
-      <Modal visible={!!showEdit} transparent animationType="slide" onRequestClose={() => setShowEdit(null)}>
-        <View style={styles.slideModalOverlay}>
-          <View style={styles.slideModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Editar Orientação</Text>
-              <TouchableOpacity onPress={() => setShowEdit(null)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
+          <Modal visible={!!showEdit} transparent animationType="slide" onRequestClose={() => setShowEdit(null)}>
+            <View style={styles.slideModalOverlay}>
+              <View style={styles.slideModalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Editar Orientação</Text>
+                  <TouchableOpacity onPress={() => setShowEdit(null)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
+                </View>
+                <TextInput style={[styles.formInput, styles.textArea]} placeholder="Orientação *" value={text} onChangeText={setText} multiline numberOfLines={4} placeholderTextColor={colors.textSecondary} />
+                <TextInput style={[styles.formInput, styles.textArea]} placeholder="Resultados..." value={results} onChangeText={setResults} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
+                <TouchableOpacity style={[styles.addButton, addLoading && { opacity: 0.6 }]} onPress={handleEdit} disabled={addLoading}>
+                  {addLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar</Text>}
+                </TouchableOpacity>
+              </View>
             </View>
-            <TextInput style={[styles.formInput, styles.textArea]} placeholder="Orientação *" value={text} onChangeText={setText} multiline numberOfLines={4} placeholderTextColor={colors.textSecondary} />
-            <TextInput style={[styles.formInput, styles.textArea]} placeholder="Resultados..." value={results} onChangeText={setResults} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
-            <TouchableOpacity style={[styles.addButton, addLoading && { opacity: 0.6 }]} onPress={handleEdit} disabled={addLoading}>
-              {addLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </Modal>
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -1293,7 +1376,9 @@ const styles = StyleSheet.create({
   welcomeCard: { backgroundColor: colors.card, borderRadius: 20, padding: 24, marginBottom: 24, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 },
   welcomeIcon: { alignSelf: "center", marginBottom: 16 },
   welcomeTitle: { fontSize: 22, fontWeight: "bold", color: colors.text, textAlign: "center", marginBottom: 12 },
-  welcomeText: { fontSize: 16, color: colors.textSecondary, textAlign: "center", lineHeight: 24, marginBottom: 20 },
+  welcomeText: { fontSize: 16, color: colors.textSecondary, textAlign: "center", lineHeight: 24, marginBottom: 12 },
+  motherInfoBox: { backgroundColor: colors.backgroundAlt, borderRadius: 12, padding: 12, marginTop: 8 },
+  motherInfoText: { fontSize: 13, color: colors.textSecondary, textAlign: "center", lineHeight: 20, fontStyle: "italic" },
   babiesList: { gap: 12 },
   babyCard: { backgroundColor: colors.card, borderRadius: 16, padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   babyCardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
@@ -1327,8 +1412,10 @@ const styles = StyleSheet.create({
   formSectionTitle: { fontSize: 15, fontWeight: "bold", color: colors.text, marginTop: 8, marginBottom: 6 },
   formInput: { backgroundColor: colors.background, borderRadius: 10, padding: 12, marginBottom: 10, fontSize: 15, borderWidth: 1, borderColor: colors.border, color: colors.text },
   textArea: { height: 80, textAlignVertical: "top" },
-  idBox: { backgroundColor: colors.background, borderRadius: 8, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: colors.border, width: "100%" },
-  idText: { fontSize: 13, color: colors.primary, fontWeight: "600", textAlign: "center" },
+  tokenBox: { backgroundColor: colors.background, borderRadius: 12, padding: 20, marginBottom: 16, borderWidth: 2, borderColor: colors.primary, width: "100%" },
+  tokenText: { fontSize: 32, color: colors.primary, fontWeight: "bold", textAlign: "center", letterSpacing: 4 },
+  copyButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.secondary, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24, marginBottom: 16, gap: 8, width: "100%" },
+  copyButtonText: { fontSize: 16, fontWeight: "600", color: "#FFFFFF" },
   roleButtons: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 8 },
   roleButton: { flex: 1, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", minWidth: 80 },
   roleButtonActive: { borderColor: colors.primary, backgroundColor: colors.primary },
