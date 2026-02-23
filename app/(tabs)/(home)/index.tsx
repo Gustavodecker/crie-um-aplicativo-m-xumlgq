@@ -1076,27 +1076,35 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       if (routine.nightSleep && routine.nightSleep.id) {
         console.log("[API] Night sleep already exists:", routine.nightSleep.id);
+        // Already exists, just expand the section
+        setExpandedNightSleep(true);
         return;
-      } else {
-        console.log("[API] Creating night sleep for routine:", routine.id);
-        const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
-          routineId: routine.id,
-          startTryTime: "20:00",
-          fellAsleepTime: null,
-          finalWakeTime: null,
-          sleepMethod: null,
-          environment: null,
-          wakeUpMood: null,
-          observations: null
-        });
-        
-        // Update local state immediately
-        setRoutine(prev => ({ ...prev, nightSleep: newNightSleep }));
-        setNightSleepObservations("");
-        setNightSleepConsultantComments("");
       }
+      
+      console.log("[API] Creating night sleep for routine:", routine.id, "(POST upsert)");
+      // Use POST - backend handles upsert by routineId to avoid duplicates
+      const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
+        routineId: routine.id,
+        startTryTime: "20:00",
+        fellAsleepTime: null,
+        finalWakeTime: null,
+        sleepMethod: null,
+        environment: null,
+        wakeUpMood: null,
+        observations: null
+      });
+      
+      console.log("[API] Night sleep created/upserted with ID:", newNightSleep.id);
+      
+      // Update local state immediately
+      setRoutine(prev => ({ ...prev, nightSleep: newNightSleep }));
+      setNightSleepObservations("");
+      setNightSleepConsultantComments("");
+      setExpandedNightSleep(true);
+      
       await loadRoutine();
     } catch (error: any) {
+      console.error("[API] Error creating night sleep:", error);
       showErr(error.message || "Erro ao salvar sono noturno");
     }
   };
@@ -1105,11 +1113,30 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       console.log("[API] Updating night sleep field:", field, "value:", value);
       
-      // Always use POST - backend handles upsert automatically
-      const updatedNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
-        routineId: routine.id,
-        [field]: value
-      });
+      const currentNightSleep = routine.nightSleep;
+      let updatedNightSleep: NightSleep;
+
+      if (currentNightSleep && currentNightSleep.id) {
+        // Night sleep exists - use PUT to update specific field
+        console.log("[API] Night sleep exists (id:", currentNightSleep.id, "), using PUT");
+        updatedNightSleep = await apiPut<NightSleep>(`/api/night-sleep/${currentNightSleep.id}`, {
+          [field]: value
+        });
+      } else {
+        // Night sleep doesn't exist yet - use POST (backend handles upsert by routineId)
+        console.log("[API] Night sleep does not exist yet, using POST (upsert) for routine:", routine.id);
+        updatedNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
+          routineId: routine.id,
+          startTryTime: field === "startTryTime" ? value : "20:00",
+          fellAsleepTime: field === "fellAsleepTime" ? value : null,
+          finalWakeTime: field === "finalWakeTime" ? value : null,
+          sleepMethod: field === "sleepMethod" ? value : null,
+          environment: field === "environment" ? value : null,
+          wakeUpMood: field === "wakeUpMood" ? value : null,
+          observations: field === "observations" ? value : null,
+          consultantComments: field === "consultantComments" ? value : null,
+        });
+      }
       
       console.log("[API] Night sleep updated/created with ID:", updatedNightSleep.id);
       
@@ -1129,31 +1156,41 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
   const handleAddWaking = async () => {
     try {
-      if (!routine.nightSleep || !routine.nightSleep.id) {
-        console.log("[API] Night sleep doesn't exist, creating it first");
-        await handleAddOrUpdateNightSleep();
-        await loadRoutine();
-        
-        const updatedRoutine = await apiGet<Routine>(`/api/routines/${routine.id}`);
-        if (!updatedRoutine.nightSleep || !updatedRoutine.nightSleep.id) {
-          showErr("Erro: Não foi possível criar o sono noturno");
-          return;
-        }
-        
-        console.log("[API] Adding night waking to newly created night sleep:", updatedRoutine.nightSleep.id);
-        await apiPost("/api/night-wakings", {
-          nightSleepId: updatedRoutine.nightSleep.id,
-          startTime: "02:00",
-          endTime: "02:30"
+      // Ensure night sleep exists first (check for valid id)
+      let nightSleepId = routine.nightSleep?.id;
+      
+      if (!nightSleepId) {
+        console.log("[API] Night sleep doesn't exist yet, creating it via POST (upsert) for routine:", routine.id);
+        // POST with upsert behavior - backend will create or return existing record
+        const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
+          routineId: routine.id,
+          startTryTime: "20:00",
+          fellAsleepTime: null,
+          finalWakeTime: null,
+          sleepMethod: null,
+          environment: null,
+          wakeUpMood: null,
+          observations: null
         });
-      } else {
-        console.log("[API] Adding night waking to existing night sleep:", routine.nightSleep.id);
-        await apiPost("/api/night-wakings", {
-          nightSleepId: routine.nightSleep.id,
-          startTime: "02:00",
-          endTime: "02:30"
-        });
+        
+        console.log("[API] Night sleep created/upserted with ID:", newNightSleep.id);
+        nightSleepId = newNightSleep.id;
+        
+        // Update local state
+        setRoutine(prev => ({
+          ...prev,
+          nightSleep: newNightSleep
+        }));
       }
+      
+      console.log("[API] Adding night waking to night sleep:", nightSleepId);
+      const newWaking = await apiPost<NightWaking>("/api/night-wakings", {
+        nightSleepId: nightSleepId,
+        startTime: "02:00",
+        endTime: "02:30"
+      });
+      
+      console.log("[API] Night waking created:", newWaking.id);
       
       await loadRoutine();
     } catch (error: any) {
@@ -1326,8 +1363,18 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const saveNightSleepObservations = async (text: string) => {
     try {
       if (routine.nightSleep?.id) {
+        // Night sleep exists - use PUT
         await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, { observations: text });
-        console.log("[API] Night sleep observations saved");
+        console.log("[API] Night sleep observations saved via PUT");
+      } else if (routine.nightSleep !== null && routine.nightSleep !== undefined) {
+        // Night sleep object exists but no id yet - use POST upsert
+        await apiPost("/api/night-sleep", {
+          routineId: routine.id,
+          startTryTime: "20:00",
+          observations: text
+        });
+        console.log("[API] Night sleep observations saved via POST upsert");
+        await loadRoutine(true);
       }
     } catch (error: any) {
       console.error("[API] Error saving night sleep observations:", error);
@@ -1337,8 +1384,18 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const saveNightSleepConsultantComments = async (text: string) => {
     try {
       if (routine.nightSleep?.id) {
+        // Night sleep exists - use PUT
         await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, { consultantComments: text });
-        console.log("[API] Night sleep consultant comments saved");
+        console.log("[API] Night sleep consultant comments saved via PUT");
+      } else if (routine.nightSleep !== null && routine.nightSleep !== undefined) {
+        // Night sleep object exists but no id yet - use POST upsert
+        await apiPost("/api/night-sleep", {
+          routineId: routine.id,
+          startTryTime: "20:00",
+          consultantComments: text
+        });
+        console.log("[API] Night sleep consultant comments saved via POST upsert");
+        await loadRoutine(true);
       }
     } catch (error: any) {
       console.error("[API] Error saving night sleep consultant comments:", error);
@@ -1348,7 +1405,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
 
   const naps = routine.naps || [];
-  const nightSleep = routine.nightSleep;
+  // nightSleep from API can be {} (empty object) when no record exists - treat as null if no id
+  const nightSleep = routine.nightSleep && routine.nightSleep.id ? routine.nightSleep : null;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
