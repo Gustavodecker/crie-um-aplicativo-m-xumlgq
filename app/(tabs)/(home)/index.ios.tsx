@@ -1,3 +1,2 @@
 
-import HomeScreen from './index';
-export default HomeScreen;
+export { default } from './index';

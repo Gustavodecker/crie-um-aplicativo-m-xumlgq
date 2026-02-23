@@ -138,7 +138,8 @@ interface Report {
 type Screen = 
   | { type: "list" }
   | { type: "baby"; baby: Baby }
-  | { type: "routine"; baby: Baby; routine: Routine }
+  | { type: "routineList"; baby: Baby }
+  | { type: "routine"; baby: Baby; routine: Routine; dayNumber: number }
   | { type: "orientations"; baby: Baby }
   | { type: "reports"; baby: Baby };
 
@@ -230,9 +231,11 @@ function HomeScreen() {
       case "list": 
         return <BabiesListScreen isConsultant={isConsultant} onSelectBaby={(b) => setScreen({ type: "baby", baby: b })} showErr={showErr} />;
       case "baby": 
-        return <BabyDetailScreen isConsultant={isConsultant} baby={screen.baby} onBack={() => setScreen({ type: "list" })} onOpenRoutine={(r) => setScreen({ type: "routine", baby: screen.baby, routine: r })} onOpenOrientations={() => setScreen({ type: "orientations", baby: screen.baby })} onOpenReports={() => setScreen({ type: "reports", baby: screen.baby })} showErr={showErr} />;
+        return <BabyDetailScreen isConsultant={isConsultant} baby={screen.baby} onBack={() => setScreen({ type: "list" })} onOpenRoutineList={() => setScreen({ type: "routineList", baby: screen.baby })} onOpenOrientations={() => setScreen({ type: "orientations", baby: screen.baby })} onOpenReports={() => setScreen({ type: "reports", baby: screen.baby })} showErr={showErr} />;
+      case "routineList":
+        return <RoutineListScreen isConsultant={isConsultant} baby={screen.baby} onBack={() => setScreen({ type: "baby", baby: screen.baby })} onOpenRoutine={(r, dayNum) => setScreen({ type: "routine", baby: screen.baby, routine: r, dayNumber: dayNum })} showErr={showErr} />;
       case "routine": 
-        return <RoutineDetailScreen isConsultant={isConsultant} baby={screen.baby} routine={screen.routine} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
+        return <RoutineDetailScreen isConsultant={isConsultant} baby={screen.baby} routine={screen.routine} dayNumber={screen.dayNumber} onBack={() => setScreen({ type: "routineList", baby: screen.baby })} showErr={showErr} />;
       case "orientations": 
         return <OrientationsScreen isConsultant={isConsultant} baby={screen.baby} onBack={() => setScreen({ type: "baby", baby: screen.baby })} showErr={showErr} />;
       case "reports": 
@@ -286,15 +289,12 @@ function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultan
         console.log("[API] Consultant babies loaded:", data.length);
         setBabies(data);
       } else {
-        // Mother - fetch her linked baby via GET /api/mother/baby
         console.log("[API] User is a mother - fetching linked baby via /api/mother/baby");
         try {
           const baby = await apiGet<Baby>("/api/mother/baby");
           console.log("[API] Mother's baby loaded:", baby.id, baby.name);
           setBabies([baby]);
         } catch (error: any) {
-          // The apiCall throws an Error with message like "404" or "Baby not found"
-          // when the server returns a 404 (no baby linked yet)
           const msg: string = error?.message || "";
           if (msg.includes("404") || msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("no baby")) {
             console.log("[API] No baby linked to this mother yet (404)");
@@ -582,21 +582,15 @@ function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultan
 
 // ─── Baby Detail Screen ───────────────────────────────────────────────────────
 
-function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutine, onOpenOrientations, onOpenReports, showErr }: {
-  isConsultant: boolean; baby: Baby; onBack: () => void; onOpenRoutine: (r: Routine) => void;
+function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutineList, onOpenOrientations, onOpenReports, showErr }: {
+  isConsultant: boolean; baby: Baby; onBack: () => void; onOpenRoutineList: () => void;
   onOpenOrientations: () => void; onOpenReports: () => void; showErr: (m: string) => void;
 }) {
-  const [routines, setRoutines] = useState<Routine[]>([]);
   const [contract, setContract] = useState<Contract | null>(baby.activeContract);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showAddRoutine, setShowAddRoutine] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
   const [showEditBaby, setShowEditBaby] = useState(false);
-  const [addRoutineLoading, setAddRoutineLoading] = useState(false);
-  const [routineDate, setRoutineDate] = useState(new Date().toISOString().split("T")[0]);
-  const [routineWakeTime, setRoutineWakeTime] = useState("07:00");
-  const [routineObs, setRoutineObs] = useState("");
   const [contractStartDate, setContractStartDate] = useState(contract?.startDate || new Date().toISOString().split("T")[0]);
   const [contractDuration, setContractDuration] = useState(String(contract?.durationDays || 21));
   const [contractStatus, setContractStatus] = useState(contract?.status || "active");
@@ -608,12 +602,8 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutine, onOpenOri
 
   const loadData = useCallback(async () => {
     try {
-      console.log("[API] Loading routines for baby:", baby.id);
-      const [routinesData, contractData] = await Promise.all([
-        apiGet<Routine[]>(`/api/routines/baby/${baby.id}`),
-        apiGet<Contract | null>(`/api/contracts/baby/${baby.id}`),
-      ]);
-      setRoutines(routinesData.sort((a, b) => b.date.localeCompare(a.date)));
+      console.log("[API] Loading contract for baby:", baby.id);
+      const contractData = await apiGet<Contract | null>(`/api/contracts/baby/${baby.id}`);
       setContract(contractData);
     } catch (error: any) {
       console.error("Error loading baby data:", error);
@@ -625,25 +615,6 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutine, onOpenOri
   }, [baby.id]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
-  const handleAddRoutine = async () => {
-    if (!routineDate || !routineWakeTime) { showErr("Preencha data e horário de acordar"); return; }
-    setAddRoutineLoading(true);
-    try {
-      console.log("[API] Creating routine for baby:", baby.id);
-      const routine = await apiPost<Routine>("/api/routines", { babyId: baby.id, date: routineDate, wakeUpTime: routineWakeTime, motherObservations: routineObs || null });
-      console.log("[API] Routine created:", routine.id);
-      setShowAddRoutine(false);
-      setRoutineDate(new Date().toISOString().split("T")[0]);
-      setRoutineWakeTime("07:00");
-      setRoutineObs("");
-      loadData();
-    } catch (error: any) {
-      showErr(error.message || "Erro ao criar rotina");
-    } finally {
-      setAddRoutineLoading(false);
-    }
-  };
 
   const handleSaveContract = async () => {
     if (!contractStartDate || !contractDuration) { showErr("Preencha todos os campos do contrato"); return; }
@@ -681,8 +652,6 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutine, onOpenOri
   };
 
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
-
-  const contractActive = contract?.status === "active";
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -723,71 +692,20 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutine, onOpenOri
         )}
 
         <View style={styles.quickActions}>
+          <TouchableOpacity style={styles.quickActionBtn} onPress={onOpenRoutineList}>
+            <IconSymbol ios_icon_name="calendar.badge.clock" android_material_icon_name="schedule" size={24} color={colors.primary} />
+            <Text style={styles.quickActionText}>Rotina</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.quickActionBtn} onPress={onOpenOrientations}>
-            <IconSymbol ios_icon_name="list.bullet.clipboard.fill" android_material_icon_name="assignment" size={24} color={colors.primary} />
+            <IconSymbol ios_icon_name="list.bullet.clipboard.fill" android_material_icon_name="assignment" size={24} color={colors.secondary} />
             <Text style={styles.quickActionText}>Orientações</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.quickActionBtn} onPress={onOpenReports}>
-            <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar-chart" size={24} color={colors.secondary} />
+            <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar-chart" size={24} color={colors.success} />
             <Text style={styles.quickActionText}>Acompanhamento</Text>
           </TouchableOpacity>
         </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Rotina Vigente</Text>
-          {contractActive && (
-            <TouchableOpacity style={styles.addSmallBtn} onPress={() => setShowAddRoutine(true)}>
-              <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
-              <Text style={styles.addSmallBtnText}>Novo Dia</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {routines.length === 0 ? (
-          <View style={styles.emptyState}><Text style={styles.emptyStateText}>Nenhuma rotina registrada</Text></View>
-        ) : (
-          routines.map((routine, index) => {
-            const dayNumber = routines.length - index;
-            const routineStatus = routine.consultantComments ? "Concluído" : "Em Preenchimento";
-            const statusColor = routine.consultantComments ? colors.statusGood : colors.statusMedium;
-            
-            return (
-              <TouchableOpacity key={routine.id} style={styles.routineCard} onPress={() => { console.log("Opening routine:", routine.id); onOpenRoutine(routine); }}>
-                <View style={styles.routineCardHeader}>
-                  <View>
-                    <Text style={styles.routineDayNumber}>Dia {dayNumber}</Text>
-                    <Text style={styles.routineDate}>{formatDateToBR(routine.date)}</Text>
-                  </View>
-                  <View style={[styles.routineStatusBadge, { backgroundColor: statusColor }]}>
-                    <Text style={styles.routineStatusText}>{routineStatus}</Text>
-                  </View>
-                </View>
-                {routine.consultantComments && <Text style={styles.routineComment} numberOfLines={2}>💬 {routine.consultantComments}</Text>}
-                <View style={{ alignItems: "flex-end", marginTop: 4 }}>
-                  <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={colors.textSecondary} />
-                </View>
-              </TouchableOpacity>
-            );
-          })
-        )}
       </ScrollView>
-
-      <Modal visible={showAddRoutine} transparent animationType="slide" onRequestClose={() => setShowAddRoutine(false)}>
-        <View style={styles.slideModalOverlay}>
-          <View style={styles.slideModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nova Rotina</Text>
-              <TouchableOpacity onPress={() => setShowAddRoutine(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
-            </View>
-            <TextInput style={styles.formInput} placeholder="Data (AAAA-MM-DD)" value={routineDate} onChangeText={setRoutineDate} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-            <TextInput style={styles.formInput} placeholder="Horário que acordou (HH:MM)" value={routineWakeTime} onChangeText={setRoutineWakeTime} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-            <TextInput style={[styles.formInput, styles.textArea]} placeholder="Observações da mãe..." value={routineObs} onChangeText={setRoutineObs} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
-            <TouchableOpacity style={[styles.addButton, addRoutineLoading && { opacity: 0.6 }]} onPress={handleAddRoutine} disabled={addRoutineLoading}>
-              {addRoutineLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Criar Rotina</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {isConsultant && (
         <>
@@ -837,10 +755,184 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutine, onOpenOri
   );
 }
 
+// ─── Routine List Screen ──────────────────────────────────────────────────────
+
+function RoutineListScreen({ isConsultant, baby, onBack, onOpenRoutine, showErr }: {
+  isConsultant: boolean; baby: Baby; onBack: () => void; onOpenRoutine: (r: Routine, dayNum: number) => void; showErr: (m: string) => void;
+}) {
+  const [routines, setRoutines] = useState<Routine[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showAddRoutine, setShowAddRoutine] = useState(false);
+  const [addRoutineLoading, setAddRoutineLoading] = useState(false);
+  const [routineDate, setRoutineDate] = useState(new Date().toISOString().split("T")[0]);
+  const [routineWakeTime, setRoutineWakeTime] = useState("07:00");
+  const [routineObs, setRoutineObs] = useState("");
+
+  const loadRoutines = useCallback(async () => {
+    try {
+      console.log("[API] Loading routines for baby:", baby.id);
+      const routinesData = await apiGet<Routine[]>(`/api/routines/baby/${baby.id}`);
+      setRoutines(routinesData.sort((a, b) => a.date.localeCompare(b.date)));
+    } catch (error: any) {
+      console.error("Error loading routines:", error);
+      showErr(error.message || "Erro ao carregar rotinas");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [baby.id]);
+
+  useEffect(() => { loadRoutines(); }, [loadRoutines]);
+
+  const handleAddRoutine = async () => {
+    if (!routineDate || !routineWakeTime) { showErr("Preencha data e horário de acordar"); return; }
+    setAddRoutineLoading(true);
+    try {
+      console.log("[API] Creating routine for baby:", baby.id);
+      const routine = await apiPost<Routine>("/api/routines", { babyId: baby.id, date: routineDate, wakeUpTime: routineWakeTime, motherObservations: routineObs || null });
+      console.log("[API] Routine created:", routine.id);
+      setShowAddRoutine(false);
+      setRoutineDate(new Date().toISOString().split("T")[0]);
+      setRoutineWakeTime("07:00");
+      setRoutineObs("");
+      loadRoutines();
+    } catch (error: any) {
+      showErr(error.message || "Erro ao criar rotina");
+    } finally {
+      setAddRoutineLoading(false);
+    }
+  };
+
+  if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
+
+  const contract = baby.activeContract;
+  const contractActive = contract?.status === "active";
+  const totalDays = contract?.durationDays || 0;
+
+  const routinesByDay: { [key: number]: Routine | null } = {};
+  for (let i = 1; i <= totalDays; i++) {
+    routinesByDay[i] = null;
+  }
+
+  routines.forEach((routine, index) => {
+    const dayNumber = index + 1;
+    if (dayNumber <= totalDays) {
+      routinesByDay[dayNumber] = routine;
+    }
+  });
+
+  return (
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <Stack.Screen options={{ 
+        headerShown: true, 
+        title: `Rotina - ${baby.name}`, 
+        headerStyle: { backgroundColor: colors.background }, 
+        headerTintColor: colors.text, 
+        headerLeft: () => (
+          <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}>
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        )
+      }} />
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadRoutines(); }} />}
+      >
+        {contract && (
+          <View style={styles.infoCard}>
+            <Text style={styles.infoCardTitle}>Contrato: {contract.durationDays} dias</Text>
+            <Text style={styles.infoCardSubtitle}>Início: {formatDateToBR(contract.startDate)}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(contract.status), marginTop: 8, alignSelf: "flex-start" }]}>
+              <Text style={styles.statusText}>{getStatusText(contract.status)}</Text>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Dias da Rotina</Text>
+          {contractActive && (
+            <TouchableOpacity style={styles.addSmallBtn} onPress={() => setShowAddRoutine(true)}>
+              <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
+              <Text style={styles.addSmallBtnText}>Novo Dia</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {totalDays === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>Nenhum contrato ativo</Text>
+            <Text style={styles.emptyStateSubtext}>Configure um contrato para visualizar os dias</Text>
+          </View>
+        ) : (
+          Object.keys(routinesByDay).map((dayKey) => {
+            const dayNumber = parseInt(dayKey);
+            const routine = routinesByDay[dayNumber];
+            const routineStatus = routine?.consultantComments ? "Concluído" : routine ? "Em Preenchimento" : "Pendente";
+            const statusColor = routine?.consultantComments ? colors.statusGood : routine ? colors.statusMedium : colors.statusPoor;
+
+            return (
+              <TouchableOpacity 
+                key={dayNumber} 
+                style={styles.routineCard} 
+                onPress={() => {
+                  if (routine) {
+                    console.log("Opening routine:", routine.id, "Day:", dayNumber);
+                    onOpenRoutine(routine, dayNumber);
+                  } else {
+                    showErr("Este dia ainda não foi preenchido");
+                  }
+                }}
+                disabled={!routine}
+              >
+                <View style={styles.routineCardHeader}>
+                  <View>
+                    <Text style={styles.routineDayNumber}>Dia {dayNumber}</Text>
+                    {routine && <Text style={styles.routineDate}>{formatDateToBR(routine.date)}</Text>}
+                  </View>
+                  <View style={[styles.routineStatusBadge, { backgroundColor: statusColor }]}>
+                    <Text style={styles.routineStatusText}>{routineStatus}</Text>
+                  </View>
+                </View>
+                {routine?.consultantComments && (
+                  <Text style={styles.routineComment} numberOfLines={2}>💬 {routine.consultantComments}</Text>
+                )}
+                {routine && (
+                  <View style={{ alignItems: "flex-end", marginTop: 4 }}>
+                    <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={colors.textSecondary} />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })
+        )}
+      </ScrollView>
+
+      <Modal visible={showAddRoutine} transparent animationType="slide" onRequestClose={() => setShowAddRoutine(false)}>
+        <View style={styles.slideModalOverlay}>
+          <View style={styles.slideModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Nova Rotina</Text>
+              <TouchableOpacity onPress={() => setShowAddRoutine(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
+            </View>
+            <TextInput style={styles.formInput} placeholder="Data (AAAA-MM-DD)" value={routineDate} onChangeText={setRoutineDate} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
+            <TextInput style={styles.formInput} placeholder="Horário que acordou (HH:MM)" value={routineWakeTime} onChangeText={setRoutineWakeTime} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
+            <TextInput style={[styles.formInput, styles.textArea]} placeholder="Observações da mãe..." value={routineObs} onChangeText={setRoutineObs} multiline numberOfLines={3} placeholderTextColor={colors.textSecondary} />
+            <TouchableOpacity style={[styles.addButton, addRoutineLoading && { opacity: 0.6 }]} onPress={handleAddRoutine} disabled={addRoutineLoading}>
+              {addRoutineLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Criar Rotina</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
 // ─── Routine Detail Screen ────────────────────────────────────────────────────
 
-function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, onBack, showErr }: {
-  isConsultant: boolean; baby: Baby; routine: Routine; onBack: () => void; showErr: (m: string) => void;
+function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayNumber, onBack, showErr }: {
+  isConsultant: boolean; baby: Baby; routine: Routine; dayNumber: number; onBack: () => void; showErr: (m: string) => void;
 }) {
   const [routine, setRoutine] = useState<Routine>(initialRoutine);
   const [loading, setLoading] = useState(true);
@@ -970,9 +1062,17 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, onBa
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Stack.Screen options={{ headerShown: true, title: `Dia ${formatDateToBR(routine.date)}`, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerLeft: () => (
-        <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}><IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} /></TouchableOpacity>
-      )}} />
+      <Stack.Screen options={{ 
+        headerShown: true, 
+        title: `Dia ${dayNumber} - ${formatDateToBR(routine.date)}`, 
+        headerStyle: { backgroundColor: colors.background }, 
+        headerTintColor: colors.text, 
+        headerLeft: () => (
+          <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}>
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        )
+      }} />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         
         <View style={styles.infoCard}>
@@ -1516,5 +1616,4 @@ const styles = StyleSheet.create({
   dateRow: { flexDirection: "row", gap: 8 },
 });
 
-// Explicit default export for Android bundler compatibility
 export default HomeScreen;
