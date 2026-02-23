@@ -655,10 +655,10 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutineList, onOpe
     }
   };
 
-  const handleOpenLandscapeReports = () => {
-    console.log("[Navigation] Opening landscape reports for baby:", baby.id, baby.name);
+  const handleOpenAcompanhamento = () => {
+    console.log("[Navigation] Opening acompanhamento (landscape reports) for baby:", baby.id, baby.name);
     router.push({
-      pathname: "/(tabs)/(home)/reports-landscape",
+      pathname: "/(tabs)/(home)/acompanhamento",
       params: { babyId: baby.id, babyName: baby.name },
     });
   };
@@ -712,7 +712,7 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutineList, onOpe
             <IconSymbol ios_icon_name="list.bullet.clipboard.fill" android_material_icon_name="assignment" size={24} color={colors.secondary} />
             <Text style={styles.quickActionText}>Orientações</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionBtn} onPress={handleOpenLandscapeReports}>
+          <TouchableOpacity style={styles.quickActionBtn} onPress={handleOpenAcompanhamento}>
             <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar-chart" size={24} color={colors.success} />
             <Text style={styles.quickActionText}>Acompanhamento</Text>
           </TouchableOpacity>
