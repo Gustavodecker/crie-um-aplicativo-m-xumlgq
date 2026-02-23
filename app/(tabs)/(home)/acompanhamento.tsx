@@ -92,7 +92,9 @@ interface Routine {
 function minutesToHM(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  return `${h}:${m.toString().padStart(2, "0")}:00 h`;
+  const hStr = String(h);
+  const mStr = String(m).padStart(2, "0");
+  return `${hStr}h${mStr}min`;
 }
 
 function calcTimeDiff(start: string, end: string): number {
@@ -120,16 +122,8 @@ export default function AcompanhamentoScreen() {
   const babyId = params.babyId as string;
   const babyName = params.babyName as string;
   
-  const [report, setReport] = useState<Report | null>(null);
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    return d.toISOString().split("T")[0];
-  });
-  const [endDate, setEndDate] = useState(new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
     console.log("[Orientation] Locking to landscape mode");
@@ -144,23 +138,27 @@ export default function AcompanhamentoScreen() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      console.log("[API] Loading report for baby:", babyId);
-      const reportData = await apiGet<Report>(`/api/reports/baby/${babyId}?startDate=${startDate}&endDate=${endDate}`);
-      setReport(reportData);
-      
-      console.log("[API] Loading routines for baby:", babyId);
+      console.log("[API] Loading all routines for baby:", babyId);
       const routinesData = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
-      const filteredRoutines = routinesData.filter(r => r.date >= startDate && r.date <= endDate);
-      setRoutines(filteredRoutines.sort((a, b) => a.date.localeCompare(b.date)));
       
-      console.log("[Data] Report loaded:", reportData);
-      console.log("[Data] Routines loaded:", filteredRoutines.length);
+      const filledRoutines = routinesData.filter(r => {
+        const hasNaps = r.naps && r.naps.length > 0;
+        const hasNightSleep = r.nightSleep && (r.nightSleep as any).id;
+        const hasWakeUpTime = r.wakeUpTime && r.wakeUpTime !== "07:00";
+        return hasNaps || hasNightSleep || hasWakeUpTime;
+      });
+      
+      const sortedRoutines = filledRoutines.sort((a, b) => a.date.localeCompare(b.date));
+      setRoutines(sortedRoutines);
+      
+      console.log("[Data] Total routines:", routinesData.length);
+      console.log("[Data] Filled routines:", sortedRoutines.length);
     } catch (error: any) {
       console.error("[Error] Loading data:", error);
     } finally {
       setLoading(false);
     }
-  }, [babyId, startDate, endDate]);
+  }, [babyId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -172,7 +170,7 @@ export default function AcompanhamentoScreen() {
     );
   }
 
-  if (!report) {
+  if (routines.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
         <Stack.Screen options={{ 
@@ -187,7 +185,7 @@ export default function AcompanhamentoScreen() {
           )
         }} />
         <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>Nenhum dado disponível</Text>
+          <Text style={styles.emptyStateText}>Nenhuma rotina preenchida ainda</Text>
         </View>
       </SafeAreaView>
     );
@@ -216,10 +214,7 @@ export default function AcompanhamentoScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {report.dailyEvolution.map((day, index) => {
-            const routine = routines[index];
-            if (!routine) return null;
-            
+          {routines.map((routine, index) => {
             const naps = routine.naps || [];
             const nightSleep = routine.nightSleep && (routine.nightSleep as any).id ? routine.nightSleep : null;
             const wakings = nightSleep?.wakings || [];
@@ -235,11 +230,20 @@ export default function AcompanhamentoScreen() {
               ? calcTimeDiff(nightSleep.fellAsleepTime, nightSleep.finalWakeTime)
               : 0;
             
+            const totalWakingDuration = wakings.reduce((sum, waking) => {
+              return sum + calcTimeDiff(waking.startTime, waking.endTime);
+            }, 0);
+            
+            const netNightSleep = nightSleepDuration - totalWakingDuration;
+            const total24h = totalNapDuration + netNightSleep;
+            
+            const dayNumber = index + 1;
+            
             return (
-              <View key={day.date} style={styles.dayCard}>
+              <View key={routine.id} style={styles.dayCard}>
                 <View style={styles.dayHeader}>
-                  <Text style={styles.dayTitle}>DIA {index + 1}</Text>
-                  <Text style={styles.dayDate}>{formatDateToBR(day.date)}</Text>
+                  <Text style={styles.dayTitle}>DIA {dayNumber}</Text>
+                  <Text style={styles.dayDate}>{formatDateToBR(routine.date)}</Text>
                 </View>
                 
                 <View style={styles.divider} />
@@ -247,14 +251,20 @@ export default function AcompanhamentoScreen() {
                 <View style={styles.section}>
                   <Text style={styles.sectionLabel}>Acordou</Text>
                   <Text style={styles.sectionValue}>Às {routine.wakeUpTime}h</Text>
-                  <Text style={styles.sectionSubValue}>
-                    Janela de {minutesToHM(naps[0] && naps[0].startTryTime ? calcTimeDiff(routine.wakeUpTime, naps[0].startTryTime) : 0)}
-                  </Text>
+                  {naps[0] && naps[0].startTryTime && (
+                    <Text style={styles.sectionSubValue}>
+                      Janela de {minutesToHM(calcTimeDiff(routine.wakeUpTime, naps[0].startTryTime))}
+                    </Text>
+                  )}
                 </View>
                 
                 <View style={styles.divider} />
                 
                 {naps.map((nap, napIndex) => {
+                  const timeToSleep = nap.startTryTime && nap.fellAsleepTime
+                    ? calcTimeDiff(nap.startTryTime, nap.fellAsleepTime)
+                    : 0;
+                  
                   const sleepDuration = nap.fellAsleepTime && nap.wakeUpTime 
                     ? calcTimeDiff(nap.fellAsleepTime, nap.wakeUpTime) 
                     : 0;
@@ -264,19 +274,57 @@ export default function AcompanhamentoScreen() {
                     ? calcTimeDiff(nap.wakeUpTime, nextNap.startTryTime)
                     : 0;
                   
+                  const windowToNight = !nextNap && nap.wakeUpTime && nightSleep?.startTryTime
+                    ? calcTimeDiff(nap.wakeUpTime, nightSleep.startTryTime)
+                    : 0;
+                  
                   return (
                     <React.Fragment key={nap.id}>
                       <View style={styles.section}>
                         <Text style={styles.sectionLabel}>Soneca {napIndex + 1}</Text>
-                        <Text style={styles.sectionValue}>
-                          Das {nap.fellAsleepTime || "—"} às {nap.wakeUpTime || "—"} h
-                        </Text>
-                        <Text style={styles.sectionSubValue}>
-                          ({minutesToHM(sleepDuration)})
-                        </Text>
+                        {nap.startTryTime && (
+                          <Text style={styles.sectionValue}>
+                            Tentou dormir às {nap.startTryTime}h
+                          </Text>
+                        )}
+                        {nap.fellAsleepTime && nap.wakeUpTime && (
+                          <>
+                            <Text style={styles.sectionValue}>
+                              Dormiu das {nap.fellAsleepTime}h às {nap.wakeUpTime}h
+                            </Text>
+                            <Text style={styles.sectionSubValue}>
+                              Duração: {minutesToHM(sleepDuration)}
+                            </Text>
+                          </>
+                        )}
+                        {timeToSleep > 0 && (
+                          <Text style={styles.sectionSubValue}>
+                            Levou {minutesToHM(timeToSleep)} para dormir
+                          </Text>
+                        )}
+                        {nap.sleepMethod && (
+                          <Text style={styles.sectionSubValue}>
+                            Dormiu: {nap.sleepMethod}
+                          </Text>
+                        )}
+                        {nap.environment && (
+                          <Text style={styles.sectionSubValue}>
+                            Ambiente: {nap.environment}
+                          </Text>
+                        )}
+                        {nap.wakeUpMood && (
+                          <Text style={styles.sectionSubValue}>
+                            Acordou: {nap.wakeUpMood}
+                          </Text>
+                        )}
                         {windowToNext > 0 && (
                           <Text style={styles.sectionSubValue}>
-                            Janela de {minutesToHM(windowToNext)}
+                            Janela até próxima soneca: {minutesToHM(windowToNext)}
+                          </Text>
+                        )}
+                        {windowToNight > 0 && (
+                          <Text style={styles.sectionSubValue}>
+                            Janela até sono noturno: {minutesToHM(windowToNight)}
                           </Text>
                         )}
                       </View>
@@ -286,9 +334,9 @@ export default function AcompanhamentoScreen() {
                 })}
                 
                 <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>Duração do Sono Diurno</Text>
+                  <Text style={styles.sectionLabel}>Total Sono Diurno</Text>
                   <Text style={styles.sectionValue}>
-                    Somatória das Sonecas {minutesToHM(totalNapDuration)}
+                    {minutesToHM(totalNapDuration)}
                   </Text>
                 </View>
                 
@@ -298,15 +346,44 @@ export default function AcompanhamentoScreen() {
                   <Text style={styles.sectionLabel}>Sono Noturno</Text>
                   {nightSleep ? (
                     <>
-                      <Text style={styles.sectionValue}>
-                        Iniciou às {nightSleep.startTryTime || "—"}h
-                      </Text>
-                      <Text style={styles.sectionSubValue}>
-                        ({minutesToHM(nightSleepDuration)})
-                      </Text>
+                      {nightSleep.startTryTime && (
+                        <Text style={styles.sectionValue}>
+                          Tentou dormir às {nightSleep.startTryTime}h
+                        </Text>
+                      )}
+                      {nightSleep.fellAsleepTime && nightSleep.finalWakeTime && (
+                        <>
+                          <Text style={styles.sectionValue}>
+                            Dormiu das {nightSleep.fellAsleepTime}h às {nightSleep.finalWakeTime}h
+                          </Text>
+                          <Text style={styles.sectionSubValue}>
+                            Duração total: {minutesToHM(nightSleepDuration)}
+                          </Text>
+                        </>
+                      )}
+                      {nightSleep.startTryTime && nightSleep.fellAsleepTime && (
+                        <Text style={styles.sectionSubValue}>
+                          Levou {minutesToHM(calcTimeDiff(nightSleep.startTryTime, nightSleep.fellAsleepTime))} para dormir
+                        </Text>
+                      )}
+                      {nightSleep.sleepMethod && (
+                        <Text style={styles.sectionSubValue}>
+                          Dormiu: {nightSleep.sleepMethod}
+                        </Text>
+                      )}
+                      {nightSleep.environment && (
+                        <Text style={styles.sectionSubValue}>
+                          Ambiente: {nightSleep.environment}
+                        </Text>
+                      )}
+                      {nightSleep.wakeUpMood && (
+                        <Text style={styles.sectionSubValue}>
+                          Acordou: {nightSleep.wakeUpMood}
+                        </Text>
+                      )}
                     </>
                   ) : (
-                    <Text style={styles.sectionValue}>—</Text>
+                    <Text style={styles.sectionValue}>Não registrado</Text>
                   )}
                 </View>
                 
@@ -314,18 +391,39 @@ export default function AcompanhamentoScreen() {
                   <>
                     <View style={styles.divider} />
                     <View style={styles.section}>
-                      <Text style={styles.sectionLabel}>Despertares:</Text>
+                      <Text style={styles.sectionLabel}>Despertares Noturnos</Text>
                       {wakings.map((waking, wakingIndex) => {
                         const duration = calcTimeDiff(waking.startTime, waking.endTime);
                         return (
                           <Text key={waking.id} style={styles.sectionValue}>
-                            {wakingIndex + 1}º → {waking.startTime} - {waking.endTime} ({minutesToHM(duration)})
+                            {wakingIndex + 1}º despertar: {waking.startTime}h - {waking.endTime}h ({minutesToHM(duration)})
                           </Text>
                         );
                       })}
+                      <Text style={styles.sectionSubValue}>
+                        Total de despertares: {minutesToHM(totalWakingDuration)}
+                      </Text>
+                      <Text style={styles.sectionSubValue}>
+                        Sono noturno líquido: {minutesToHM(netNightSleep)}
+                      </Text>
                     </View>
                   </>
                 )}
+                
+                <View style={styles.divider} />
+                
+                <View style={styles.summarySection}>
+                  <Text style={styles.summaryLabel}>Resumo do Dia</Text>
+                  <Text style={styles.summaryValue}>
+                    Sono diurno: {minutesToHM(totalNapDuration)}
+                  </Text>
+                  <Text style={styles.summaryValue}>
+                    Sono noturno líquido: {minutesToHM(netNightSleep)}
+                  </Text>
+                  <Text style={styles.summaryTotal}>
+                    Total 24h: {minutesToHM(total24h)}
+                  </Text>
+                </View>
               </View>
             );
           })}
@@ -370,7 +468,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginRight: 16,
-    width: 320,
+    width: 340,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -380,10 +478,10 @@ const styles = StyleSheet.create({
   
   dayHeader: {
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   dayTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "bold",
     color: colors.primary,
   },
@@ -396,27 +494,53 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: colors.border,
-    marginVertical: 10,
+    marginVertical: 8,
   },
   
   section: {
     marginBottom: 4,
   },
   sectionLabel: {
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "700",
     color: colors.text,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   sectionValue: {
     fontSize: 13,
     color: colors.textSecondary,
     marginLeft: 8,
+    marginBottom: 2,
   },
   sectionSubValue: {
     fontSize: 12,
     color: colors.textSecondary,
     marginLeft: 16,
     fontStyle: "italic",
+    marginBottom: 1,
+  },
+  
+  summarySection: {
+    backgroundColor: colors.background,
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  summaryLabel: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.primary,
+    marginBottom: 6,
+  },
+  summaryValue: {
+    fontSize: 13,
+    color: colors.text,
+    marginBottom: 3,
+  },
+  summaryTotal: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.primary,
+    marginTop: 4,
   },
 });
