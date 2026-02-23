@@ -21,6 +21,7 @@ import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { setStringAsync } from 'expo-clipboard';
 import { useAuth } from "@/contexts/AuthContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -279,16 +280,30 @@ function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultan
 
   const loadBabies = useCallback(async () => {
     console.log("[API] Loading babies");
-    if (!isConsultant) {
-      console.log("[API] User is a mother - skipping consultant babies endpoint");
-      setLoading(false);
-      setRefreshing(false);
-      return;
-    }
     try {
-      const data = await apiGet<Baby[]>("/api/consultant/babies");
-      console.log("[API] Babies loaded:", data.length);
-      setBabies(data);
+      if (isConsultant) {
+        const data = await apiGet<Baby[]>("/api/consultant/babies");
+        console.log("[API] Consultant babies loaded:", data.length);
+        setBabies(data);
+      } else {
+        // Mother - fetch her linked baby via GET /api/mother/baby
+        console.log("[API] User is a mother - fetching linked baby via /api/mother/baby");
+        try {
+          const baby = await apiGet<Baby>("/api/mother/baby");
+          console.log("[API] Mother's baby loaded:", baby.id, baby.name);
+          setBabies([baby]);
+        } catch (error: any) {
+          // The apiCall throws an Error with message like "404" or "Baby not found"
+          // when the server returns a 404 (no baby linked yet)
+          const msg: string = error?.message || "";
+          if (msg.includes("404") || msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("no baby")) {
+            console.log("[API] No baby linked to this mother yet (404)");
+            setBabies([]);
+          } else {
+            throw error;
+          }
+        }
+      }
     } catch (error: any) {
       console.error("Error loading babies:", error);
       showErr(error.message || "Erro ao carregar bebês");

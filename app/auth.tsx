@@ -17,6 +17,7 @@ import { LoadingButton } from "@/components/LoadingButton";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/styles/commonStyles";
 import { apiPost } from "@/utils/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type UserRole = "consultant" | "mother";
 
@@ -76,7 +77,10 @@ export default function AuthScreen() {
         } else if (role === "mother" && babyToken) {
           console.log("[API] Linking mother to baby with token:", babyToken);
           try {
-            await apiPost("/api/init/mother", { token: babyToken.toUpperCase() });
+            const response = await apiPost<{ id: string }>("/api/init/mother", { token: babyToken.toUpperCase() });
+            console.log("[API] Mother linked successfully, baby ID:", response.id);
+            // Store baby ID for future logins
+            await AsyncStorage.setItem("motherBabyId", response.id);
           } catch (initErr: any) {
             console.error("[API] Mother init error:", initErr);
             showErrorModal(initErr.message || "Erro ao vincular bebê. Verifique o código.");
