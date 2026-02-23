@@ -217,34 +217,48 @@ export default function AcompanhamentoScreen() {
     const wakeUpTime = routine.wakeUpTime;
     
     const dayNumberText = `DIA ${dayNumber}`;
-    const dateText = formatDateToBR(routine.date);
-    const wakeUpText = `ACORDOU ÀS ${wakeUpTime}`;
     
-    let totalSleepWindowText = "";
+    const acordouLabel = "Acordou:";
+    const acordouValue = `${wakeUpTime}`;
+    
+    let janelaLabel = "";
+    let janelaValue = "";
     if (nightSleep && nightSleep.fellAsleepTime && wakeUpTime) {
       const totalWindow = calcTimeDiff(nightSleep.fellAsleepTime, wakeUpTime);
       const netWindow = totalWindow - totalWakingDuration;
-      totalSleepWindowText = `JANELA DE: ${minutesToHM(netWindow)}`;
+      janelaLabel = "Janela de:";
+      janelaValue = minutesToHM(netWindow);
     }
     
-    const totalNapDurationText = `Somatória das sonecas: ${minutesToHM(totalNapDuration)}`;
+    const duracaoSonoDiurnoLabel = "Duração sono diurno:";
+    const duracaoSonoDiurnoValue = `Somatória das sonecas: ${minutesToHM(totalNapDuration)}`;
+    
+    const sonoNoturnoLabel = "Sono noturno";
+    let sonoNoturnoValue = "";
+    if (nightSleep && nightSleep.fellAsleepTime) {
+      sonoNoturnoValue = `Iniciou às ${nightSleep.fellAsleepTime} (Total ${minutesToHM(nightSleepDuration)})`;
+    }
+    
+    const despertaresLabel = "Despertares:";
     
     return (
       <View key={routine.id} style={styles.dayCard}>
         <ScrollView showsVerticalScrollIndicator={true}>
           <View style={styles.dayHeader}>
             <Text style={styles.dayTitle}>{dayNumberText}</Text>
-            <Text style={styles.dayDate}>{dateText}</Text>
           </View>
-          
-          <View style={styles.divider} />
           
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{wakeUpText}</Text>
-            {totalSleepWindowText !== "" && (
-              <Text style={styles.sectionValue}>{totalSleepWindowText}</Text>
-            )}
+            <Text style={styles.infoLabel}>{acordouLabel}</Text>
+            <Text style={styles.infoValue}>{acordouValue}</Text>
           </View>
+          
+          {janelaLabel !== "" && (
+            <View style={styles.section}>
+              <Text style={styles.infoLabel}>{janelaLabel}</Text>
+              <Text style={styles.infoValue}>{janelaValue}</Text>
+            </View>
+          )}
           
           <View style={styles.divider} />
           
@@ -269,13 +283,13 @@ export default function AcompanhamentoScreen() {
             
             return (
               <React.Fragment key={nap.id}>
-                <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>{napLabel}</Text>
+                <View style={styles.napSection}>
+                  <Text style={styles.napLabel}>{napLabel}</Text>
                   {napTimeText !== "" && (
-                    <Text style={styles.sectionValue}>{napTimeText}</Text>
+                    <Text style={styles.napTime}>{napTimeText}</Text>
                   )}
                   {napWindowText !== "" && (
-                    <Text style={styles.sectionSubValue}>{napWindowText}</Text>
+                    <Text style={styles.napWindow}>{napWindowText}</Text>
                   )}
                 </View>
                 <View style={styles.divider} />
@@ -284,20 +298,16 @@ export default function AcompanhamentoScreen() {
           })}
           
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Duração sono diurno:</Text>
-            <Text style={styles.sectionValue}>{totalNapDurationText}</Text>
+            <Text style={styles.sectionLabel}>{duracaoSonoDiurnoLabel}</Text>
+            <Text style={styles.sectionValue}>{duracaoSonoDiurnoValue}</Text>
           </View>
           
           <View style={styles.divider} />
           
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Sono noturno</Text>
-            {nightSleep && nightSleep.fellAsleepTime ? (
-              <>
-                <Text style={styles.sectionValue}>
-                  Iniciou às {nightSleep.fellAsleepTime} (Total {minutesToHM(nightSleepDuration)})
-                </Text>
-              </>
+            <Text style={styles.sectionLabel}>{sonoNoturnoLabel}</Text>
+            {sonoNoturnoValue !== "" ? (
+              <Text style={styles.sectionValue}>{sonoNoturnoValue}</Text>
             ) : (
               <Text style={styles.sectionValue}>Não registrado</Text>
             )}
@@ -307,7 +317,7 @@ export default function AcompanhamentoScreen() {
             <>
               <View style={styles.divider} />
               <View style={styles.section}>
-                <Text style={styles.sectionLabel}>Despertares:</Text>
+                <Text style={styles.sectionLabel}>{despertaresLabel}</Text>
                 {wakings.map((waking, wakingIndex) => {
                   const duration = calcTimeDiff(waking.startTime, waking.endTime);
                   const wakingNumber = wakingIndex + 1;
@@ -415,28 +425,58 @@ const styles = StyleSheet.create({
   
   dayHeader: {
     alignItems: "center",
-    marginBottom: 8,
+    marginBottom: 12,
   },
   dayTitle: {
     fontSize: 20,
     fontWeight: "bold",
     color: colors.primary,
   },
-  dayDate: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
   
   divider: {
     height: 1,
     backgroundColor: colors.border,
-    marginVertical: 8,
+    marginVertical: 10,
   },
   
   section: {
+    marginBottom: 8,
+  },
+  
+  infoLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.primary,
+    marginTop: 2,
+  },
+  
+  napSection: {
+    marginBottom: 6,
+  },
+  napLabel: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.text,
     marginBottom: 4,
   },
+  napTime: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginLeft: 8,
+    marginBottom: 2,
+  },
+  napWindow: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginLeft: 8,
+    fontStyle: "italic",
+  },
+  
   sectionLabel: {
     fontSize: 14,
     fontWeight: "700",
@@ -448,12 +488,5 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginLeft: 8,
     marginBottom: 2,
-  },
-  sectionSubValue: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginLeft: 16,
-    fontStyle: "italic",
-    marginBottom: 1,
   },
 });
