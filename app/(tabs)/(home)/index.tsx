@@ -1103,37 +1103,21 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
   const handleUpdateNightSleep = async (field: string, value: string) => {
     try {
-      const currentNightSleep = routine.nightSleep;
+      console.log("[API] Updating night sleep field:", field, "value:", value);
       
-      // Check if nightSleep exists and has an id (not just an empty object)
-      if (currentNightSleep && typeof currentNightSleep === 'object' && Object.keys(currentNightSleep).length > 0 && currentNightSleep.id) {
-        console.log("[API] Updating existing night sleep:", currentNightSleep.id, "field:", field, "value:", value);
-        const updates = { [field]: value };
-        const updatedNightSleep = await apiPut<NightSleep>(`/api/night-sleep/${currentNightSleep.id}`, updates);
-        
-        // Update local state immediately for better UX
-        setRoutine(prev => ({
-          ...prev,
-          nightSleep: updatedNightSleep
-        }));
-      } else {
-        console.log("[API] Night sleep doesn't exist yet, creating it with initial data");
-        const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
-          routineId: routine.id,
-          startTryTime: "20:00",
-          fellAsleepTime: null,
-          finalWakeTime: null,
-          sleepMethod: null,
-          environment: null,
-          wakeUpMood: null,
-          observations: null,
-          [field]: value
-        });
-        console.log("[API] Night sleep created with ID:", newNightSleep.id);
-        
-        // Update local state immediately with the new night sleep
-        setRoutine(prev => ({ ...prev, nightSleep: newNightSleep }));
-      }
+      // Always use POST - backend handles upsert automatically
+      const updatedNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
+        routineId: routine.id,
+        [field]: value
+      });
+      
+      console.log("[API] Night sleep updated/created with ID:", updatedNightSleep.id);
+      
+      // Update local state immediately for better UX
+      setRoutine(prev => ({
+        ...prev,
+        nightSleep: updatedNightSleep
+      }));
       
       // Reload but skip text update to prevent clearing
       await loadRoutine(true);
