@@ -1121,7 +1121,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       console.log("[API] Night sleep created/upserted with ID:", newNightSleep.id);
       
       // Update local state immediately with the full night sleep data from POST response
-      // IMPORTANT: Do NOT call loadRoutine after this, as the GET endpoint may return
+      // CRITICAL: Do NOT call loadRoutine after this, as the GET endpoint returns
       // nightSleep as {} (empty object) due to Fastify schema serialization issues,
       // which would overwrite our valid night sleep data and collapse the form.
       setRoutine(prev => ({ ...prev, nightSleep: { ...newNightSleep, wakings: [] } }));
@@ -1132,7 +1132,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       setExpandedNightSleep(true);
     } catch (error: any) {
       console.error("[API] Error creating night sleep:", error);
-      showErr(error.message || "Erro ao salvar sono noturno");
+      showErr(error.message || "Erro ao criar sono noturno");
     }
   };
 
@@ -1702,8 +1702,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           )}
         </View>
 
-        {/* Show the form if nightSleep exists OR if expandedNightSleep is true (form was just opened) */}
-        {(nightSleep || expandedNightSleep) && (
+        {/* Show the form if nightSleep exists (has valid id) */}
+        {nightSleep && (
           <View style={styles.expandableCard}>
             <TouchableOpacity 
               style={styles.expandableHeader} 
@@ -1711,7 +1711,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Text style={styles.expandableTitle}>Sono Noturno</Text>
-                {!expandedNightSleep && nightSleep && nightSleep.startTryTime && nightSleep.finalWakeTime && (
+                {!expandedNightSleep && nightSleep.startTryTime && nightSleep.finalWakeTime && (
                   <Text style={styles.expandableSubtitle}>
                     {nightSleep.startTryTime} - {nightSleep.finalWakeTime}
                   </Text>
@@ -1732,7 +1732,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   style={styles.timePickerButton} 
                   onPress={() => openTimePicker("nightSleep_startTryTime")}
                 >
-                  <Text style={styles.timePickerText}>{nightSleep?.startTryTime || "20:00"}</Text>
+                  <Text style={styles.timePickerText}>{nightSleep.startTryTime || "20:00"}</Text>
                   <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                 </TouchableOpacity>
                 
@@ -1741,7 +1741,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   style={styles.timePickerButton} 
                   onPress={() => openTimePicker("nightSleep_fellAsleepTime")}
                 >
-                  <Text style={styles.timePickerText}>{nightSleep?.fellAsleepTime || "—"}</Text>
+                  <Text style={styles.timePickerText}>{nightSleep.fellAsleepTime || "—"}</Text>
                   <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                 </TouchableOpacity>
                 
@@ -1750,7 +1750,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   style={styles.timePickerButton} 
                   onPress={() => openTimePicker("nightSleep_finalWakeTime")}
                 >
-                  <Text style={styles.timePickerText}>{nightSleep?.finalWakeTime || "—"}</Text>
+                  <Text style={styles.timePickerText}>{nightSleep.finalWakeTime || "—"}</Text>
                   <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                 </TouchableOpacity>
                 
