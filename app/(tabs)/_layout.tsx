@@ -1,6 +1,6 @@
 
 import React from "react";
-import { Redirect } from "expo-router";
+import { Redirect, Slot } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { View, ActivityIndicator } from "react-native";
 import FloatingTabBar, { TabBarItem } from "@/components/FloatingTabBar";
@@ -36,5 +36,10 @@ export default function TabLayout() {
     },
   ];
 
-  return <FloatingTabBar tabs={tabs} />;
+  return (
+    <View style={{ flex: 1 }}>
+      <Slot />
+      <FloatingTabBar tabs={tabs} />
+    </View>
+  );
 }
