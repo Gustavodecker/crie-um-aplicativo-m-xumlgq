@@ -185,7 +185,7 @@ function formatDateToBR(dateStr: string): string {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-function HomeScreen() {
+export default function HomeScreen() {
   const { user } = useAuth();
   const [screen, setScreen] = useState<Screen>({ type: "list" });
   const [errorMessage, setErrorMessage] = useState("");
@@ -1500,5 +1500,3 @@ const styles = StyleSheet.create({
   reportDayStat: { fontSize: 13, color: colors.textSecondary },
   dateRow: { flexDirection: "row", gap: 8 },
 });
-
-export default HomeScreen;
