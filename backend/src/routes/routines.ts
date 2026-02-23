@@ -158,9 +158,19 @@ export function registerRoutinesRoutes(app: App) {
       return reply.status(401).send({ error: 'Not authorized' });
     }
 
+    const nightSleepRecord = routine.nightSleep && routine.nightSleep.length > 0 ? routine.nightSleep[0] : null;
+
     return {
-      ...routine,
-      nightSleep: routine.nightSleep?.[0] || null,
+      id: routine.id,
+      babyId: routine.babyId,
+      date: routine.date,
+      wakeUpTime: routine.wakeUpTime,
+      motherObservations: routine.motherObservations,
+      consultantComments: routine.consultantComments,
+      createdAt: routine.createdAt,
+      updatedAt: routine.updatedAt,
+      naps: routine.naps,
+      nightSleep: nightSleepRecord,
     };
   });
 

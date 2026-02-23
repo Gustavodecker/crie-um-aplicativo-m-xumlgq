@@ -86,6 +86,12 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Get consultant profile for new user without initialization returns 404", async () => {
+    const { token: newToken } = await signUpTestUser();
+    const res = await authenticatedApi("/api/consultant/profile", newToken);
+    await expectStatus(res, 404);
+  });
+
   // ===== Babies =====
 
   test("Create baby", async () => {
@@ -1094,6 +1100,15 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 401);
+  });
+
+  test("Register mother without required token field returns 400", async () => {
+    const res = await authenticatedApi("/api/init/mother", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
   });
 
   // ===== Mother Baby Access =====
