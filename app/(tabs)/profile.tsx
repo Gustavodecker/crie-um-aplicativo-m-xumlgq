@@ -50,12 +50,9 @@ export default function ProfileScreen() {
   const [editLoading, setEditLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [showError, setShowError] = useState(false);
-  // Edit profile form
   const [editName, setEditName] = useState("");
-  // Branding form
   const [editPrimaryColor, setEditPrimaryColor] = useState("");
   const [editSecondaryColor, setEditSecondaryColor] = useState("");
-  // Sleep windows
   const [sleepWindows, setSleepWindows] = useState<SleepWindow[]>([]);
   const [swLoading, setSwLoading] = useState(false);
   const [showAddSW, setShowAddSW] = useState(false);
@@ -235,19 +232,42 @@ export default function ProfileScreen() {
             <Text style={styles.menuItemText}>Personalizar Marca</Text>
             <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
+        </View>
 
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => {
-              console.log("Tapped sleep windows config");
-              loadSleepWindows();
-              setShowSleepWindows(true);
-            }}
-          >
-            <IconSymbol ios_icon_name="clock.fill" android_material_icon_name="schedule" size={24} color={colors.text} />
-            <Text style={styles.menuItemText}>Janelas de Sono</Text>
-            <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
+        <View style={styles.section}>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Janelas de Sono por Idade</Text>
+            <TouchableOpacity 
+              style={styles.addSmallBtn} 
+              onPress={() => {
+                console.log("Tapped add sleep window");
+                loadSleepWindows();
+                setShowAddSW(true);
+              }}
+            >
+              <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={16} color="#FFF" />
+              <Text style={styles.addSmallBtnText}>Adicionar</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {sleepWindows.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>Nenhuma janela de sono configurada</Text>
+              <Text style={styles.emptySubtext}>Configure as janelas de sono por faixa etária para cálculo automático</Text>
+            </View>
+          ) : (
+            sleepWindows.map((sw) => (
+              <View key={sw.id} style={styles.swCard}>
+                <View style={styles.swCardContent}>
+                  <IconSymbol ios_icon_name="clock.fill" android_material_icon_name="schedule" size={20} color={colors.primary} />
+                  <View style={styles.swCardInfo}>
+                    <Text style={styles.swText}>{sw.ageMonthsMin}-{sw.ageMonthsMax} meses</Text>
+                    <Text style={styles.swMinutes}>{sw.windowMinutes} minutos</Text>
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
         </View>
 
         <TouchableOpacity
@@ -262,7 +282,6 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Sign Out Modal */}
       <Modal visible={showSignOutModal} transparent animationType="fade" onRequestClose={() => setShowSignOutModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -280,7 +299,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Edit Profile Modal */}
       <Modal visible={showEditProfile} transparent animationType="slide" onRequestClose={() => setShowEditProfile(false)}>
         <View style={styles.slideModalOverlay}>
           <View style={styles.slideModalContent}>
@@ -296,7 +314,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Branding Modal */}
       <Modal visible={showBranding} transparent animationType="slide" onRequestClose={() => setShowBranding(false)}>
         <View style={styles.slideModalOverlay}>
           <View style={styles.slideModalContent}>
@@ -321,51 +338,26 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Sleep Windows Modal */}
-      <Modal visible={showSleepWindows} transparent animationType="slide" onRequestClose={() => setShowSleepWindows(false)}>
+      <Modal visible={showAddSW} transparent animationType="slide" onRequestClose={() => setShowAddSW(false)}>
         <View style={styles.slideModalOverlay}>
-          <View style={[styles.slideModalContent, { maxHeight: "85%" }]}>
+          <View style={styles.slideModalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Janelas de Sono</Text>
-              <TouchableOpacity onPress={() => setShowSleepWindows(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
+              <Text style={styles.modalTitle}>Adicionar Janela de Sono</Text>
+              <TouchableOpacity onPress={() => setShowAddSW(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {sleepWindows.map((sw) => (
-                <View key={sw.id} style={styles.swCard}>
-                  <Text style={styles.swText}>{sw.ageMonthsMin}-{sw.ageMonthsMax} meses</Text>
-                  <Text style={styles.swMinutes}>{sw.windowMinutes} min</Text>
-                </View>
-              ))}
-              {sleepWindows.length === 0 && <Text style={styles.emptyText}>Nenhuma janela configurada</Text>}
-              
-              {showAddSW ? (
-                <View style={styles.addSWForm}>
-                  <Text style={styles.formLabel}>Idade mínima (meses)</Text>
-                  <TextInput style={styles.formInput} placeholder="Ex: 0" value={swAgeMin} onChangeText={setSwAgeMin} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-                  <Text style={styles.formLabel}>Idade máxima (meses)</Text>
-                  <TextInput style={styles.formInput} placeholder="Ex: 3" value={swAgeMax} onChangeText={setSwAgeMax} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-                  <Text style={styles.formLabel}>Janela de sono (minutos)</Text>
-                  <TextInput style={styles.formInput} placeholder="Ex: 60" value={swMinutes} onChangeText={setSwMinutes} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <TouchableOpacity style={[styles.saveButton, { flex: 1, backgroundColor: colors.textSecondary }]} onPress={() => setShowAddSW(false)}>
-                      <Text style={styles.saveButtonText}>Cancelar</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.saveButton, { flex: 1 }, swLoading && { opacity: 0.6 }]} onPress={handleAddSleepWindow} disabled={swLoading}>
-                      {swLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>Adicionar</Text>}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <TouchableOpacity style={styles.saveButton} onPress={() => setShowAddSW(true)}>
-                  <Text style={styles.saveButtonText}>+ Adicionar Janela</Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
+            <Text style={styles.formLabel}>Idade mínima (meses)</Text>
+            <TextInput style={styles.formInput} placeholder="Ex: 0" value={swAgeMin} onChangeText={setSwAgeMin} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
+            <Text style={styles.formLabel}>Idade máxima (meses)</Text>
+            <TextInput style={styles.formInput} placeholder="Ex: 3" value={swAgeMax} onChangeText={setSwAgeMax} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
+            <Text style={styles.formLabel}>Janela de sono (minutos)</Text>
+            <TextInput style={styles.formInput} placeholder="Ex: 60" value={swMinutes} onChangeText={setSwMinutes} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
+            <TouchableOpacity style={[styles.saveButton, swLoading && { opacity: 0.6 }]} onPress={handleAddSleepWindow} disabled={swLoading}>
+              {swLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>Adicionar</Text>}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* Error Modal */}
       <Modal visible={showError} transparent animationType="fade" onRequestClose={() => setShowError(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -397,11 +389,21 @@ const styles = StyleSheet.create({
   initButtonText: { fontSize: 15, fontWeight: "600", color: "#FFF" },
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 18, fontWeight: "bold", color: colors.text, marginBottom: 12 },
+  sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   menuItem: { flexDirection: "row", alignItems: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, marginBottom: 8, gap: 12 },
   menuItemText: { flex: 1, fontSize: 16, color: colors.text },
   signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, gap: 8, borderWidth: 1, borderColor: colors.error },
   signOutText: { fontSize: 16, fontWeight: "600", color: colors.error },
-  // Modals
+  emptyCard: { backgroundColor: colors.card, borderRadius: 12, padding: 20, alignItems: "center" },
+  emptyText: { fontSize: 15, fontWeight: "600", color: colors.text, marginBottom: 4, textAlign: "center" },
+  emptySubtext: { fontSize: 13, color: colors.textSecondary, textAlign: "center" },
+  swCard: { backgroundColor: colors.card, borderRadius: 12, padding: 12, marginBottom: 8 },
+  swCardContent: { flexDirection: "row", alignItems: "center", gap: 12 },
+  swCardInfo: { flex: 1 },
+  swText: { fontSize: 15, fontWeight: "600", color: colors.text },
+  swMinutes: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  addSmallBtn: { flexDirection: "row", alignItems: "center", backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, gap: 4 },
+  addSmallBtnText: { fontSize: 12, fontWeight: "600", color: "#FFF" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
   slideModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   slideModalContent: { backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 },
@@ -415,17 +417,10 @@ const styles = StyleSheet.create({
   modalButtonConfirm: { backgroundColor: colors.error },
   modalButtonTextCancel: { fontSize: 16, fontWeight: "600", color: colors.text },
   modalButtonTextConfirm: { fontSize: 16, fontWeight: "600", color: "#FFFFFF" },
-  // Forms
   formInput: { backgroundColor: colors.background, borderRadius: 10, padding: 12, marginBottom: 10, fontSize: 15, borderWidth: 1, borderColor: colors.border, color: colors.text },
   formLabel: { fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: 6 },
   saveButton: { backgroundColor: colors.primary, borderRadius: 12, padding: 14, alignItems: "center", marginTop: 8 },
   saveButtonText: { fontSize: 16, fontWeight: "600", color: "#FFF" },
   colorInputRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
   colorPreviewBox: { width: 40, height: 40, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
-  // Sleep Windows
-  swCard: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: colors.background, borderRadius: 10, padding: 12, marginBottom: 8 },
-  swText: { fontSize: 15, color: colors.text },
-  swMinutes: { fontSize: 15, fontWeight: "bold", color: colors.primary },
-  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: "center", paddingVertical: 16 },
-  addSWForm: { backgroundColor: colors.background, borderRadius: 12, padding: 16, marginTop: 8 },
 });
