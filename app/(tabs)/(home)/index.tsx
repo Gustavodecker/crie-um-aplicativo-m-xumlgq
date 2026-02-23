@@ -19,7 +19,7 @@ import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import Clipboard from "@react-native-clipboard/clipboard";
+import { setStringAsync } from 'expo-clipboard';
 import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -349,8 +349,8 @@ function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultan
     }
   };
 
-  const handleCopyToken = () => {
-    Clipboard.setString(createdBabyToken);
+  const handleCopyToken = async () => {
+    await setStringAsync(createdBabyToken);
     console.log("[Clipboard] Token copied:", createdBabyToken);
     showErr("✅ Código copiado para a área de transferência!");
   };
