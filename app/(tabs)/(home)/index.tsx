@@ -937,12 +937,30 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const [nightSleepObservations, setNightSleepObservations] = useState("");
   const [nightSleepConsultantComments, setNightSleepConsultantComments] = useState("");
 
-  const loadRoutine = useCallback(async (skipTextUpdate = false) => {
+  const loadRoutine = useCallback(async (skipTextUpdate = false, preserveNightSleep = false) => {
     try {
       console.log("[API] Loading routine:", initialRoutine.id);
       const data = await apiGet<Routine>(`/api/routines/${initialRoutine.id}`);
       console.log("[API] Routine loaded successfully:", data.id);
-      setRoutine(data);
+      
+      // The backend may return nightSleep as {} (empty object) due to Fastify schema serialization
+      // when a night sleep record exists. We detect this and preserve the current nightSleep state.
+      const apiNightSleep = data.nightSleep && (data.nightSleep as any).id ? data.nightSleep : null;
+      
+      setRoutine(prev => {
+        // If preserveNightSleep is true, keep the current nightSleep (from POST/PUT response)
+        // If the API returned a valid nightSleep (with id), use it
+        // Otherwise, keep the previous nightSleep to avoid losing data
+        const nightSleepToUse = preserveNightSleep 
+          ? prev.nightSleep 
+          : (apiNightSleep || prev.nightSleep);
+        
+        return {
+          ...data,
+          nightSleep: nightSleepToUse,
+        };
+      });
+      
       setConsultantComments(data.consultantComments || "");
       setWakeUpObs(data.motherObservations || "");
       setWakeUpTime(data.wakeUpTime || "07:00");
@@ -958,8 +976,11 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         setNapObservations(napObs);
         setNapConsultantComments(napComments);
         
-        setNightSleepObservations(data.nightSleep?.observations || "");
-        setNightSleepConsultantComments(data.nightSleep?.consultantComments || "");
+        // Only update night sleep text if we have valid data from API
+        if (apiNightSleep) {
+          setNightSleepObservations(apiNightSleep.observations || "");
+          setNightSleepConsultantComments(apiNightSleep.consultantComments || "");
+        }
       }
     } catch (error: any) {
       console.error("[API] Error loading routine:", error);
@@ -979,7 +1000,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         wakeUpTime, 
         motherObservations: wakeUpObs 
       });
-      await loadRoutine();
+      // Reload but preserve night sleep to avoid losing it due to Fastify schema issue
+      await loadRoutine(false, true);
     } catch (error: any) {
       showErr(error.message || "Erro ao salvar observações");
     } finally {
@@ -993,7 +1015,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       console.log("[API] Saving consultant comments for routine:", routine.id);
       await apiPut(`/api/routines/${routine.id}`, { consultantComments });
       showErr("✅ Comentários salvos com sucesso!");
-      await loadRoutine();
+      // Reload but preserve night sleep to avoid losing it due to Fastify schema issue
+      await loadRoutine(false, true);
     } catch (error: any) {
       showErr(error.message || "Erro ao salvar comentários");
     } finally {
@@ -1021,7 +1044,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       setNapObservations(prev => ({ ...prev, [newNap.id]: "" }));
       setNapConsultantComments(prev => ({ ...prev, [newNap.id]: "" }));
       
-      await loadRoutine();
+      // Reload but preserve night sleep to avoid losing it due to Fastify schema issue
+      await loadRoutine(false, true);
       setExpandedNaps({ ...expandedNaps, [napNumber]: true });
     } catch (error: any) {
       showErr(error.message || "Erro ao adicionar soneca");
@@ -1034,15 +1058,13 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       await apiPut(`/api/naps/${napId}`, updates);
       
       // Update local state immediately for better UX
+      // IMPORTANT: Do NOT call loadRoutine here as it may overwrite nightSleep with {}
       setRoutine(prev => ({
         ...prev,
         naps: prev.naps?.map(nap => 
           nap.id === napId ? { ...nap, ...updates } : nap
         )
       }));
-      
-      // Reload but skip text update to prevent clearing
-      await loadRoutine(true);
     } catch (error: any) {
       console.error("[API] Error updating nap:", error);
       showErr(error.message || "Erro ao atualizar soneca");
@@ -1066,7 +1088,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         return newState;
       });
       
-      await loadRoutine();
+      // Reload but preserve night sleep to avoid losing it due to Fastify schema issue
+      await loadRoutine(false, true);
     } catch (error: any) {
       showErr(error.message || "Erro ao excluir soneca");
     }
@@ -1097,14 +1120,16 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       
       console.log("[API] Night sleep created/upserted with ID:", newNightSleep.id);
       
-      // Update local state immediately and expand
-      setRoutine(prev => ({ ...prev, nightSleep: newNightSleep }));
+      // Update local state immediately with the full night sleep data from POST response
+      // IMPORTANT: Do NOT call loadRoutine after this, as the GET endpoint may return
+      // nightSleep as {} (empty object) due to Fastify schema serialization issues,
+      // which would overwrite our valid night sleep data and collapse the form.
+      setRoutine(prev => ({ ...prev, nightSleep: { ...newNightSleep, wakings: [] } }));
       setNightSleepObservations("");
       setNightSleepConsultantComments("");
-      setExpandedNightSleep(true);
       
-      // Reload to ensure consistency
-      await loadRoutine(true);
+      // CRITICAL: Keep the form expanded after creation
+      setExpandedNightSleep(true);
     } catch (error: any) {
       console.error("[API] Error creating night sleep:", error);
       showErr(error.message || "Erro ao salvar sono noturno");
@@ -1121,13 +1146,19 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       if (currentNightSleep && currentNightSleep.id) {
         // Night sleep exists - use PUT to update specific field
         console.log("[API] Night sleep exists (id:", currentNightSleep.id, "), using PUT");
-        updatedNightSleep = await apiPut<NightSleep>(`/api/night-sleep/${currentNightSleep.id}`, {
+        const putResult = await apiPut<NightSleep>(`/api/night-sleep/${currentNightSleep.id}`, {
           [field]: value
         });
+        // Merge PUT result with current state to preserve wakings array
+        updatedNightSleep = {
+          ...currentNightSleep,
+          ...putResult,
+          wakings: currentNightSleep.wakings || [],
+        };
       } else {
         // Night sleep doesn't exist yet - use POST (backend handles upsert by routineId)
         console.log("[API] Night sleep does not exist yet, using POST (upsert) for routine:", routine.id);
-        updatedNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
+        const postResult = await apiPost<NightSleep>("/api/night-sleep", {
           routineId: routine.id,
           startTryTime: field === "startTryTime" ? value : "20:00",
           fellAsleepTime: field === "fellAsleepTime" ? value : null,
@@ -1138,18 +1169,18 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           observations: field === "observations" ? value : null,
           consultantComments: field === "consultantComments" ? value : null,
         });
+        updatedNightSleep = { ...postResult, wakings: [] };
       }
       
       console.log("[API] Night sleep updated/created with ID:", updatedNightSleep.id);
       
       // Update local state immediately for better UX
+      // IMPORTANT: Do NOT call loadRoutine after this, as the GET endpoint may return
+      // nightSleep as {} (empty object) due to Fastify schema serialization issues.
       setRoutine(prev => ({
         ...prev,
         nightSleep: updatedNightSleep
       }));
-      
-      // Reload but skip text update to prevent clearing
-      await loadRoutine(true);
     } catch (error: any) {
       console.error("[API] Error processing night sleep:", error);
       showErr(error.message || "Erro ao processar sono noturno");
@@ -1160,6 +1191,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       // Ensure night sleep exists first (check for valid id)
       let nightSleepId = routine.nightSleep?.id;
+      let currentNightSleep = routine.nightSleep;
       
       if (!nightSleepId) {
         console.log("[API] Night sleep doesn't exist yet, creating it via POST (upsert) for routine:", routine.id);
@@ -1177,11 +1209,12 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         
         console.log("[API] Night sleep created/upserted with ID:", newNightSleep.id);
         nightSleepId = newNightSleep.id;
+        currentNightSleep = { ...newNightSleep, wakings: [] };
         
-        // Update local state
+        // Update local state with the new night sleep
         setRoutine(prev => ({
           ...prev,
-          nightSleep: newNightSleep
+          nightSleep: currentNightSleep
         }));
       }
       
@@ -1194,7 +1227,18 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       
       console.log("[API] Night waking created:", newWaking.id);
       
-      await loadRoutine();
+      // Update local state immediately by adding the new waking
+      // IMPORTANT: Do NOT call loadRoutine here as it may overwrite nightSleep with {}
+      setRoutine(prev => ({
+        ...prev,
+        nightSleep: prev.nightSleep ? {
+          ...prev.nightSleep,
+          wakings: [...(prev.nightSleep.wakings || []), newWaking]
+        } : currentNightSleep ? {
+          ...currentNightSleep,
+          wakings: [newWaking]
+        } : null
+      }));
     } catch (error: any) {
       console.error("[API] Error adding waking:", error);
       showErr(error.message || "Erro ao adicionar despertar");
@@ -1205,7 +1249,16 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       console.log("[API] Deleting night waking:", wakingId);
       await apiDelete(`/api/night-wakings/${wakingId}`);
-      await loadRoutine();
+      
+      // Update local state immediately by removing the deleted waking
+      // IMPORTANT: Do NOT call loadRoutine here as it may overwrite nightSleep with {}
+      setRoutine(prev => ({
+        ...prev,
+        nightSleep: prev.nightSleep ? {
+          ...prev.nightSleep,
+          wakings: (prev.nightSleep.wakings || []).filter(w => w.id !== wakingId)
+        } : null
+      }));
     } catch (error: any) {
       showErr(error.message || "Erro ao excluir despertar");
     }
@@ -1282,6 +1335,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       await apiPut(`/api/night-wakings/${wakingId}`, updates);
       
       // Update local state immediately
+      // IMPORTANT: Do NOT call loadRoutine here as it may overwrite nightSleep with {}
       setRoutine(prev => ({
         ...prev,
         nightSleep: prev.nightSleep ? {
@@ -1291,9 +1345,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           )
         } : null
       }));
-      
-      // Reload but skip text update
-      await loadRoutine(true);
     } catch (error: any) {
       console.error("[API] Error updating waking:", error);
       showErr(error.message || "Erro ao atualizar despertar");
@@ -1366,17 +1417,25 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       if (routine.nightSleep?.id) {
         // Night sleep exists - use PUT
-        await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, { observations: text });
+        const updated = await apiPut<NightSleep>(`/api/night-sleep/${routine.nightSleep.id}`, { observations: text });
         console.log("[API] Night sleep observations saved via PUT");
-      } else if (routine.nightSleep !== null && routine.nightSleep !== undefined) {
-        // Night sleep object exists but no id yet - use POST upsert
-        await apiPost("/api/night-sleep", {
+        // Update local state preserving wakings
+        setRoutine(prev => ({
+          ...prev,
+          nightSleep: prev.nightSleep ? { ...prev.nightSleep, ...updated, wakings: prev.nightSleep.wakings || [] } : null
+        }));
+      } else {
+        // Night sleep doesn't exist yet - use POST upsert
+        const created = await apiPost<NightSleep>("/api/night-sleep", {
           routineId: routine.id,
           startTryTime: "20:00",
           observations: text
         });
         console.log("[API] Night sleep observations saved via POST upsert");
-        await loadRoutine(true);
+        setRoutine(prev => ({
+          ...prev,
+          nightSleep: { ...created, wakings: [] }
+        }));
       }
     } catch (error: any) {
       console.error("[API] Error saving night sleep observations:", error);
@@ -1387,17 +1446,25 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       if (routine.nightSleep?.id) {
         // Night sleep exists - use PUT
-        await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, { consultantComments: text });
+        const updated = await apiPut<NightSleep>(`/api/night-sleep/${routine.nightSleep.id}`, { consultantComments: text });
         console.log("[API] Night sleep consultant comments saved via PUT");
-      } else if (routine.nightSleep !== null && routine.nightSleep !== undefined) {
-        // Night sleep object exists but no id yet - use POST upsert
-        await apiPost("/api/night-sleep", {
+        // Update local state preserving wakings
+        setRoutine(prev => ({
+          ...prev,
+          nightSleep: prev.nightSleep ? { ...prev.nightSleep, ...updated, wakings: prev.nightSleep.wakings || [] } : null
+        }));
+      } else {
+        // Night sleep doesn't exist yet - use POST upsert
+        const created = await apiPost<NightSleep>("/api/night-sleep", {
           routineId: routine.id,
           startTryTime: "20:00",
           consultantComments: text
         });
         console.log("[API] Night sleep consultant comments saved via POST upsert");
-        await loadRoutine(true);
+        setRoutine(prev => ({
+          ...prev,
+          nightSleep: { ...created, wakings: [] }
+        }));
       }
     } catch (error: any) {
       console.error("[API] Error saving night sleep consultant comments:", error);
@@ -1635,7 +1702,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           )}
         </View>
 
-        {nightSleep && (
+        {/* Show the form if nightSleep exists OR if expandedNightSleep is true (form was just opened) */}
+        {(nightSleep || expandedNightSleep) && (
           <View style={styles.expandableCard}>
             <TouchableOpacity 
               style={styles.expandableHeader} 
@@ -1643,7 +1711,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Text style={styles.expandableTitle}>Sono Noturno</Text>
-                {!expandedNightSleep && nightSleep.startTryTime && nightSleep.finalWakeTime && (
+                {!expandedNightSleep && nightSleep && nightSleep.startTryTime && nightSleep.finalWakeTime && (
                   <Text style={styles.expandableSubtitle}>
                     {nightSleep.startTryTime} - {nightSleep.finalWakeTime}
                   </Text>
@@ -1664,7 +1732,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   style={styles.timePickerButton} 
                   onPress={() => openTimePicker("nightSleep_startTryTime")}
                 >
-                  <Text style={styles.timePickerText}>{nightSleep.startTryTime}</Text>
+                  <Text style={styles.timePickerText}>{nightSleep?.startTryTime || "20:00"}</Text>
                   <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                 </TouchableOpacity>
                 
@@ -1673,7 +1741,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   style={styles.timePickerButton} 
                   onPress={() => openTimePicker("nightSleep_fellAsleepTime")}
                 >
-                  <Text style={styles.timePickerText}>{nightSleep.fellAsleepTime || "—"}</Text>
+                  <Text style={styles.timePickerText}>{nightSleep?.fellAsleepTime || "—"}</Text>
                   <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                 </TouchableOpacity>
                 
@@ -1682,7 +1750,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   style={styles.timePickerButton} 
                   onPress={() => openTimePicker("nightSleep_finalWakeTime")}
                 >
-                  <Text style={styles.timePickerText}>{nightSleep.finalWakeTime || "—"}</Text>
+                  <Text style={styles.timePickerText}>{nightSleep?.finalWakeTime || "—"}</Text>
                   <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                 </TouchableOpacity>
                 
