@@ -51,7 +51,7 @@ export function registerNightSleepRoutes(app: App) {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
-    app.logger.info({ userId: session.user.id, body: request.body }, 'Creating night sleep record');
+    app.logger.info({ userId: session.user.id, body: request.body }, 'Creating or updating night sleep record');
 
     const routine = await app.db.query.dailyRoutines.findFirst({
       where: eq(schema.dailyRoutines.id, request.body.routineId),
@@ -75,20 +75,48 @@ export function registerNightSleepRoutes(app: App) {
       return reply.status(401).send({ error: 'Not authorized' });
     }
 
-    const [nightSleepRecord] = await app.db.insert(schema.nightSleep).values({
-      routineId: request.body.routineId,
-      startTryTime: request.body.startTryTime,
-      fellAsleepTime: request.body.fellAsleepTime || null,
-      finalWakeTime: request.body.finalWakeTime || null,
-      sleepMethod: request.body.sleepMethod || null,
-      environment: request.body.environment || null,
-      wakeUpMood: request.body.wakeUpMood || null,
-      observations: request.body.observations || null,
-      consultantComments: request.body.consultantComments || null,
-    }).returning();
+    // Check if night sleep record already exists for this routine
+    const existingRecord = await app.db.query.nightSleep.findFirst({
+      where: eq(schema.nightSleep.routineId, request.body.routineId),
+    });
 
-    app.logger.info({ nightSleepId: nightSleepRecord.id, routineId: request.body.routineId }, 'Night sleep record created successfully');
-    return reply.status(201).send(nightSleepRecord);
+    let nightSleepRecord;
+
+    if (existingRecord) {
+      // Update existing record
+      const [updated] = await app.db.update(schema.nightSleep)
+        .set({
+          startTryTime: request.body.startTryTime,
+          fellAsleepTime: request.body.fellAsleepTime || null,
+          finalWakeTime: request.body.finalWakeTime || null,
+          sleepMethod: request.body.sleepMethod || null,
+          environment: request.body.environment || null,
+          wakeUpMood: request.body.wakeUpMood || null,
+          observations: request.body.observations || null,
+          consultantComments: request.body.consultantComments || null,
+        })
+        .where(eq(schema.nightSleep.id, existingRecord.id))
+        .returning();
+      nightSleepRecord = updated;
+      app.logger.info({ nightSleepId: nightSleepRecord.id, routineId: request.body.routineId }, 'Night sleep record updated successfully');
+    } else {
+      // Create new record
+      const [created] = await app.db.insert(schema.nightSleep).values({
+        routineId: request.body.routineId,
+        startTryTime: request.body.startTryTime,
+        fellAsleepTime: request.body.fellAsleepTime || null,
+        finalWakeTime: request.body.finalWakeTime || null,
+        sleepMethod: request.body.sleepMethod || null,
+        environment: request.body.environment || null,
+        wakeUpMood: request.body.wakeUpMood || null,
+        observations: request.body.observations || null,
+        consultantComments: request.body.consultantComments || null,
+      }).returning();
+      nightSleepRecord = created;
+      app.logger.info({ nightSleepId: nightSleepRecord.id, routineId: request.body.routineId }, 'Night sleep record created successfully');
+    }
+
+    return reply.status(existingRecord ? 200 : 201).send(nightSleepRecord);
   });
 
   // PUT /api/night-sleep/:id - Updates night sleep
@@ -243,6 +271,83 @@ export function registerNightSleepRoutes(app: App) {
 
     app.logger.info({ wakingId: waking.id, nightSleepId: request.body.nightSleepId }, 'Night waking created successfully');
     return reply.status(201).send(waking);
+  });
+
+  // PUT /api/night-wakings/:id - Updates night waking
+  app.fastify.put('/api/night-wakings/:id', {
+    schema: {
+      description: 'Update a night waking',
+      tags: ['night-sleep'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+        },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          startTime: { type: 'string' },
+          endTime: { type: 'string' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            nightSleepId: { type: 'string', format: 'uuid' },
+            startTime: { type: 'string' },
+            endTime: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Params: { id: string }; Body: Partial<{ startTime: string; endTime: string }> }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    app.logger.info({ userId: session.user.id, wakingId: request.params.id, body: request.body }, 'Updating night waking');
+
+    const waking = await app.db.query.nightWakings.findFirst({
+      where: eq(schema.nightWakings.id, request.params.id),
+      with: {
+        nightSleep: {
+          with: {
+            routine: { with: { baby: true } },
+          },
+        },
+      },
+    });
+
+    if (!waking) {
+      app.logger.warn({ wakingId: request.params.id }, 'Night waking not found');
+      return reply.status(404).send({ error: 'Night waking not found' });
+    }
+
+    const consultant = await app.db.query.consultants.findFirst({
+      where: eq(schema.consultants.userId, session.user.id),
+    });
+
+    const isMother = waking.nightSleep.routine.baby.motherUserId === session.user.id;
+    const isConsultant = consultant && waking.nightSleep.routine.baby.consultantId === consultant.id;
+
+    if (!isMother && !isConsultant) {
+      app.logger.warn({ userId: session.user.id, wakingId: request.params.id }, 'Not authorized');
+      return reply.status(401).send({ error: 'Not authorized' });
+    }
+
+    const [updated] = await app.db.update(schema.nightWakings)
+      .set(request.body)
+      .where(eq(schema.nightWakings.id, request.params.id))
+      .returning();
+
+    app.logger.info({ wakingId: updated.id }, 'Night waking updated successfully');
+    return updated;
   });
 
   // DELETE /api/night-wakings/:id - Deletes night waking

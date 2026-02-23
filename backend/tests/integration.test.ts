@@ -673,6 +673,57 @@ describe("API Integration Tests", () => {
     expect(data.nightSleepId).toBe(nightSleepId);
   });
 
+  test("Update night waking", async () => {
+    const res = await authenticatedApi(
+      `/api/night-wakings/${nightWakingId}`,
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startTime: "01:00",
+          endTime: "01:15",
+        }),
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.startTime).toBe("01:00");
+    expect(data.endTime).toBe("01:15");
+  });
+
+  test("Update night waking with nonexistent ID returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/night-wakings/00000000-0000-0000-0000-000000000000",
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startTime: "01:00",
+          endTime: "01:15",
+        }),
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Update night waking with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/night-wakings/invalid-uuid",
+      authToken,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startTime: "01:00",
+          endTime: "01:15",
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
   test("Delete night waking", async () => {
     const res = await authenticatedApi(
       `/api/night-wakings/${nightWakingId}`,
