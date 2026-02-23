@@ -64,6 +64,7 @@ interface Nap {
   environment: string | null;
   wakeUpMood: string | null;
   observations: string | null;
+  consultantComments: string | null;
   createdAt: string;
 }
 
@@ -85,6 +86,7 @@ interface NightSleep {
   environment: string | null;
   wakeUpMood: string | null;
   observations: string | null;
+  consultantComments: string | null;
   createdAt: string;
   wakings?: NightWaking[];
 }
@@ -780,6 +782,34 @@ function RoutineListScreen({ isConsultant, baby, onBack, onOpenRoutine, showErr 
 
   useEffect(() => { loadRoutines(); }, [loadRoutines]);
 
+  const createRoutineForDay = async (dayNumber: number) => {
+    try {
+      console.log("[API] Creating routine for day:", dayNumber);
+      const contract = baby.activeContract;
+      if (!contract) {
+        showErr("Nenhum contrato ativo");
+        return;
+      }
+      
+      const startDate = new Date(contract.startDate);
+      startDate.setDate(startDate.getDate() + (dayNumber - 1));
+      const routineDate = formatDateForDisplay(startDate);
+      
+      const newRoutine = await apiPost<Routine>("/api/routines", {
+        babyId: baby.id,
+        date: routineDate,
+        wakeUpTime: "07:00",
+        motherObservations: null,
+        consultantComments: null
+      });
+      
+      console.log("[API] Routine created:", newRoutine.id);
+      onOpenRoutine(newRoutine, dayNumber);
+    } catch (error: any) {
+      showErr(error.message || "Erro ao criar rotina");
+    }
+  };
+
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
 
   const contract = baby.activeContract;
@@ -847,14 +877,15 @@ function RoutineListScreen({ isConsultant, baby, onBack, onOpenRoutine, showErr 
                 key={dayNumber} 
                 style={styles.routineCard} 
                 onPress={() => {
+                  console.log("Tapped day:", dayNumber);
                   if (routine) {
-                    console.log("Opening routine:", routine.id, "Day:", dayNumber);
+                    console.log("Opening existing routine:", routine.id);
                     onOpenRoutine(routine, dayNumber);
                   } else {
-                    showErr("Este dia ainda não foi preenchido");
+                    console.log("Creating new routine for day:", dayNumber);
+                    createRoutineForDay(dayNumber);
                   }
                 }}
-                disabled={!routine}
               >
                 <View style={styles.routineCardHeader}>
                   <View>
@@ -868,11 +899,9 @@ function RoutineListScreen({ isConsultant, baby, onBack, onOpenRoutine, showErr 
                 {routine?.consultantComments && (
                   <Text style={styles.routineComment} numberOfLines={2}>💬 {routine.consultantComments}</Text>
                 )}
-                {routine && (
-                  <View style={{ alignItems: "flex-end", marginTop: 4 }}>
-                    <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={colors.textSecondary} />
-                  </View>
-                )}
+                <View style={{ alignItems: "flex-end", marginTop: 4 }}>
+                  <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={colors.textSecondary} />
+                </View>
               </TouchableOpacity>
             );
           })
@@ -892,12 +921,14 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const [saving, setSaving] = useState(false);
   const [consultantComments, setConsultantComments] = useState(initialRoutine.consultantComments || "");
   const [wakeUpObs, setWakeUpObs] = useState(initialRoutine.motherObservations || "");
-  const [expandedNaps, setExpandedNaps] = useState<{ [key: number]: boolean }>({});
-  const [expandedWakings, setExpandedWakings] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [wakeUpTime, setWakeUpTime] = useState(initialRoutine.wakeUpTime || "07:00");
+  const [expandedNaps, setExpandedNaps] = useState<{ [key: number]: boolean }>({ 1: true });
+  const [expandedNightSleep, setExpandedNightSleep] = useState(false);
+  const [expandedWakings, setExpandedWakings] = useState<{ [key: number]: boolean }>({});
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [currentTimeField, setCurrentTimeField] = useState<string>("");
-  const [currentNapIndex, setCurrentNapIndex] = useState<number | null>(null);
+  const [currentNapId, setCurrentNapId] = useState<string | null>(null);
+  const [currentWakingId, setCurrentWakingId] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState(new Date());
 
   const loadRoutine = useCallback(async () => {
@@ -907,6 +938,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       setRoutine(data);
       setConsultantComments(data.consultantComments || "");
       setWakeUpObs(data.motherObservations || "");
+      setWakeUpTime(data.wakeUpTime || "07:00");
     } catch (error: any) {
       showErr(error.message || "Erro ao carregar rotina");
     } finally {
@@ -919,8 +951,11 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const handleSaveWakeUp = async () => {
     setSaving(true);
     try {
-      console.log("[API] Saving wake up observations for routine:", routine.id);
-      await apiPut(`/api/routines/${routine.id}`, { motherObservations: wakeUpObs });
+      console.log("[API] Saving wake up data for routine:", routine.id);
+      await apiPut(`/api/routines/${routine.id}`, { 
+        wakeUpTime, 
+        motherObservations: wakeUpObs 
+      });
       loadRoutine();
     } catch (error: any) {
       showErr(error.message || "Erro ao salvar observações");
@@ -934,6 +969,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       console.log("[API] Saving consultant comments for routine:", routine.id);
       await apiPut(`/api/routines/${routine.id}`, { consultantComments });
+      showErr("✅ Comentários salvos com sucesso!");
       loadRoutine();
     } catch (error: any) {
       showErr(error.message || "Erro ao salvar comentários");
@@ -1062,19 +1098,43 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       const timeString = `${hours}:${minutes}`;
       
       if (currentTimeField === "wakeUpTime") {
-        // Update wake up time via API
-      } else if (currentTimeField.startsWith("nap_")) {
-        const napId = currentTimeField.split("_")[1];
-        const field = currentTimeField.split("_")[2];
-        const nap = routine.naps?.find(n => n.id === napId);
-        if (nap) {
-          handleUpdateNap(napId, { [field]: timeString });
-        }
+        setWakeUpTime(timeString);
+      } else if (currentTimeField.startsWith("nap_") && currentNapId) {
+        const field = currentTimeField.split("_")[1];
+        handleUpdateNap(currentNapId, { [field]: timeString });
       } else if (currentTimeField.startsWith("nightSleep_")) {
         const field = currentTimeField.split("_")[1];
         handleUpdateNightSleep({ [field]: timeString });
+      } else if (currentTimeField.startsWith("waking_") && currentWakingId) {
+        const field = currentTimeField.split("_")[1];
+        handleUpdateWaking(currentWakingId, field, timeString);
       }
     }
+  };
+
+  const handleUpdateWaking = async (wakingId: string, field: string, value: string) => {
+    try {
+      console.log("[API] Updating waking:", wakingId, field, value);
+      const waking = routine.nightSleep?.wakings?.find(w => w.id === wakingId);
+      if (!waking) return;
+      
+      const updates = {
+        startTime: field === "startTime" ? value : waking.startTime,
+        endTime: field === "endTime" ? value : waking.endTime
+      };
+      
+      await apiPut(`/api/night-wakings/${wakingId}`, updates);
+      loadRoutine();
+    } catch (error: any) {
+      showErr(error.message || "Erro ao atualizar despertar");
+    }
+  };
+
+  const openTimePicker = (field: string, napId?: string, wakingId?: string) => {
+    setCurrentTimeField(field);
+    setCurrentNapId(napId || null);
+    setCurrentWakingId(wakingId || null);
+    setShowTimePicker(true);
   };
 
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
@@ -1100,11 +1160,17 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         {/* ACORDOU */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionCardTitle}>☀️ Acordou</Text>
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Horário</Text>
-            <Text style={styles.fieldValue}>{routine.wakeUpTime}</Text>
-          </View>
-          <Text style={styles.fieldLabel}>Observações</Text>
+          
+          <Text style={styles.fieldLabel}>Horário</Text>
+          <TouchableOpacity 
+            style={styles.timePickerButton} 
+            onPress={() => openTimePicker("wakeUpTime")}
+          >
+            <Text style={styles.timePickerText}>{wakeUpTime}</Text>
+            <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
+          </TouchableOpacity>
+          
+          <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações</Text>
           <TextInput 
             style={[styles.formInput, styles.textArea]} 
             placeholder="Observações da mãe..." 
@@ -1114,8 +1180,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
             numberOfLines={2} 
             placeholderTextColor={colors.textSecondary} 
           />
+          
           <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSaveWakeUp} disabled={saving}>
-            {saving ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.saveBtnText}>Salvar</Text>}
+            {saving ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.saveBtnText}>Salvar Observações</Text>}
           </TouchableOpacity>
           
           {isConsultant && (
@@ -1150,8 +1217,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
         {naps.map((nap, index) => {
           const isExpanded = expandedNaps[nap.napNumber] || false;
-          const sleepDuration = nap.fellAsleepTime && nap.wakeUpTime ? calcTimeDiff(nap.fellAsleepTime, nap.wakeUpTime) : null;
+          const sleepWindow = nap.startTryTime && nap.wakeUpTime ? calcTimeDiff(nap.startTryTime, nap.wakeUpTime) : null;
           const timeToSleep = nap.startTryTime && nap.fellAsleepTime ? calcTimeDiff(nap.startTryTime, nap.fellAsleepTime) : null;
+          const sleepDuration = nap.fellAsleepTime && nap.wakeUpTime ? calcTimeDiff(nap.fellAsleepTime, nap.wakeUpTime) : null;
           
           return (
             <View key={nap.id} style={styles.expandableCard}>
@@ -1159,7 +1227,14 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                 style={styles.expandableHeader} 
                 onPress={() => setExpandedNaps({ ...expandedNaps, [nap.napNumber]: !isExpanded })}
               >
-                <Text style={styles.expandableTitle}>Soneca {nap.napNumber}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={styles.expandableTitle}>Soneca {nap.napNumber}</Text>
+                  {!isExpanded && nap.fellAsleepTime && nap.wakeUpTime && (
+                    <Text style={styles.expandableSubtitle}>
+                      {nap.fellAsleepTime} - {nap.wakeUpTime}
+                    </Text>
+                  )}
+                </View>
                 <IconSymbol 
                   ios_icon_name={isExpanded ? "chevron.up" : "chevron.down"} 
                   android_material_icon_name={isExpanded ? "expand-less" : "expand-more"} 
@@ -1170,24 +1245,39 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
               
               {isExpanded && (
                 <View style={styles.expandableContent}>
-                  <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>Início</Text>
-                    <Text style={styles.fieldValue}>{nap.startTryTime}</Text>
-                  </View>
-                  <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>Término</Text>
-                    <Text style={styles.fieldValue}>{nap.wakeUpTime || "—"}</Text>
-                  </View>
+                  <Text style={styles.fieldLabel}>Janela de sono - Início</Text>
+                  <TouchableOpacity 
+                    style={styles.timePickerButton} 
+                    onPress={() => openTimePicker("nap_startTryTime", nap.id)}
+                  >
+                    <Text style={styles.timePickerText}>{nap.startTryTime}</Text>
+                    <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                  
+                  <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Janela de sono - Término</Text>
+                  <TouchableOpacity 
+                    style={styles.timePickerButton} 
+                    onPress={() => openTimePicker("nap_wakeUpTime", nap.id)}
+                  >
+                    <Text style={styles.timePickerText}>{nap.wakeUpTime || "—"}</Text>
+                    <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                  
+                  {sleepWindow !== null && (
+                    <Text style={styles.calcText}>📊 Janela de sono (Total): {minutesToHM(sleepWindow)}</Text>
+                  )}
+                  
                   {timeToSleep !== null && (
                     <Text style={styles.calcText}>⏱ Em quanto tempo dormiu: {minutesToHM(timeToSleep)}</Text>
                   )}
+                  
                   {sleepDuration !== null && (
                     <Text style={styles.calcText}>💤 Quanto tempo dormiu: {minutesToHM(sleepDuration)}</Text>
                   )}
                   
                   <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Dormiu como</Text>
                   <View style={styles.choiceButtons}>
-                    {["No colo", "Com embalo", "Mamando", "Sozinho no berço"].map((method) => (
+                    {["No colo", "Com embalo", "Mamando"].map((method) => (
                       <TouchableOpacity 
                         key={method} 
                         style={[styles.choiceBtn, nap.sleepMethod === method && styles.choiceBtnActive]} 
@@ -1235,6 +1325,21 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                     placeholderTextColor={colors.textSecondary} 
                   />
                   
+                  {isConsultant && (
+                    <>
+                      <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentários da Consultora</Text>
+                      <TextInput 
+                        style={[styles.formInput, styles.textArea]} 
+                        placeholder="Comentários da consultora..." 
+                        value={nap.consultantComments || ""} 
+                        onChangeText={(text) => handleUpdateNap(nap.id, { consultantComments: text })} 
+                        multiline 
+                        numberOfLines={2} 
+                        placeholderTextColor={colors.textSecondary} 
+                      />
+                    </>
+                  )}
+                  
                   <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteNap(nap.id)}>
                     <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={18} color="#FFF" />
                     <Text style={styles.deleteBtnText}>Excluir Soneca</Text>
@@ -1257,30 +1362,83 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         </View>
 
         {nightSleep && (
-          <View style={styles.sectionCard}>
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Início</Text>
-              <Text style={styles.fieldValue}>{nightSleep.startTryTime}</Text>
-            </View>
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Dormiu</Text>
-              <Text style={styles.fieldValue}>{nightSleep.fellAsleepTime || "—"}</Text>
-            </View>
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Acordou</Text>
-              <Text style={styles.fieldValue}>{nightSleep.finalWakeTime || "—"}</Text>
-            </View>
+          <View style={styles.expandableCard}>
+            <TouchableOpacity 
+              style={styles.expandableHeader} 
+              onPress={() => setExpandedNightSleep(!expandedNightSleep)}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={styles.expandableTitle}>Sono Noturno</Text>
+                {!expandedNightSleep && nightSleep.startTryTime && nightSleep.finalWakeTime && (
+                  <Text style={styles.expandableSubtitle}>
+                    {nightSleep.startTryTime} - {nightSleep.finalWakeTime}
+                  </Text>
+                )}
+              </View>
+              <IconSymbol 
+                ios_icon_name={expandedNightSleep ? "chevron.up" : "chevron.down"} 
+                android_material_icon_name={expandedNightSleep ? "expand-less" : "expand-more"} 
+                size={24} 
+                color={colors.primary} 
+              />
+            </TouchableOpacity>
             
-            <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações</Text>
-            <TextInput 
-              style={[styles.formInput, styles.textArea]} 
-              placeholder="Observações..." 
-              value={nightSleep.observations || ""} 
-              onChangeText={(text) => handleUpdateNightSleep({ observations: text })} 
-              multiline 
-              numberOfLines={2} 
-              placeholderTextColor={colors.textSecondary} 
-            />
+            {expandedNightSleep && (
+              <View style={styles.expandableContent}>
+                <Text style={styles.fieldLabel}>Início</Text>
+                <TouchableOpacity 
+                  style={styles.timePickerButton} 
+                  onPress={() => openTimePicker("nightSleep_startTryTime")}
+                >
+                  <Text style={styles.timePickerText}>{nightSleep.startTryTime}</Text>
+                  <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
+                </TouchableOpacity>
+                
+                <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Dormiu</Text>
+                <TouchableOpacity 
+                  style={styles.timePickerButton} 
+                  onPress={() => openTimePicker("nightSleep_fellAsleepTime")}
+                >
+                  <Text style={styles.timePickerText}>{nightSleep.fellAsleepTime || "—"}</Text>
+                  <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
+                </TouchableOpacity>
+                
+                <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Acordou</Text>
+                <TouchableOpacity 
+                  style={styles.timePickerButton} 
+                  onPress={() => openTimePicker("nightSleep_finalWakeTime")}
+                >
+                  <Text style={styles.timePickerText}>{nightSleep.finalWakeTime || "—"}</Text>
+                  <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
+                </TouchableOpacity>
+                
+                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações</Text>
+                <TextInput 
+                  style={[styles.formInput, styles.textArea]} 
+                  placeholder="Observações..." 
+                  value={nightSleep.observations || ""} 
+                  onChangeText={(text) => handleUpdateNightSleep({ observations: text })} 
+                  multiline 
+                  numberOfLines={2} 
+                  placeholderTextColor={colors.textSecondary} 
+                />
+                
+                {isConsultant && (
+                  <>
+                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentários da Consultora</Text>
+                    <TextInput 
+                      style={[styles.formInput, styles.textArea]} 
+                      placeholder="Comentários da consultora..." 
+                      value={nightSleep.consultantComments || ""} 
+                      onChangeText={(text) => handleUpdateNightSleep({ consultantComments: text })} 
+                      multiline 
+                      numberOfLines={2} 
+                      placeholderTextColor={colors.textSecondary} 
+                    />
+                  </>
+                )}
+              </View>
+            )}
           </View>
         )}
 
@@ -1296,24 +1454,60 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
             </View>
 
             {(nightSleep.wakings || []).map((waking, index) => {
+              const wakingNumber = index + 1;
+              const isExpanded = expandedWakings[wakingNumber] || false;
               const duration = calcTimeDiff(waking.startTime, waking.endTime);
+              
               return (
-                <View key={waking.id} style={styles.wakingCard}>
-                  <View style={styles.wakingHeader}>
-                    <Text style={styles.wakingTitle}>Despertar {index + 1}</Text>
-                    <TouchableOpacity onPress={() => handleDeleteWaking(waking.id)}>
-                      <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={18} color={colors.error} />
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>Início</Text>
-                    <Text style={styles.fieldValue}>{waking.startTime}</Text>
-                  </View>
-                  <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>Término</Text>
-                    <Text style={styles.fieldValue}>{waking.endTime}</Text>
-                  </View>
-                  <Text style={styles.calcText}>⏱ Duração: {minutesToHM(duration)}</Text>
+                <View key={waking.id} style={styles.expandableCard}>
+                  <TouchableOpacity 
+                    style={styles.expandableHeader} 
+                    onPress={() => setExpandedWakings({ ...expandedWakings, [wakingNumber]: !isExpanded })}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Text style={styles.expandableTitle}>Despertar {wakingNumber}</Text>
+                      {!isExpanded && (
+                        <Text style={styles.expandableSubtitle}>
+                          {waking.startTime} - {waking.endTime}
+                        </Text>
+                      )}
+                    </View>
+                    <IconSymbol 
+                      ios_icon_name={isExpanded ? "chevron.up" : "chevron.down"} 
+                      android_material_icon_name={isExpanded ? "expand-less" : "expand-more"} 
+                      size={24} 
+                      color={colors.primary} 
+                    />
+                  </TouchableOpacity>
+                  
+                  {isExpanded && (
+                    <View style={styles.expandableContent}>
+                      <Text style={styles.fieldLabel}>Início</Text>
+                      <TouchableOpacity 
+                        style={styles.timePickerButton} 
+                        onPress={() => openTimePicker("waking_startTime", undefined, waking.id)}
+                      >
+                        <Text style={styles.timePickerText}>{waking.startTime}</Text>
+                        <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
+                      </TouchableOpacity>
+                      
+                      <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Término</Text>
+                      <TouchableOpacity 
+                        style={styles.timePickerButton} 
+                        onPress={() => openTimePicker("waking_endTime", undefined, waking.id)}
+                      >
+                        <Text style={styles.timePickerText}>{waking.endTime}</Text>
+                        <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
+                      </TouchableOpacity>
+                      
+                      <Text style={styles.calcText}>⏱ Duração: {minutesToHM(duration)}</Text>
+                      
+                      <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteWaking(waking.id)}>
+                        <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={18} color="#FFF" />
+                        <Text style={styles.deleteBtnText}>Excluir Despertar</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -1678,7 +1872,21 @@ const styles = StyleSheet.create({
   expandableCard: { backgroundColor: colors.card, borderRadius: 12, marginBottom: 8, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 2, elevation: 1 },
   expandableHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 14 },
   expandableTitle: { fontSize: 16, fontWeight: "bold", color: colors.text },
+  expandableSubtitle: { fontSize: 13, color: colors.textSecondary, fontWeight: "normal" },
   expandableContent: { padding: 14, paddingTop: 0 },
+  timePickerButton: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "space-between", 
+    backgroundColor: colors.background, 
+    borderRadius: 10, 
+    padding: 12, 
+    marginTop: 6,
+    marginBottom: 6,
+    borderWidth: 1, 
+    borderColor: colors.border 
+  },
+  timePickerText: { fontSize: 16, color: colors.text, fontWeight: "600" },
   calcText: { fontSize: 13, color: colors.primary, marginTop: 6, fontWeight: "600" },
   choiceButtons: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
   choiceBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.background },
