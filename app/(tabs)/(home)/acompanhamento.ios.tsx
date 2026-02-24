@@ -66,6 +66,30 @@ interface Routine {
   nightSleep?: NightSleep | null;
 }
 
+interface CalculatedNap {
+  napNumber: number;
+  displayText: string;
+  windowText: string;
+  durationMinutes: number;
+}
+
+interface CalculatedWaking {
+  index: number;
+  displayText: string;
+  durationMinutes: number;
+}
+
+interface DailyReport {
+  dayNumber: number;
+  dateDisplay: string;
+  wakeUpTime: string | null;
+  naps: CalculatedNap[];
+  daytimeSleepTotal: string | null;
+  nightSleepStart: string | null;
+  nightSleepLiquidTotal: string | null;
+  wakings: CalculatedWaking[];
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -123,6 +147,11 @@ const styles = StyleSheet.create({
   scrollContainer: {
     padding: 16,
   },
+  cardsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
   dayCard: {
     backgroundColor: colors.card,
     borderRadius: 12,
@@ -130,57 +159,217 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
+    width: "48%",
   },
   dayHeader: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "700",
-    color: colors.text,
-    marginBottom: 4,
-  },
-  dateText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-    marginTop: 12,
-    marginBottom: 6,
-    textTransform: "uppercase",
-  },
-  infoText: {
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 4,
-  },
-  napContainer: {
-    marginTop: 8,
-    marginBottom: 8,
-    paddingLeft: 8,
-  },
-  napTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: 4,
-  },
-  wakingContainer: {
-    marginTop: 4,
-    paddingLeft: 8,
-  },
-  wakingText: {
-    fontSize: 14,
     color: colors.text,
     marginBottom: 2,
   },
+  dateText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.text,
+    marginTop: 10,
+    marginBottom: 4,
+    textTransform: "uppercase",
+  },
+  infoText: {
+    fontSize: 13,
+    color: colors.text,
+    marginBottom: 2,
+    lineHeight: 18,
+  },
+  napContainer: {
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  napTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.text,
+    marginBottom: 3,
+    textTransform: "uppercase",
+  },
+  napDetail: {
+    fontSize: 13,
+    color: colors.text,
+    marginBottom: 2,
+    lineHeight: 18,
+  },
+  wakingDetail: {
+    fontSize: 13,
+    color: colors.text,
+    marginBottom: 2,
+    lineHeight: 18,
+  },
 });
 
+// ========== UTILITY FUNCTIONS FOR TIME CALCULATIONS ==========
+
+/**
+ * Converts time string (HH:MM) to total minutes from midnight
+ */
+function timeToMinutes(time: string): number {
+  if (!time || time.trim() === "") return 0;
+  const parts = time.split(":");
+  if (parts.length !== 2) return 0;
+  const hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
+  if (isNaN(hours) || isNaN(minutes)) return 0;
+  return hours * 60 + minutes;
+}
+
+/**
+ * Calculates the difference between two time strings in minutes
+ * Handles overnight periods (e.g., 23:00 to 02:00 = 3 hours)
+ */
+function calculateTimeDifference(startTime: string, endTime: string): number {
+  if (!startTime || !endTime) return 0;
+  
+  const startMinutes = timeToMinutes(startTime);
+  const endMinutes = timeToMinutes(endTime);
+  
+  if (endMinutes >= startMinutes) {
+    return endMinutes - startMinutes;
+  } else {
+    // Overnight period
+    return (24 * 60 - startMinutes) + endMinutes;
+  }
+}
+
+/**
+ * Formats total minutes into "HhMMmin" string (e.g., 150 -> "2h30min")
+ */
+function formatTimeDuration(totalMinutes: number): string {
+  if (totalMinutes <= 0) return "0h00min";
+  
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  
+  return `${hours}h${minutes.toString().padStart(2, "0")}min`;
+}
+
+/**
+ * Formats date string to Brazilian format
+ */
 function formatDateToBR(dateStr: string): string {
   const [year, month, day] = dateStr.split("-");
   return `${day}/${month}/${year}`;
 }
+
+// ========== MAIN CALCULATION FUNCTION ==========
+
+/**
+ * Calculates a complete daily report from raw routine data
+ */
+function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
+  console.log(`Calculating report for day ${dayIndex + 1}, routine:`, routine.id);
+  
+  const report: DailyReport = {
+    dayNumber: dayIndex + 1,
+    dateDisplay: formatDateToBR(routine.date),
+    wakeUpTime: null,
+    naps: [],
+    daytimeSleepTotal: null,
+    nightSleepStart: null,
+    nightSleepLiquidTotal: null,
+    wakings: [],
+  };
+
+  // ACORDOU
+  if (routine.wakeUpTime && routine.wakeUpTime.trim() !== "") {
+    report.wakeUpTime = routine.wakeUpTime;
+  }
+
+  // SONECAS & JANELAS
+  let totalDaytimeNapMinutes = 0;
+  let lastWakeTimeForWindow = routine.wakeUpTime; // For calculating windows
+
+  if (routine.naps && routine.naps.length > 0) {
+    // Sort naps by napNumber to ensure correct order
+    const sortedNaps = [...routine.naps].sort((a, b) => a.napNumber - b.napNumber);
+
+    sortedNaps.forEach((nap) => {
+      // Only process naps that have both start and wake times
+      if (nap.startTryTime && nap.wakeUpTime) {
+        const napDuration = calculateTimeDifference(nap.startTryTime, nap.wakeUpTime);
+        totalDaytimeNapMinutes += napDuration;
+
+        const napDurationFormatted = formatTimeDuration(napDuration);
+        const displayText = `Das ${nap.startTryTime} às ${nap.wakeUpTime} (${napDurationFormatted})`;
+
+        // Calculate window (time from last wake to this nap start)
+        let windowText = "";
+        if (lastWakeTimeForWindow && nap.startTryTime) {
+          const windowDuration = calculateTimeDifference(lastWakeTimeForWindow, nap.startTryTime);
+          windowText = `Janela: ${formatTimeDuration(windowDuration)}`;
+        }
+
+        report.naps.push({
+          napNumber: nap.napNumber,
+          displayText,
+          windowText,
+          durationMinutes: napDuration,
+        });
+
+        // Update last wake time for next window calculation
+        lastWakeTimeForWindow = nap.wakeUpTime;
+      }
+    });
+  }
+
+  // DURAÇÃO DO SONO DIURNO
+  if (totalDaytimeNapMinutes > 0) {
+    report.daytimeSleepTotal = formatTimeDuration(totalDaytimeNapMinutes);
+  }
+
+  // DESPERTARES (Night Wakings)
+  let totalWakingMinutes = 0;
+  if (routine.nightSleep && routine.nightSleep.wakings && routine.nightSleep.wakings.length > 0) {
+    routine.nightSleep.wakings.forEach((waking, index) => {
+      if (waking.startTime && waking.endTime) {
+        const duration = calculateTimeDifference(waking.startTime, waking.endTime);
+        totalWakingMinutes += duration;
+        
+        const durationFormatted = formatTimeDuration(duration);
+        const displayText = `${index + 1}º – ${waking.startTime} às ${waking.endTime} (${durationFormatted})`;
+        
+        report.wakings.push({
+          index: index + 1,
+          displayText,
+          durationMinutes: duration,
+        });
+      }
+    });
+  }
+
+  // SONO NOTURNO
+  if (routine.nightSleep && routine.nightSleep.startTryTime) {
+    report.nightSleepStart = routine.nightSleep.startTryTime;
+
+    // Calculate liquid night sleep (brute - wakings)
+    if (routine.nightSleep.finalWakeTime) {
+      const nightSleepBruteMinutes = calculateTimeDifference(
+        routine.nightSleep.startTryTime,
+        routine.nightSleep.finalWakeTime
+      );
+      const nightSleepLiquidMinutes = nightSleepBruteMinutes - totalWakingMinutes;
+      report.nightSleepLiquidTotal = formatTimeDuration(nightSleepLiquidMinutes);
+    }
+  }
+
+  console.log(`Report calculated for day ${dayIndex + 1}:`, report);
+  return report;
+}
+
+// ========== MAIN COMPONENT ==========
 
 export default function AcompanhamentoScreen() {
   const router = useRouter();
@@ -283,7 +472,7 @@ export default function AcompanhamentoScreen() {
     );
   }
 
-  // Filter routines that have data (wakeUpTime or naps or nightSleep)
+  // Filter routines that have meaningful data
   const filledRoutines = routines.filter((r) => {
     const hasWakeUp = r.wakeUpTime && r.wakeUpTime.trim() !== "";
     const hasNaps = r.naps && r.naps.length > 0;
@@ -291,7 +480,12 @@ export default function AcompanhamentoScreen() {
     return hasWakeUp || hasNaps || hasNightSleep;
   });
 
-  console.log("Acompanhamento: Filtered routines:", filledRoutines.length);
+  // Calculate reports for all filled routines
+  const dailyReports = filledRoutines.map((routine, index) => 
+    calculateDailyReport(routine, index)
+  );
+
+  console.log("Acompanhamento: Generated daily reports:", dailyReports.length);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -310,95 +504,86 @@ export default function AcompanhamentoScreen() {
       </View>
 
       <ScrollView style={styles.scrollContainer}>
-        {filledRoutines.length === 0 ? (
+        {dailyReports.length === 0 ? (
           <View style={styles.errorContainer}>
             <Text style={styles.errorText}>
               Nenhuma rotina preenchida ainda.
             </Text>
           </View>
         ) : (
-          filledRoutines.map((routine, index) => {
-            const dayNumber = index + 1;
-            const dateDisplay = formatDateToBR(routine.date);
+          <View style={styles.cardsGrid}>
+            {dailyReports.map((report) => {
+              const dayNumberText = `DIA ${report.dayNumber}`;
+              const dateText = report.dateDisplay;
 
-            return (
-              <View key={routine.id} style={styles.dayCard}>
-                <Text style={styles.dayHeader}>DIA {dayNumber}</Text>
-                <Text style={styles.dateText}>{dateDisplay}</Text>
+              return (
+                <View key={report.dayNumber} style={styles.dayCard}>
+                  <Text style={styles.dayHeader}>{dayNumberText}</Text>
+                  <Text style={styles.dateText}>{dateText}</Text>
 
-                {/* Only show sections if data exists */}
-                {routine.wakeUpTime && routine.wakeUpTime.trim() !== "" && (
-                  <>
-                    <Text style={styles.sectionTitle}>ACORDOU:</Text>
-                    <Text style={styles.infoText}>{routine.wakeUpTime}</Text>
-                  </>
-                )}
+                  {/* ACORDOU */}
+                  {report.wakeUpTime && (
+                    <React.Fragment>
+                      <Text style={styles.sectionTitle}>ACORDOU:</Text>
+                      <Text style={styles.infoText}>{report.wakeUpTime}</Text>
+                    </React.Fragment>
+                  )}
 
-                {routine.naps && routine.naps.length > 0 && (
-                  <>
-                    {routine.naps.map((nap) => (
-                      <View key={nap.id} style={styles.napContainer}>
-                        <Text style={styles.napTitle}>
-                          SONECA {nap.napNumber}
-                        </Text>
-                        {nap.startTryTime && (
-                          <Text style={styles.infoText}>
-                            Início: {nap.startTryTime}
-                          </Text>
-                        )}
-                        {nap.fellAsleepTime && (
-                          <Text style={styles.infoText}>
-                            Dormiu: {nap.fellAsleepTime}
-                          </Text>
-                        )}
-                        {nap.wakeUpTime && (
-                          <Text style={styles.infoText}>
-                            Acordou: {nap.wakeUpTime}
-                          </Text>
+                  {/* SONECAS */}
+                  {report.naps.map((nap) => {
+                    const napTitleText = `SONECA ${nap.napNumber}`;
+                    
+                    return (
+                      <View key={nap.napNumber} style={styles.napContainer}>
+                        <Text style={styles.napTitle}>{napTitleText}</Text>
+                        <Text style={styles.napDetail}>{nap.displayText}</Text>
+                        {nap.windowText && (
+                          <Text style={styles.napDetail}>{nap.windowText}</Text>
                         )}
                       </View>
-                    ))}
-                  </>
-                )}
+                    );
+                  })}
 
-                {routine.nightSleep && (
-                  <>
-                    <Text style={styles.sectionTitle}>SONO NOTURNO</Text>
-                    {routine.nightSleep.startTryTime && (
+                  {/* DURAÇÃO DO SONO DIURNO */}
+                  {report.daytimeSleepTotal && (
+                    <React.Fragment>
+                      <Text style={styles.sectionTitle}>DURAÇÃO DO SONO DIURNO</Text>
                       <Text style={styles.infoText}>
-                        Iniciou às {routine.nightSleep.startTryTime}
+                        Somatória das sonecas: {report.daytimeSleepTotal}
                       </Text>
-                    )}
-                    {routine.nightSleep.fellAsleepTime && (
-                      <Text style={styles.infoText}>
-                        Dormiu às {routine.nightSleep.fellAsleepTime}
-                      </Text>
-                    )}
-                    {routine.nightSleep.finalWakeTime && (
-                      <Text style={styles.infoText}>
-                        Acordou às {routine.nightSleep.finalWakeTime}
-                      </Text>
-                    )}
+                    </React.Fragment>
+                  )}
 
-                    {routine.nightSleep.wakings &&
-                      routine.nightSleep.wakings.length > 0 && (
-                        <>
-                          <Text style={styles.sectionTitle}>DESPERTARES</Text>
-                          {routine.nightSleep.wakings.map((waking, idx) => (
-                            <View key={waking.id} style={styles.wakingContainer}>
-                              <Text style={styles.wakingText}>
-                                {idx + 1}º – {waking.startTime} às{" "}
-                                {waking.endTime}
-                              </Text>
-                            </View>
-                          ))}
-                        </>
+                  {/* SONO NOTURNO */}
+                  {report.nightSleepStart && (
+                    <React.Fragment>
+                      <Text style={styles.sectionTitle}>SONO NOTURNO</Text>
+                      <Text style={styles.infoText}>
+                        Iniciou às {report.nightSleepStart}
+                      </Text>
+                      {report.nightSleepLiquidTotal && (
+                        <Text style={styles.infoText}>
+                          Total líquido: {report.nightSleepLiquidTotal}
+                        </Text>
                       )}
-                  </>
-                )}
-              </View>
-            );
-          })
+                    </React.Fragment>
+                  )}
+
+                  {/* DESPERTARES */}
+                  {report.wakings.length > 0 && (
+                    <React.Fragment>
+                      <Text style={styles.sectionTitle}>DESPERTARES</Text>
+                      {report.wakings.map((waking) => (
+                        <Text key={waking.index} style={styles.wakingDetail}>
+                          {waking.displayText}
+                        </Text>
+                      ))}
+                    </React.Fragment>
+                  )}
+                </View>
+              );
+            })}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
