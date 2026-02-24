@@ -82,9 +82,6 @@ interface NightSleep {
   startTryTime: string;
   fellAsleepTime: string | null;
   finalWakeTime: string | null;
-  sleepMethod: string | null;
-  environment: string | null;
-  wakeUpMood: string | null;
   observations: string | null;
   consultantComments: string | null;
   createdAt: string;
@@ -968,13 +965,13 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const [nightSleepConsultantComments, setNightSleepConsultantComments] = useState("");
 
   // Ref to always have the latest nightSleep id for auto-save
-  // Initialize with the current night sleep id if it exists
   const nightSleepIdRef = useRef<string | null>(initialRoutine.nightSleep?.id || null);
   
   // Keep nightSleepIdRef in sync with routine.nightSleep
   useEffect(() => {
     if (routine.nightSleep?.id) {
       nightSleepIdRef.current = routine.nightSleep.id;
+      console.log("[Night Sleep Ref] Updated nightSleepIdRef to:", routine.nightSleep.id);
     }
   }, [routine.nightSleep?.id]);
 
@@ -1015,10 +1012,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     }
   }, 1000);
 
-  const autoSaveNightSleepObservations = useDebounce(async (text: string, nightSleepId?: string) => {
+  const autoSaveNightSleepObservations = useDebounce(async (text: string) => {
     try {
-      // Use passed nightSleepId or fall back to ref (which has the latest value)
-      const id = nightSleepId || nightSleepIdRef.current;
+      const id = nightSleepIdRef.current;
       if (id) {
         console.log("[Auto-save] Saving night sleep observations for id:", id);
         await apiPut(`/api/night-sleep/${id}`, { observations: text });
@@ -1030,10 +1026,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     }
   }, 1000);
 
-  const autoSaveNightSleepComments = useDebounce(async (text: string, nightSleepId?: string) => {
+  const autoSaveNightSleepComments = useDebounce(async (text: string) => {
     try {
-      // Use passed nightSleepId or fall back to ref (which has the latest value)
-      const id = nightSleepId || nightSleepIdRef.current;
+      const id = nightSleepIdRef.current;
       if (id) {
         console.log("[Auto-save] Saving night sleep consultant comments for id:", id);
         await apiPut(`/api/night-sleep/${id}`, { consultantComments: text });
@@ -1056,6 +1051,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       // Update the nightSleepIdRef with the latest id from API
       if (apiNightSleep?.id && !preserveNightSleep) {
         nightSleepIdRef.current = apiNightSleep.id;
+        console.log("[API] Updated nightSleepIdRef from API to:", apiNightSleep.id);
       }
       
       setRoutine(prev => {
@@ -1066,6 +1062,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         // Update ref if we have a night sleep
         if (nightSleepToUse?.id) {
           nightSleepIdRef.current = nightSleepToUse.id;
+          console.log("[API] Updated nightSleepIdRef from nightSleepToUse to:", nightSleepToUse.id);
         }
         
         return {
@@ -1196,9 +1193,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         startTryTime: "20:00",
         fellAsleepTime: null,
         finalWakeTime: null,
-        sleepMethod: null,
-        environment: null,
-        wakeUpMood: null,
         observations: null
       });
       
@@ -1206,6 +1200,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       
       // Update ref immediately so auto-save functions can use it
       nightSleepIdRef.current = newNightSleep.id;
+      console.log("[API] Updated nightSleepIdRef after creation to:", newNightSleep.id);
       
       setRoutine(prev => ({ ...prev, nightSleep: { ...newNightSleep, wakings: [] } }));
       setNightSleepObservations("");
@@ -1243,15 +1238,13 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           startTryTime: field === "startTryTime" ? value : "20:00",
           fellAsleepTime: field === "fellAsleepTime" ? value : null,
           finalWakeTime: field === "finalWakeTime" ? value : null,
-          sleepMethod: field === "sleepMethod" ? value : null,
-          environment: field === "environment" ? value : null,
-          wakeUpMood: field === "wakeUpMood" ? value : null,
           observations: field === "observations" ? value : null,
           consultantComments: field === "consultantComments" ? value : null,
         });
         updatedNightSleep = { ...postResult, wakings: [] };
         // Update the ref immediately so auto-save functions can use it
         nightSleepIdRef.current = postResult.id;
+        console.log("[API] Updated nightSleepIdRef after POST to:", postResult.id);
       }
       
       console.log("[API] Night sleep updated/created with ID:", updatedNightSleep.id);
@@ -1278,9 +1271,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           startTryTime: "20:00",
           fellAsleepTime: null,
           finalWakeTime: null,
-          sleepMethod: null,
-          environment: null,
-          wakeUpMood: null,
           observations: null
         });
         
@@ -1290,6 +1280,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         
         // Update ref immediately
         nightSleepIdRef.current = newNightSleep.id;
+        console.log("[API] Updated nightSleepIdRef after waking creation to:", newNightSleep.id);
         
         setRoutine(prev => ({
           ...prev,
@@ -1755,45 +1746,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                 </TouchableOpacity>
                 
-                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Dormiu como</Text>
-                <View style={styles.choiceButtons}>
-                  {["No colo", "Com embalo", "Mamando", "Sozinho no berço"].map((method) => (
-                    <TouchableOpacity 
-                      key={method} 
-                      style={[styles.choiceBtn, nightSleep.sleepMethod === method && styles.choiceBtnActive]} 
-                      onPress={() => handleUpdateNightSleep("sleepMethod", method)}
-                    >
-                      <Text style={[styles.choiceBtnText, nightSleep.sleepMethod === method && styles.choiceBtnTextActive]}>{method}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                
-                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Ambiente</Text>
-                <View style={styles.choiceButtons}>
-                  {["Adequado", "Parcialmente adequado", "Inadequado"].map((env) => (
-                    <TouchableOpacity 
-                      key={env} 
-                      style={[styles.choiceBtn, nightSleep.environment === env && styles.choiceBtnActive]} 
-                      onPress={() => handleUpdateNightSleep("environment", env)}
-                    >
-                      <Text style={[styles.choiceBtnText, nightSleep.environment === env && styles.choiceBtnTextActive]}>{env}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                
-                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Como acordou</Text>
-                <View style={styles.choiceButtons}>
-                  {["De bom humor", "Sorrindo", "Choroso", "Muito irritado"].map((mood) => (
-                    <TouchableOpacity 
-                      key={mood} 
-                      style={[styles.choiceBtn, nightSleep.wakeUpMood === mood && styles.choiceBtnActive]} 
-                      onPress={() => handleUpdateNightSleep("wakeUpMood", mood)}
-                    >
-                      <Text style={[styles.choiceBtnText, nightSleep.wakeUpMood === mood && styles.choiceBtnTextActive]}>{mood}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                
                 <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações (salva automaticamente)</Text>
                 <TextInput 
                   style={[styles.formInput, styles.textArea]} 
@@ -1801,7 +1753,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   value={nightSleepObservations} 
                   onChangeText={(text) => {
                     setNightSleepObservations(text);
-                    autoSaveNightSleepObservations(text, nightSleep.id);
+                    autoSaveNightSleepObservations(text);
                   }}
                   multiline 
                   numberOfLines={2} 
@@ -1817,7 +1769,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                       value={nightSleepConsultantComments} 
                       onChangeText={(text) => {
                         setNightSleepConsultantComments(text);
-                        autoSaveNightSleepComments(text, nightSleep.id);
+                        autoSaveNightSleepComments(text);
                       }}
                       multiline 
                       numberOfLines={2} 
