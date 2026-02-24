@@ -346,9 +346,11 @@ export function registerRoutinesRoutes(app: App) {
       return reply.status(401).send({ error: 'Not authorized' });
     }
 
-    if (!canEditRoutine(routine.createdAt)) {
-      app.logger.warn({ routineId: request.params.id }, 'Routine edit window expired');
-      return reply.status(403).send({ error: 'Cannot edit routine after 48 hours' });
+    // Allow observations and comments to be updated anytime (auto-save pattern)
+    // Only restrict wakeUpTime changes to 48-hour window
+    if (request.body.wakeUpTime !== undefined && !canEditRoutine(routine.createdAt)) {
+      app.logger.warn({ routineId: request.params.id }, 'Wake up time cannot be edited after 48 hours');
+      return reply.status(403).send({ error: 'Wake up time cannot be edited after 48 hours' });
     }
 
     if (isMother && request.body.consultantComments !== undefined) {
