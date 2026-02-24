@@ -401,9 +401,25 @@ export default function AcompanhamentoScreen() {
     setError(null);
     try {
       console.log(`[API] Calling: GET /api/routines/baby/${babyId}`);
-      const data = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
-      console.log("Acompanhamento: Loaded routines:", data);
-      setRoutines(data || []);
+      const basicRoutines = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
+      console.log("Acompanhamento: Loaded basic routines:", basicRoutines?.length);
+      
+      // Load full details for each routine (includes naps and nightSleep)
+      const fullRoutines = await Promise.all(
+        (basicRoutines || []).map(async (r) => {
+          try {
+            console.log(`[API] Calling: GET /api/routines/${r.id}`);
+            const full = await apiGet<Routine>(`/api/routines/${r.id}`);
+            return full;
+          } catch (err) {
+            console.warn(`Acompanhamento: Failed to load full routine ${r.id}:`, err);
+            return r;
+          }
+        })
+      );
+      
+      console.log("Acompanhamento: Loaded full routines:", fullRoutines.length);
+      setRoutines(fullRoutines);
     } catch (err: any) {
       console.error("Acompanhamento: Error loading data:", err);
       setError(err.message || "Erro ao carregar dados");

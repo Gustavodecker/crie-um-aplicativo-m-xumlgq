@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -185,6 +185,26 @@ function formatDateForDisplay(date: Date): string {
 function formatDateToBR(dateStr: string): string {
   const [year, month, day] = dateStr.split("-");
   return `${day}/${month}/${year}`;
+}
+
+// Debounce utility - uses ref to avoid stale closure issues
+function useDebounce(callback: (...args: any[]) => void, delay: number) {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const callbackRef = useRef(callback);
+  
+  // Keep callbackRef up to date without triggering re-renders
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
+  
+  return useCallback((...args: any[]) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
+      callbackRef.current(...args);
+    }, delay);
+  }, [delay]);
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -929,8 +949,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const [routine, setRoutine] = useState<Routine>(initialRoutine);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [consultantComments, setConsultantComments] = useState(initialRoutine.consultantComments || "");
-  const [wakeUpObs, setWakeUpObs] = useState(initialRoutine.motherObservations || "");
   const [wakeUpTime, setWakeUpTime] = useState(initialRoutine.wakeUpTime || "07:00");
   const [expandedNaps, setExpandedNaps] = useState<{ [key: number]: boolean }>({ 1: true });
   const [expandedNightSleep, setExpandedNightSleep] = useState(false);
@@ -941,11 +959,91 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const [currentWakingId, setCurrentWakingId] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState(new Date());
   
-  // Local state for text inputs to prevent clearing while typing
+  // Local state for text inputs with auto-save
+  const [routineObservations, setRoutineObservations] = useState(initialRoutine.motherObservations || "");
+  const [routineConsultantComments, setRoutineConsultantComments] = useState(initialRoutine.consultantComments || "");
   const [napObservations, setNapObservations] = useState<{ [key: string]: string }>({});
   const [napConsultantComments, setNapConsultantComments] = useState<{ [key: string]: string }>({});
   const [nightSleepObservations, setNightSleepObservations] = useState("");
   const [nightSleepConsultantComments, setNightSleepConsultantComments] = useState("");
+
+  // Ref to always have the latest nightSleep id for auto-save
+  // Initialize with the current night sleep id if it exists
+  const nightSleepIdRef = useRef<string | null>(initialRoutine.nightSleep?.id || null);
+  
+  // Keep nightSleepIdRef in sync with routine.nightSleep
+  useEffect(() => {
+    if (routine.nightSleep?.id) {
+      nightSleepIdRef.current = routine.nightSleep.id;
+    }
+  }, [routine.nightSleep?.id]);
+
+  // Auto-save functions with debounce
+  const autoSaveRoutineObservations = useDebounce(async (text: string) => {
+    try {
+      console.log("[Auto-save] Saving routine observations");
+      await apiPut(`/api/routines/${routine.id}`, { motherObservations: text });
+    } catch (error: any) {
+      console.error("[Auto-save] Error saving routine observations:", error);
+    }
+  }, 1000);
+
+  const autoSaveRoutineComments = useDebounce(async (text: string) => {
+    try {
+      console.log("[Auto-save] Saving routine consultant comments");
+      await apiPut(`/api/routines/${routine.id}`, { consultantComments: text });
+    } catch (error: any) {
+      console.error("[Auto-save] Error saving routine comments:", error);
+    }
+  }, 1000);
+
+  const autoSaveNapObservations = useDebounce(async (napId: string, text: string) => {
+    try {
+      console.log("[Auto-save] Saving nap observations for:", napId);
+      await apiPut(`/api/naps/${napId}`, { observations: text });
+    } catch (error: any) {
+      console.error("[Auto-save] Error saving nap observations:", error);
+    }
+  }, 1000);
+
+  const autoSaveNapComments = useDebounce(async (napId: string, text: string) => {
+    try {
+      console.log("[Auto-save] Saving nap consultant comments for:", napId);
+      await apiPut(`/api/naps/${napId}`, { consultantComments: text });
+    } catch (error: any) {
+      console.error("[Auto-save] Error saving nap comments:", error);
+    }
+  }, 1000);
+
+  const autoSaveNightSleepObservations = useDebounce(async (text: string, nightSleepId?: string) => {
+    try {
+      // Use passed nightSleepId or fall back to ref (which has the latest value)
+      const id = nightSleepId || nightSleepIdRef.current;
+      if (id) {
+        console.log("[Auto-save] Saving night sleep observations for id:", id);
+        await apiPut(`/api/night-sleep/${id}`, { observations: text });
+      } else {
+        console.log("[Auto-save] Night sleep id not available yet, skipping observations save");
+      }
+    } catch (error: any) {
+      console.error("[Auto-save] Error saving night sleep observations:", error);
+    }
+  }, 1000);
+
+  const autoSaveNightSleepComments = useDebounce(async (text: string, nightSleepId?: string) => {
+    try {
+      // Use passed nightSleepId or fall back to ref (which has the latest value)
+      const id = nightSleepId || nightSleepIdRef.current;
+      if (id) {
+        console.log("[Auto-save] Saving night sleep consultant comments for id:", id);
+        await apiPut(`/api/night-sleep/${id}`, { consultantComments: text });
+      } else {
+        console.log("[Auto-save] Night sleep id not available yet, skipping comments save");
+      }
+    } catch (error: any) {
+      console.error("[Auto-save] Error saving night sleep comments:", error);
+    }
+  }, 1000);
 
   const loadRoutine = useCallback(async (skipTextUpdate = false, preserveNightSleep = false) => {
     try {
@@ -953,17 +1051,22 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       const data = await apiGet<Routine>(`/api/routines/${initialRoutine.id}`);
       console.log("[API] Routine loaded successfully:", data.id);
       
-      // The backend may return nightSleep as {} (empty object) due to Fastify schema serialization
-      // when a night sleep record exists. We detect this and preserve the current nightSleep state.
       const apiNightSleep = data.nightSleep && (data.nightSleep as any).id ? data.nightSleep : null;
       
+      // Update the nightSleepIdRef with the latest id from API
+      if (apiNightSleep?.id && !preserveNightSleep) {
+        nightSleepIdRef.current = apiNightSleep.id;
+      }
+      
       setRoutine(prev => {
-        // If preserveNightSleep is true, keep the current nightSleep (from POST/PUT response)
-        // If the API returned a valid nightSleep (with id), use it
-        // Otherwise, keep the previous nightSleep to avoid losing data
         const nightSleepToUse = preserveNightSleep 
           ? prev.nightSleep 
           : (apiNightSleep || prev.nightSleep);
+        
+        // Update ref if we have a night sleep
+        if (nightSleepToUse?.id) {
+          nightSleepIdRef.current = nightSleepToUse.id;
+        }
         
         return {
           ...data,
@@ -971,12 +1074,12 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         };
       });
       
-      setConsultantComments(data.consultantComments || "");
-      setWakeUpObs(data.motherObservations || "");
       setWakeUpTime(data.wakeUpTime || "07:00");
       
-      // Only update local text state if not skipping (to prevent clearing while typing)
       if (!skipTextUpdate) {
+        setRoutineObservations(data.motherObservations || "");
+        setRoutineConsultantComments(data.consultantComments || "");
+        
         const napObs: { [key: string]: string } = {};
         const napComments: { [key: string]: string } = {};
         data.naps?.forEach(nap => {
@@ -986,7 +1089,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         setNapObservations(napObs);
         setNapConsultantComments(napComments);
         
-        // Only update night sleep text if we have valid data from API
         if (apiNightSleep) {
           setNightSleepObservations(apiNightSleep.observations || "");
           setNightSleepConsultantComments(apiNightSleep.consultantComments || "");
@@ -1005,30 +1107,11 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const handleSaveWakeUp = async () => {
     setSaving(true);
     try {
-      console.log("[API] Saving wake up data for routine:", routine.id);
-      await apiPut(`/api/routines/${routine.id}`, { 
-        wakeUpTime, 
-        motherObservations: wakeUpObs 
-      });
-      // Reload but preserve night sleep to avoid losing it due to Fastify schema issue
-      await loadRoutine(false, true);
+      console.log("[API] Saving wake up time for routine:", routine.id);
+      await apiPut(`/api/routines/${routine.id}`, { wakeUpTime });
+      await loadRoutine(true, true);
     } catch (error: any) {
-      showErr(error.message || "Erro ao salvar observações");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveConsultantComments = async () => {
-    setSaving(true);
-    try {
-      console.log("[API] Saving consultant comments for routine:", routine.id);
-      await apiPut(`/api/routines/${routine.id}`, { consultantComments });
-      showErr("✅ Comentários salvos com sucesso!");
-      // Reload but preserve night sleep to avoid losing it due to Fastify schema issue
-      await loadRoutine(false, true);
-    } catch (error: any) {
-      showErr(error.message || "Erro ao salvar comentários");
+      showErr(error.message || "Erro ao salvar horário");
     } finally {
       setSaving(false);
     }
@@ -1050,11 +1133,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         observations: null
       });
       
-      // Initialize local text state for new nap
       setNapObservations(prev => ({ ...prev, [newNap.id]: "" }));
       setNapConsultantComments(prev => ({ ...prev, [newNap.id]: "" }));
       
-      // Reload but preserve night sleep to avoid losing it due to Fastify schema issue
       await loadRoutine(false, true);
       setExpandedNaps({ ...expandedNaps, [napNumber]: true });
     } catch (error: any) {
@@ -1067,8 +1148,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       console.log("[API] Updating nap:", napId, "with updates:", updates);
       await apiPut(`/api/naps/${napId}`, updates);
       
-      // Update local state immediately for better UX
-      // IMPORTANT: Do NOT call loadRoutine here as it may overwrite nightSleep with {}
       setRoutine(prev => ({
         ...prev,
         naps: prev.naps?.map(nap => 
@@ -1086,7 +1165,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       console.log("[API] Deleting nap:", napId);
       await apiDelete(`/api/naps/${napId}`);
       
-      // Clean up local text state
       setNapObservations(prev => {
         const newState = { ...prev };
         delete newState[napId];
@@ -1098,7 +1176,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         return newState;
       });
       
-      // Reload but preserve night sleep to avoid losing it due to Fastify schema issue
       await loadRoutine(false, true);
     } catch (error: any) {
       showErr(error.message || "Erro ao excluir soneca");
@@ -1107,16 +1184,13 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
   const handleAddOrUpdateNightSleep = async () => {
     try {
-      // Check if night sleep already exists with a valid ID
       if (routine.nightSleep && routine.nightSleep.id) {
         console.log("[API] Night sleep already exists:", routine.nightSleep.id, "- just expanding");
-        // Already exists, just expand the section
         setExpandedNightSleep(true);
         return;
       }
       
-      console.log("[API] Creating night sleep for routine:", routine.id, "(POST upsert)");
-      // Use POST - backend handles upsert by routineId to avoid duplicates
+      console.log("[API] Creating night sleep for routine:", routine.id);
       const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
         routineId: routine.id,
         startTryTime: "20:00",
@@ -1128,17 +1202,14 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         observations: null
       });
       
-      console.log("[API] Night sleep created/upserted with ID:", newNightSleep.id);
+      console.log("[API] Night sleep created with ID:", newNightSleep.id);
       
-      // Update local state immediately with the full night sleep data from POST response
-      // CRITICAL: Do NOT call loadRoutine after this, as the GET endpoint returns
-      // nightSleep as {} (empty object) due to Fastify schema serialization issues,
-      // which would overwrite our valid night sleep data and collapse the form.
+      // Update ref immediately so auto-save functions can use it
+      nightSleepIdRef.current = newNightSleep.id;
+      
       setRoutine(prev => ({ ...prev, nightSleep: { ...newNightSleep, wakings: [] } }));
       setNightSleepObservations("");
       setNightSleepConsultantComments("");
-      
-      // CRITICAL: Keep the form expanded after creation
       setExpandedNightSleep(true);
     } catch (error: any) {
       console.error("[API] Error creating night sleep:", error);
@@ -1154,20 +1225,19 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       let updatedNightSleep: NightSleep;
 
       if (currentNightSleep && currentNightSleep.id) {
-        // Night sleep exists - use PUT to update specific field
         console.log("[API] Night sleep exists (id:", currentNightSleep.id, "), using PUT");
         const putResult = await apiPut<NightSleep>(`/api/night-sleep/${currentNightSleep.id}`, {
           [field]: value
         });
-        // Merge PUT result with current state to preserve wakings array
         updatedNightSleep = {
           ...currentNightSleep,
+          [field]: value,
           ...putResult,
           wakings: currentNightSleep.wakings || [],
         };
       } else {
-        // Night sleep doesn't exist yet - use POST (backend handles upsert by routineId)
         console.log("[API] Night sleep does not exist yet, using POST (upsert) for routine:", routine.id);
+        // POST endpoint handles upsert - creates or updates based on routineId
         const postResult = await apiPost<NightSleep>("/api/night-sleep", {
           routineId: routine.id,
           startTryTime: field === "startTryTime" ? value : "20:00",
@@ -1180,13 +1250,12 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           consultantComments: field === "consultantComments" ? value : null,
         });
         updatedNightSleep = { ...postResult, wakings: [] };
+        // Update the ref immediately so auto-save functions can use it
+        nightSleepIdRef.current = postResult.id;
       }
       
       console.log("[API] Night sleep updated/created with ID:", updatedNightSleep.id);
       
-      // Update local state immediately for better UX
-      // IMPORTANT: Do NOT call loadRoutine after this, as the GET endpoint may return
-      // nightSleep as {} (empty object) due to Fastify schema serialization issues.
       setRoutine(prev => ({
         ...prev,
         nightSleep: updatedNightSleep
@@ -1199,13 +1268,11 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
   const handleAddWaking = async () => {
     try {
-      // Ensure night sleep exists first (check for valid id)
       let nightSleepId = routine.nightSleep?.id;
       let currentNightSleep = routine.nightSleep;
       
       if (!nightSleepId) {
-        console.log("[API] Night sleep doesn't exist yet, creating it via POST (upsert) for routine:", routine.id);
-        // POST with upsert behavior - backend will create or return existing record
+        console.log("[API] Night sleep doesn't exist yet, creating it for routine:", routine.id);
         const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
           routineId: routine.id,
           startTryTime: "20:00",
@@ -1217,11 +1284,13 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           observations: null
         });
         
-        console.log("[API] Night sleep created/upserted with ID:", newNightSleep.id);
+        console.log("[API] Night sleep created with ID:", newNightSleep.id);
         nightSleepId = newNightSleep.id;
         currentNightSleep = { ...newNightSleep, wakings: [] };
         
-        // Update local state with the new night sleep
+        // Update ref immediately
+        nightSleepIdRef.current = newNightSleep.id;
+        
         setRoutine(prev => ({
           ...prev,
           nightSleep: currentNightSleep
@@ -1237,8 +1306,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       
       console.log("[API] Night waking created:", newWaking.id);
       
-      // Update local state immediately by adding the new waking
-      // IMPORTANT: Do NOT call loadRoutine here as it may overwrite nightSleep with {}
       setRoutine(prev => ({
         ...prev,
         nightSleep: prev.nightSleep ? {
@@ -1260,8 +1327,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       console.log("[API] Deleting night waking:", wakingId);
       await apiDelete(`/api/night-wakings/${wakingId}`);
       
-      // Update local state immediately by removing the deleted waking
-      // IMPORTANT: Do NOT call loadRoutine here as it may overwrite nightSleep with {}
       setRoutine(prev => ({
         ...prev,
         nightSleep: prev.nightSleep ? {
@@ -1292,7 +1357,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         } else if (currentTimeField.startsWith("nap_") && currentNapId) {
           const field = currentTimeField.split("_")[1];
           
-          // Update local state immediately
           setRoutine(prev => ({
             ...prev,
             naps: prev.naps?.map(nap => 
@@ -1300,18 +1364,15 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
             )
           }));
           
-          // Then save to backend
           await handleUpdateNap(currentNapId, { [field]: timeString });
         } else if (currentTimeField.startsWith("nightSleep_")) {
           const field = currentTimeField.split("_")[1];
           
-          // Update local state immediately
           setRoutine(prev => ({
             ...prev,
             nightSleep: prev.nightSleep ? { ...prev.nightSleep, [field]: timeString } : null
           }));
           
-          // Then save to backend
           await handleUpdateNightSleep(field, timeString);
         } else if (currentTimeField.startsWith("waking_") && currentWakingId) {
           const field = currentTimeField.split("_")[1];
@@ -1344,8 +1405,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       
       await apiPut(`/api/night-wakings/${wakingId}`, updates);
       
-      // Update local state immediately
-      // IMPORTANT: Do NOT call loadRoutine here as it may overwrite nightSleep with {}
       setRoutine(prev => ({
         ...prev,
         nightSleep: prev.nightSleep ? {
@@ -1367,7 +1426,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     setCurrentNapId(napId || null);
     setCurrentWakingId(wakingId || null);
     
-    // Set initial time based on current value
     let initialTime = new Date();
     initialTime.setSeconds(0);
     initialTime.setMilliseconds(0);
@@ -1404,87 +1462,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     setShowTimePicker(true);
   };
 
-  // Debounced save functions for text inputs
-  const saveNapObservations = async (napId: string, text: string) => {
-    try {
-      await apiPut(`/api/naps/${napId}`, { observations: text });
-      console.log("[API] Nap observations saved for:", napId);
-    } catch (error: any) {
-      console.error("[API] Error saving nap observations:", error);
-    }
-  };
-
-  const saveNapConsultantComments = async (napId: string, text: string) => {
-    try {
-      await apiPut(`/api/naps/${napId}`, { consultantComments: text });
-      console.log("[API] Nap consultant comments saved for:", napId);
-    } catch (error: any) {
-      console.error("[API] Error saving nap consultant comments:", error);
-    }
-  };
-
-  const saveNightSleepObservations = async (text: string) => {
-    try {
-      if (routine.nightSleep?.id) {
-        // Night sleep exists - use PUT
-        const updated = await apiPut<NightSleep>(`/api/night-sleep/${routine.nightSleep.id}`, { observations: text });
-        console.log("[API] Night sleep observations saved via PUT");
-        // Update local state preserving wakings
-        setRoutine(prev => ({
-          ...prev,
-          nightSleep: prev.nightSleep ? { ...prev.nightSleep, ...updated, wakings: prev.nightSleep.wakings || [] } : null
-        }));
-      } else {
-        // Night sleep doesn't exist yet - use POST upsert
-        const created = await apiPost<NightSleep>("/api/night-sleep", {
-          routineId: routine.id,
-          startTryTime: "20:00",
-          observations: text
-        });
-        console.log("[API] Night sleep observations saved via POST upsert");
-        setRoutine(prev => ({
-          ...prev,
-          nightSleep: { ...created, wakings: [] }
-        }));
-      }
-    } catch (error: any) {
-      console.error("[API] Error saving night sleep observations:", error);
-    }
-  };
-
-  const saveNightSleepConsultantComments = async (text: string) => {
-    try {
-      if (routine.nightSleep?.id) {
-        // Night sleep exists - use PUT
-        const updated = await apiPut<NightSleep>(`/api/night-sleep/${routine.nightSleep.id}`, { consultantComments: text });
-        console.log("[API] Night sleep consultant comments saved via PUT");
-        // Update local state preserving wakings
-        setRoutine(prev => ({
-          ...prev,
-          nightSleep: prev.nightSleep ? { ...prev.nightSleep, ...updated, wakings: prev.nightSleep.wakings || [] } : null
-        }));
-      } else {
-        // Night sleep doesn't exist yet - use POST upsert
-        const created = await apiPost<NightSleep>("/api/night-sleep", {
-          routineId: routine.id,
-          startTryTime: "20:00",
-          consultantComments: text
-        });
-        console.log("[API] Night sleep consultant comments saved via POST upsert");
-        setRoutine(prev => ({
-          ...prev,
-          nightSleep: { ...created, wakings: [] }
-        }));
-      }
-    } catch (error: any) {
-      console.error("[API] Error saving night sleep consultant comments:", error);
-    }
-  };
-
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
 
   const naps = routine.naps || [];
-  // nightSleep from API can be {} (empty object) when no record exists - treat as null if no id
   const nightSleep = routine.nightSleep && routine.nightSleep.id ? routine.nightSleep : null;
 
   return (
@@ -1515,36 +1495,39 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
             <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
           </TouchableOpacity>
           
-          <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações</Text>
+          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSaveWakeUp} disabled={saving}>
+            {saving ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.saveBtnText}>Salvar Horário</Text>}
+          </TouchableOpacity>
+          
+          <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações (salva automaticamente)</Text>
           <TextInput 
             style={[styles.formInput, styles.textArea]} 
             placeholder="Observações da mãe..." 
-            value={wakeUpObs} 
-            onChangeText={setWakeUpObs} 
+            value={routineObservations} 
+            onChangeText={(text) => {
+              setRoutineObservations(text);
+              autoSaveRoutineObservations(text);
+            }}
             multiline 
             numberOfLines={2} 
             placeholderTextColor={colors.textSecondary} 
           />
           
-          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSaveWakeUp} disabled={saving}>
-            {saving ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.saveBtnText}>Salvar Observações</Text>}
-          </TouchableOpacity>
-          
           {isConsultant && (
             <>
-              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentário da Consultora</Text>
+              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentário da Consultora (salva automaticamente)</Text>
               <TextInput 
                 style={[styles.formInput, styles.textArea]} 
                 placeholder="Comentários da consultora..." 
-                value={consultantComments} 
-                onChangeText={setConsultantComments} 
+                value={routineConsultantComments} 
+                onChangeText={(text) => {
+                  setRoutineConsultantComments(text);
+                  autoSaveRoutineComments(text);
+                }}
                 multiline 
                 numberOfLines={2} 
                 placeholderTextColor={colors.textSecondary} 
               />
-              <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSaveConsultantComments} disabled={saving}>
-                {saving ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.saveBtnText}>Salvar Comentário</Text>}
-              </TouchableOpacity>
             </>
           )}
         </View>
@@ -1599,7 +1582,16 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                     <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                   </TouchableOpacity>
                   
-                  <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Janela de sono - Término</Text>
+                  <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Dormiu às</Text>
+                  <TouchableOpacity 
+                    style={styles.timePickerButton} 
+                    onPress={() => openTimePicker("nap_fellAsleepTime", nap.id)}
+                  >
+                    <Text style={styles.timePickerText}>{nap.fellAsleepTime || "—"}</Text>
+                    <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                  
+                  <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Acordou às</Text>
                   <TouchableOpacity 
                     style={styles.timePickerButton} 
                     onPress={() => openTimePicker("nap_wakeUpTime", nap.id)}
@@ -1622,7 +1614,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   
                   <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Dormiu como</Text>
                   <View style={styles.choiceButtons}>
-                    {["No colo", "Com embalo", "Mamando"].map((method) => (
+                    {["No colo", "Com embalo", "Mamando", "Sozinho no berço"].map((method) => (
                       <TouchableOpacity 
                         key={method} 
                         style={[styles.choiceBtn, nap.sleepMethod === method && styles.choiceBtnActive]} 
@@ -1635,7 +1627,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   
                   <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Ambiente</Text>
                   <View style={styles.choiceButtons}>
-                    {["Adequado", "Não adequado"].map((env) => (
+                    {["Adequado", "Parcialmente adequado", "Inadequado"].map((env) => (
                       <TouchableOpacity 
                         key={env} 
                         style={[styles.choiceBtn, nap.environment === env && styles.choiceBtnActive]} 
@@ -1648,7 +1640,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   
                   <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Como acordou</Text>
                   <View style={styles.choiceButtons}>
-                    {["De bom humor", "Sorrindo", "Choroso"].map((mood) => (
+                    {["De bom humor", "Sorrindo", "Choroso", "Muito irritado"].map((mood) => (
                       <TouchableOpacity 
                         key={mood} 
                         style={[styles.choiceBtn, nap.wakeUpMood === mood && styles.choiceBtnActive]} 
@@ -1659,15 +1651,15 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                     ))}
                   </View>
                   
-                  <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações</Text>
+                  <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações (salva automaticamente)</Text>
                   <TextInput 
                     style={[styles.formInput, styles.textArea]} 
                     placeholder="Observações..." 
                     value={napObservations[nap.id] || ""} 
                     onChangeText={(text) => {
                       setNapObservations(prev => ({ ...prev, [nap.id]: text }));
+                      autoSaveNapObservations(nap.id, text);
                     }}
-                    onBlur={() => saveNapObservations(nap.id, napObservations[nap.id] || "")}
                     multiline 
                     numberOfLines={2} 
                     placeholderTextColor={colors.textSecondary} 
@@ -1675,15 +1667,15 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   
                   {isConsultant && (
                     <>
-                      <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentários da Consultora</Text>
+                      <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentários da Consultora (salva automaticamente)</Text>
                       <TextInput 
                         style={[styles.formInput, styles.textArea]} 
                         placeholder="Comentários da consultora..." 
                         value={napConsultantComments[nap.id] || ""} 
                         onChangeText={(text) => {
                           setNapConsultantComments(prev => ({ ...prev, [nap.id]: text }));
+                          autoSaveNapComments(nap.id, text);
                         }}
-                        onBlur={() => saveNapConsultantComments(nap.id, napConsultantComments[nap.id] || "")}
                         multiline 
                         numberOfLines={2} 
                         placeholderTextColor={colors.textSecondary} 
@@ -1712,7 +1704,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           )}
         </View>
 
-        {/* Show the form if nightSleep exists (has valid id) */}
         {nightSleep && (
           <View style={styles.expandableCard}>
             <TouchableOpacity 
@@ -1764,13 +1755,54 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                 </TouchableOpacity>
                 
-                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações</Text>
+                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Dormiu como</Text>
+                <View style={styles.choiceButtons}>
+                  {["No colo", "Com embalo", "Mamando", "Sozinho no berço"].map((method) => (
+                    <TouchableOpacity 
+                      key={method} 
+                      style={[styles.choiceBtn, nightSleep.sleepMethod === method && styles.choiceBtnActive]} 
+                      onPress={() => handleUpdateNightSleep("sleepMethod", method)}
+                    >
+                      <Text style={[styles.choiceBtnText, nightSleep.sleepMethod === method && styles.choiceBtnTextActive]}>{method}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                
+                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Ambiente</Text>
+                <View style={styles.choiceButtons}>
+                  {["Adequado", "Parcialmente adequado", "Inadequado"].map((env) => (
+                    <TouchableOpacity 
+                      key={env} 
+                      style={[styles.choiceBtn, nightSleep.environment === env && styles.choiceBtnActive]} 
+                      onPress={() => handleUpdateNightSleep("environment", env)}
+                    >
+                      <Text style={[styles.choiceBtnText, nightSleep.environment === env && styles.choiceBtnTextActive]}>{env}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                
+                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Como acordou</Text>
+                <View style={styles.choiceButtons}>
+                  {["De bom humor", "Sorrindo", "Choroso", "Muito irritado"].map((mood) => (
+                    <TouchableOpacity 
+                      key={mood} 
+                      style={[styles.choiceBtn, nightSleep.wakeUpMood === mood && styles.choiceBtnActive]} 
+                      onPress={() => handleUpdateNightSleep("wakeUpMood", mood)}
+                    >
+                      <Text style={[styles.choiceBtnText, nightSleep.wakeUpMood === mood && styles.choiceBtnTextActive]}>{mood}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                
+                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações (salva automaticamente)</Text>
                 <TextInput 
                   style={[styles.formInput, styles.textArea]} 
                   placeholder="Observações..." 
                   value={nightSleepObservations} 
-                  onChangeText={setNightSleepObservations}
-                  onBlur={() => saveNightSleepObservations(nightSleepObservations)}
+                  onChangeText={(text) => {
+                    setNightSleepObservations(text);
+                    autoSaveNightSleepObservations(text, nightSleep.id);
+                  }}
                   multiline 
                   numberOfLines={2} 
                   placeholderTextColor={colors.textSecondary} 
@@ -1778,13 +1810,15 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                 
                 {isConsultant && (
                   <>
-                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentários da Consultora</Text>
+                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentários da Consultora (salva automaticamente)</Text>
                     <TextInput 
                       style={[styles.formInput, styles.textArea]} 
                       placeholder="Comentários da consultora..." 
                       value={nightSleepConsultantComments} 
-                      onChangeText={setNightSleepConsultantComments}
-                      onBlur={() => saveNightSleepConsultantComments(nightSleepConsultantComments)}
+                      onChangeText={(text) => {
+                        setNightSleepConsultantComments(text);
+                        autoSaveNightSleepComments(text, nightSleep.id);
+                      }}
                       multiline 
                       numberOfLines={2} 
                       placeholderTextColor={colors.textSecondary} 

@@ -138,9 +138,23 @@ export default function ReportsLandscapeScreen() {
       setReport(reportData);
       
       console.log("[API] Loading routines for baby:", babyId);
-      const routinesData = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
-      const filteredRoutines = routinesData.filter(r => r.date >= startDate && r.date <= endDate);
-      setRoutines(filteredRoutines.sort((a, b) => a.date.localeCompare(b.date)));
+      const basicRoutines = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
+      const filteredBasic = basicRoutines.filter(r => r.date >= startDate && r.date <= endDate);
+      
+      // Load full details for each routine (includes naps and nightSleep)
+      const fullRoutines = await Promise.all(
+        filteredBasic.map(async (r) => {
+          try {
+            const full = await apiGet<Routine>(`/api/routines/${r.id}`);
+            return full;
+          } catch (err) {
+            console.warn(`Failed to load full routine ${r.id}:`, err);
+            return r;
+          }
+        })
+      );
+      
+      setRoutines(fullRoutines.sort((a, b) => a.date.localeCompare(b.date)));
     } catch (error: any) {
       console.error("Error loading data:", error);
     } finally {
