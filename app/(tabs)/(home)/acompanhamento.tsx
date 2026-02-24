@@ -126,11 +126,11 @@ export default function AcompanhamentoScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log("[Orientation] Locking to landscape mode");
+    console.log("[Acompanhamento] Locking to landscape mode");
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     
     return () => {
-      console.log("[Orientation] Unlocking orientation");
+      console.log("[Acompanhamento] Unlocking orientation");
       ScreenOrientation.unlockAsync();
     };
   }, []);
@@ -138,7 +138,7 @@ export default function AcompanhamentoScreen() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      console.log("[API] Loading all routines for baby:", babyId);
+      console.log("[Acompanhamento] Loading all routines for baby:", babyId);
       const routinesData = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
       
       const filledRoutines = routinesData.filter(r => {
@@ -151,10 +151,10 @@ export default function AcompanhamentoScreen() {
       const sortedRoutines = filledRoutines.sort((a, b) => a.date.localeCompare(b.date));
       setRoutines(sortedRoutines);
       
-      console.log("[Data] Total routines:", routinesData.length);
-      console.log("[Data] Filled routines:", sortedRoutines.length);
+      console.log("[Acompanhamento] Total routines:", routinesData.length);
+      console.log("[Acompanhamento] Filled routines:", sortedRoutines.length);
     } catch (error: any) {
-      console.error("[Error] Loading data:", error);
+      console.error("[Acompanhamento] Error loading data:", error);
     } finally {
       setLoading(false);
     }
