@@ -15,29 +15,6 @@ import { IconSymbol } from "@/components/IconSymbol";
 import { apiGet } from "@/utils/api";
 import * as ScreenOrientation from 'expo-screen-orientation';
 
-interface ReportDay {
-  date: string;
-  daytimeSleep: number;
-  nighttimeSleep: number;
-  netNighttimeSleep: number;
-  total24h: number;
-  indicator: "green" | "yellow" | "red";
-}
-
-interface Report {
-  babyId: string;
-  startDate: string;
-  endDate: string;
-  totalNaps: number;
-  totalNapDuration: number;
-  totalDaytimeSleep: number;
-  totalNighttimeSleep: number;
-  totalNetNighttimeSleep: number;
-  totalSleepIn24h: number;
-  weeklyAverage: number;
-  dailyEvolution: ReportDay[];
-}
-
 interface Nap {
   id: string;
   routineId: string;
@@ -92,9 +69,7 @@ interface Routine {
 function minutesToHM(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  const hStr = String(h);
-  const mStr = String(m).padStart(2, "0");
-  return `${hStr}:${mStr}`;
+  return `${h}h ${m.toString().padStart(2, "0")}min`;
 }
 
 function calcTimeDiff(start: string, end: string): number {
@@ -108,12 +83,6 @@ function calcTimeDiff(start: string, end: string): number {
 function formatDateToBR(dateStr: string): string {
   const [year, month, day] = dateStr.split("-");
   return `${day}/${month}/${year}`;
-}
-
-function getIndicatorColor(indicator: string) {
-  if (indicator === "green") return colors.statusGood;
-  if (indicator === "yellow") return colors.statusMedium;
-  return colors.statusPoor;
 }
 
 export default function AcompanhamentoScreen() {
@@ -192,6 +161,8 @@ export default function AcompanhamentoScreen() {
   }
 
   const renderDayCard = (routine: Routine, index: number) => {
+    console.log(`[Acompanhamento] Rendering card for day ${index + 1}, routine:`, routine.id);
+    
     const naps = routine.naps || [];
     const nightSleep = routine.nightSleep && (routine.nightSleep as any).id ? routine.nightSleep : null;
     const wakings = nightSleep?.wakings || [];
@@ -211,59 +182,49 @@ export default function AcompanhamentoScreen() {
       return sum + calcTimeDiff(waking.startTime, waking.endTime);
     }, 0);
     
-    const netNightSleep = nightSleepDuration - totalWakingDuration;
-    
     const dayNumber = index + 1;
-    const wakeUpTime = routine.wakeUpTime;
+    const dateFormatted = formatDateToBR(routine.date);
+    const wakeUpTime = routine.wakeUpTime || "N/A";
     
-    const dayNumberText = `DIA ${dayNumber}`;
-    
-    const acordouLabel = "Acordou:";
-    const acordouValue = wakeUpTime;
-    
-    let janelaLabel = "";
-    let janelaValue = "";
-    if (nightSleep && nightSleep.startTryTime && wakeUpTime) {
+    let janelaValue = "N/A";
+    if (nightSleep && nightSleep.startTryTime && wakeUpTime !== "N/A") {
       const totalWindow = calcTimeDiff(nightSleep.startTryTime, wakeUpTime);
       const netWindow = totalWindow - totalWakingDuration;
-      janelaLabel = "Janela de:";
       janelaValue = minutesToHM(netWindow);
     }
     
-    const duracaoSonoDiurnoLabel = "Duração sono diurno:";
-    const duracaoSonoDiurnoValue = `Somatória das sonecas: ${minutesToHM(totalNapDuration)}`;
+    const totalDaytimeSleepText = minutesToHM(totalNapDuration);
     
-    const sonoNoturnoLabel = "Sono noturno";
-    let sonoNoturnoValue = "";
+    let nightSleepText = "Não registrado";
     if (nightSleep && nightSleep.startTryTime) {
-      sonoNoturnoValue = `Iniciou às ${nightSleep.startTryTime}`;
+      nightSleepText = `Iniciou às ${nightSleep.startTryTime}`;
       if (nightSleepDuration > 0) {
-        sonoNoturnoValue += ` (Total ${minutesToHM(nightSleepDuration)})`;
+        nightSleepText += ` (${minutesToHM(nightSleepDuration)})`;
       }
     }
-    
-    const despertaresLabel = "Despertares:";
     
     return (
       <View key={routine.id} style={styles.dayCard}>
         <ScrollView showsVerticalScrollIndicator={true}>
           <View style={styles.dayHeader}>
-            <Text style={styles.dayTitle}>{dayNumberText}</Text>
+            <Text style={styles.dayTitle}>DIA {dayNumber}</Text>
+            <Text style={styles.dayDate}>{dateFormatted}</Text>
           </View>
           
-          <View style={styles.section}>
-            <Text style={styles.infoLabel}>{acordouLabel}</Text>
-            <Text style={styles.infoValue}>{acordouValue}</Text>
+          <View style={styles.dividerDotted} />
+          
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Acordou</Text>
+          </View>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoValue}>Às {wakeUpTime}</Text>
           </View>
           
-          {janelaLabel !== "" && (
-            <View style={styles.section}>
-              <Text style={styles.infoLabel}>{janelaLabel}</Text>
-              <Text style={styles.infoValue}>{janelaValue}</Text>
-            </View>
-          )}
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Janela de {janelaValue}</Text>
+          </View>
           
-          <View style={styles.divider} />
+          <View style={styles.dividerDotted} />
           
           {naps.map((nap, napIndex) => {
             const sleepDuration = nap.fellAsleepTime && nap.wakeUpTime 
@@ -278,21 +239,19 @@ export default function AcompanhamentoScreen() {
               ? calcTimeDiff(prevWakeTime, nap.startTryTime)
               : 0;
             
-            const napLabel = `Soneca ${napIndex + 1}`;
             const napTimeText = nap.fellAsleepTime && nap.wakeUpTime 
               ? `Das ${nap.fellAsleepTime} às ${nap.wakeUpTime} (${minutesToHM(sleepDuration)})`
               : nap.startTryTime
               ? `Tentativa às ${nap.startTryTime}`
-              : "";
+              : "Não registrado";
+            
             const napWindowText = windowToThisNap > 0 ? `Janela de ${minutesToHM(windowToThisNap)}` : "";
             
             return (
               <React.Fragment key={nap.id}>
                 <View style={styles.napSection}>
-                  <Text style={styles.napLabel}>{napLabel}</Text>
-                  {napTimeText !== "" && (
-                    <Text style={styles.napTime}>{napTimeText}</Text>
-                  )}
+                  <Text style={styles.napLabel}>Soneca {napIndex + 1}</Text>
+                  <Text style={styles.napTime}>{napTimeText}</Text>
                   {napWindowText !== "" && (
                     <Text style={styles.napWindow}>{napWindowText}</Text>
                   )}
@@ -301,35 +260,31 @@ export default function AcompanhamentoScreen() {
             );
           })}
           
-          <View style={styles.divider} />
+          <View style={styles.dividerDotted} />
           
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{duracaoSonoDiurnoLabel}</Text>
-            <Text style={styles.sectionValue}>{duracaoSonoDiurnoValue}</Text>
+            <Text style={styles.sectionLabel}>Duração sono diurno:</Text>
+            <Text style={styles.sectionValue}>Somatória das sonecas: {totalDaytimeSleepText}</Text>
           </View>
           
-          <View style={styles.divider} />
+          <View style={styles.dividerDotted} />
           
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>{sonoNoturnoLabel}</Text>
-            {sonoNoturnoValue !== "" ? (
-              <Text style={styles.sectionValue}>{sonoNoturnoValue}</Text>
-            ) : (
-              <Text style={styles.sectionValue}>Não registrado</Text>
-            )}
+            <Text style={styles.sectionLabel}>Sono noturno</Text>
+            <Text style={styles.sectionValue}>{nightSleepText}</Text>
           </View>
           
           {wakings.length > 0 && (
             <>
-              <View style={styles.divider} />
+              <View style={styles.dividerDotted} />
               <View style={styles.section}>
-                <Text style={styles.sectionLabel}>{despertaresLabel}</Text>
+                <Text style={styles.sectionLabel}>Despertares:</Text>
                 {wakings.map((waking, wakingIndex) => {
                   const duration = calcTimeDiff(waking.startTime, waking.endTime);
                   const wakingNumber = wakingIndex + 1;
-                  const wakingText = `${wakingNumber}º - ${waking.startTime} - ${waking.endTime} (${minutesToHM(duration)})`;
+                  const wakingText = `${wakingNumber}º → ${waking.startTime} - ${waking.endTime} (${minutesToHM(duration)})`;
                   return (
-                    <Text key={waking.id} style={styles.sectionValue}>
+                    <Text key={waking.id} style={styles.wakingText}>
                       {wakingText}
                     </Text>
                   );
@@ -434,21 +389,27 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   dayTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "bold",
     color: colors.primary,
   },
+  dayDate: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
   
-  divider: {
+  dividerDotted: {
     height: 1,
-    backgroundColor: colors.border,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    borderStyle: "dotted",
     marginVertical: 10,
   },
   
-  section: {
-    marginBottom: 8,
+  infoRow: {
+    marginBottom: 4,
   },
-  
   infoLabel: {
     fontSize: 14,
     fontWeight: "600",
@@ -458,11 +419,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: colors.primary,
-    marginTop: 2,
   },
   
   napSection: {
-    marginBottom: 10,
+    marginBottom: 12,
   },
   napLabel: {
     fontSize: 14,
@@ -483,6 +443,9 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   
+  section: {
+    marginBottom: 8,
+  },
   sectionLabel: {
     fontSize: 14,
     fontWeight: "700",
@@ -490,6 +453,13 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sectionValue: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginLeft: 8,
+    marginBottom: 2,
+  },
+  
+  wakingText: {
     fontSize: 13,
     color: colors.textSecondary,
     marginLeft: 8,
