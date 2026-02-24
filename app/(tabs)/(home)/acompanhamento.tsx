@@ -219,12 +219,12 @@ export default function AcompanhamentoScreen() {
     const dayNumberText = `DIA ${dayNumber}`;
     
     const acordouLabel = "Acordou:";
-    const acordouValue = `${wakeUpTime}`;
+    const acordouValue = wakeUpTime;
     
     let janelaLabel = "";
     let janelaValue = "";
-    if (nightSleep && nightSleep.fellAsleepTime && wakeUpTime) {
-      const totalWindow = calcTimeDiff(nightSleep.fellAsleepTime, wakeUpTime);
+    if (nightSleep && nightSleep.startTryTime && wakeUpTime) {
+      const totalWindow = calcTimeDiff(nightSleep.startTryTime, wakeUpTime);
       const netWindow = totalWindow - totalWakingDuration;
       janelaLabel = "Janela de:";
       janelaValue = minutesToHM(netWindow);
@@ -235,8 +235,11 @@ export default function AcompanhamentoScreen() {
     
     const sonoNoturnoLabel = "Sono noturno";
     let sonoNoturnoValue = "";
-    if (nightSleep && nightSleep.fellAsleepTime) {
-      sonoNoturnoValue = `Iniciou às ${nightSleep.fellAsleepTime} (Total ${minutesToHM(nightSleepDuration)})`;
+    if (nightSleep && nightSleep.startTryTime) {
+      sonoNoturnoValue = `Iniciou às ${nightSleep.startTryTime}`;
+      if (nightSleepDuration > 0) {
+        sonoNoturnoValue += ` (Total ${minutesToHM(nightSleepDuration)})`;
+      }
     }
     
     const despertaresLabel = "Despertares:";
@@ -271,13 +274,15 @@ export default function AcompanhamentoScreen() {
               ? naps[napIndex - 1].wakeUpTime 
               : wakeUpTime;
             
-            const windowToThisNap = nap.fellAsleepTime 
-              ? calcTimeDiff(prevWakeTime, nap.fellAsleepTime)
+            const windowToThisNap = nap.startTryTime 
+              ? calcTimeDiff(prevWakeTime, nap.startTryTime)
               : 0;
             
             const napLabel = `Soneca ${napIndex + 1}`;
             const napTimeText = nap.fellAsleepTime && nap.wakeUpTime 
               ? `Das ${nap.fellAsleepTime} às ${nap.wakeUpTime} (${minutesToHM(sleepDuration)})`
+              : nap.startTryTime
+              ? `Tentativa às ${nap.startTryTime}`
               : "";
             const napWindowText = windowToThisNap > 0 ? `Janela de ${minutesToHM(windowToThisNap)}` : "";
             
@@ -292,10 +297,11 @@ export default function AcompanhamentoScreen() {
                     <Text style={styles.napWindow}>{napWindowText}</Text>
                   )}
                 </View>
-                <View style={styles.divider} />
               </React.Fragment>
             );
           })}
+          
+          <View style={styles.divider} />
           
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{duracaoSonoDiurnoLabel}</Text>
@@ -456,7 +462,7 @@ const styles = StyleSheet.create({
   },
   
   napSection: {
-    marginBottom: 6,
+    marginBottom: 10,
   },
   napLabel: {
     fontSize: 14,
