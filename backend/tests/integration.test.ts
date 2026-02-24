@@ -446,6 +446,18 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Create routine without required fields returns 400", async () => {
+    const res = await authenticatedApi("/api/routines", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyId: babyId,
+        date: "2026-02-23",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ===== Naps =====
 
   test("Create nap", async () => {
@@ -566,6 +578,18 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Create nap without required fields returns 400", async () => {
+    const res = await authenticatedApi("/api/naps", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        routineId: routineId,
+        napNumber: 1,
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ===== Night Sleep =====
 
   test("Create night sleep", async () => {
@@ -659,6 +683,17 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 401);
+  });
+
+  test("Create night sleep without required fields returns 400", async () => {
+    const res = await authenticatedApi("/api/night-sleep", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        routineId: routineId,
+      }),
+    });
+    await expectStatus(res, 400);
   });
 
   // ===== Night Wakings =====
@@ -783,6 +818,17 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Create night waking without required fields returns 400", async () => {
+    const res = await authenticatedApi("/api/night-wakings", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nightSleepId: nightSleepId,
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ===== Orientations =====
 
   test("Create orientation", async () => {
@@ -890,6 +936,18 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Create orientation without required fields returns 400", async () => {
+    const res = await authenticatedApi("/api/orientations", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyId: babyId,
+        date: "2026-02-22",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ===== Sleep Windows =====
 
   test("Create sleep window", async () => {
@@ -976,6 +1034,17 @@ describe("API Integration Tests", () => {
       }),
     });
     await expectStatus(res, 401);
+  });
+
+  test("Create sleep window without required fields returns 400", async () => {
+    const res = await authenticatedApi("/api/sleep-windows", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ageMonthsMin: 3,
+      }),
+    });
+    await expectStatus(res, 400);
   });
 
   // ===== Reports =====

@@ -53,6 +53,8 @@ export function registerRoutinesRoutes(app: App) {
               consultantComments: { type: ['string', 'null'] },
               createdAt: { type: 'string', format: 'date-time' },
               updatedAt: { type: 'string', format: 'date-time' },
+              naps: { type: 'array' },
+              nightSleep: { type: ['object', 'null'] },
             },
           },
         },
@@ -87,9 +89,27 @@ export function registerRoutinesRoutes(app: App) {
 
     const routines = await app.db.query.dailyRoutines.findMany({
       where: eq(schema.dailyRoutines.babyId, request.params.babyId),
+      with: {
+        naps: true,
+        nightSleep: {
+          with: { wakings: true },
+        },
+      },
     });
 
-    return routines;
+    // Transform each routine to match the expected response format
+    return routines.map((routine) => ({
+      id: routine.id,
+      babyId: routine.babyId,
+      date: routine.date,
+      wakeUpTime: routine.wakeUpTime,
+      motherObservations: routine.motherObservations,
+      consultantComments: routine.consultantComments,
+      createdAt: routine.createdAt,
+      updatedAt: routine.updatedAt,
+      naps: routine.naps,
+      nightSleep: routine.nightSleep && routine.nightSleep.length > 0 ? routine.nightSleep[0] : null,
+    }));
   });
 
   // GET /api/routines/:id - Returns specific routine with naps and night sleep
