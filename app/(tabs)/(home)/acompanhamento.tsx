@@ -414,20 +414,27 @@ export default function AcompanhamentoScreen() {
    *   - null / undefined  → no night sleep record
    *   - {}                → empty object (legacy bug, treat as null)
    *   - { id, ... }       → valid object
-   *   - [{ id, ... }]     → array with one item (ORM "with" relation quirk)
+   *   - [{ id, ... }]     → array with one or more items (ORM "with" relation quirk or legacy duplicates)
    *   - []                → empty array (treat as null)
+   *
+   * When an array is returned, always picks the most recent record (sorted by createdAt DESC)
+   * to handle legacy duplicate records in the database.
    */
   const normalizeNightSleep = (raw: any): NightSleep | null => {
     if (!raw) return null;
-    // Handle array form (ORM "with" relation returns array)
+    // Handle array form (ORM "with" relation returns array, or legacy duplicates)
     if (Array.isArray(raw)) {
       if (raw.length === 0) return null;
-      const first = raw[0];
-      if (!first || !first.id) return null;
+      // Sort by createdAt DESC to always get the most recent record
+      const sorted = [...raw].sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const mostRecent = sorted[0];
+      if (!mostRecent || !mostRecent.id) return null;
       // Normalize wakings inside the array item as well
       return {
-        ...first,
-        wakings: Array.isArray(first.wakings) ? first.wakings : [],
+        ...mostRecent,
+        wakings: Array.isArray(mostRecent.wakings) ? mostRecent.wakings : [],
       } as NightSleep;
     }
     // Handle object form
