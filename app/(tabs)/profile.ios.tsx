@@ -28,15 +28,6 @@ interface ConsultantProfile {
   createdAt: string;
 }
 
-interface SleepWindow {
-  id: string;
-  consultantId: string;
-  ageMonthsMin: number;
-  ageMonthsMax: number;
-  windowMinutes: number;
-  createdAt: string;
-}
-
 export default function ProfileScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
@@ -44,46 +35,34 @@ export default function ProfileScreen() {
   const [signingOut, setSigningOut] = useState(false);
   const [profile, setProfile] = useState<ConsultantProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [isConsultant, setIsConsultant] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showBranding, setShowBranding] = useState(false);
-  const [showSleepWindows, setShowSleepWindows] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [showError, setShowError] = useState(false);
   const [editName, setEditName] = useState("");
   const [editPrimaryColor, setEditPrimaryColor] = useState("");
   const [editSecondaryColor, setEditSecondaryColor] = useState("");
-  const [sleepWindows, setSleepWindows] = useState<SleepWindow[]>([]);
-  const [swLoading, setSwLoading] = useState(false);
-  const [showAddSW, setShowAddSW] = useState(false);
-  const [swAgeMin, setSwAgeMin] = useState("");
-  const [swAgeMax, setSwAgeMax] = useState("");
-  const [swMinutes, setSwMinutes] = useState("");
 
   const showErr = (msg: string) => { setErrorMessage(msg); setShowError(true); };
 
   const loadProfile = useCallback(async () => {
     try {
-      console.log("[API] Loading consultant profile");
+      console.log("[API] Loading consultant profile to determine role");
       const data = await apiGet<ConsultantProfile>("/api/consultant/profile");
       setProfile(data);
+      setIsConsultant(true);
       setEditName(data.name);
       setEditPrimaryColor(data.primaryColor);
       setEditSecondaryColor(data.secondaryColor);
+      console.log("[Role] User is a consultant");
     } catch (error: any) {
-      console.warn("[API] Profile not found (may need initialization):", error.message);
+      console.log("[Role] User is NOT a consultant (mother) - profile not found");
+      setIsConsultant(false);
+      setProfile(null);
     } finally {
       setProfileLoading(false);
-    }
-  }, []);
-
-  const loadSleepWindows = useCallback(async () => {
-    try {
-      console.log("[API] Loading sleep windows");
-      const data = await apiGet<SleepWindow[]>("/api/sleep-windows");
-      setSleepWindows(data.sort((a, b) => a.ageMonthsMin - b.ageMonthsMin));
-    } catch (error: any) {
-      showErr(error.message || "Erro ao carregar janelas de sono");
     }
   }, []);
 
@@ -133,22 +112,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleAddSleepWindow = async () => {
-    if (!swAgeMin || !swAgeMax || !swMinutes) { showErr("Preencha todos os campos"); return; }
-    setSwLoading(true);
-    try {
-      console.log("[API] Creating sleep window config");
-      await apiPost("/api/sleep-windows", { ageMonthsMin: parseInt(swAgeMin), ageMonthsMax: parseInt(swAgeMax), windowMinutes: parseInt(swMinutes) });
-      setSwAgeMin(""); setSwAgeMax(""); setSwMinutes("");
-      setShowAddSW(false);
-      loadSleepWindows();
-    } catch (error: any) {
-      showErr(error.message || "Erro ao criar janela de sono");
-    } finally {
-      setSwLoading(false);
-    }
-  };
-
   const handleInitProfile = async () => {
     if (!editName) { showErr("Informe seu nome"); return; }
     setEditLoading(true);
@@ -156,6 +119,7 @@ export default function ProfileScreen() {
       console.log("[API] Initializing consultant profile");
       const created = await apiPost<ConsultantProfile>("/api/init/consultant", { name: editName });
       setProfile(created);
+      setIsConsultant(true);
       setShowEditProfile(false);
     } catch (error: any) {
       showErr(error.message || "Erro ao criar perfil");
@@ -164,6 +128,99 @@ export default function ProfileScreen() {
     }
   };
 
+  if (profileLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <Stack.Screen options={{ headerShown: true, title: "Perfil", headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text }} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ─── Mother Profile View ───────────────────────────────────────────────────
+  if (!isConsultant) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <Stack.Screen
+          options={{
+            headerShown: true,
+            title: "Perfil",
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
+          }}
+        />
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.profileHeader}>
+            <View style={styles.avatarContainer}>
+              <IconSymbol
+                ios_icon_name="heart.circle.fill"
+                android_material_icon_name="favorite"
+                size={80}
+                color={colors.secondary}
+              />
+            </View>
+            <Text style={styles.userName}>{user?.name || "Mamãe"}</Text>
+            <Text style={styles.userEmail}>{user?.email}</Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>👶 Mãe</Text>
+            </View>
+          </View>
+
+          <View style={styles.infoCard}>
+            <View style={styles.infoRow}>
+              <IconSymbol ios_icon_name="envelope.fill" android_material_icon_name="email" size={20} color={colors.primary} />
+              <View style={styles.infoTextContainer}>
+                <Text style={styles.infoLabel}>E-mail</Text>
+                <Text style={styles.infoValue}>{user?.email}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.infoCard}>
+            <Text style={styles.infoCardTitle}>ℹ️ Sobre sua conta</Text>
+            <Text style={styles.infoCardText}>
+              Você está cadastrada como mãe. Acesse a aba "Bebês" para visualizar as rotinas e orientações do seu bebê.
+            </Text>
+            <Text style={styles.infoCardText}>
+              A consultora responsável gerencia as informações e rotinas do seu bebê.
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.signOutButton}
+            onPress={() => {
+              console.log("Mother tapped sign out button");
+              setShowSignOutModal(true);
+            }}
+          >
+            <IconSymbol ios_icon_name="arrow.right.square.fill" android_material_icon_name="logout" size={24} color={colors.error} />
+            <Text style={styles.signOutText}>Sair</Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        <Modal visible={showSignOutModal} transparent animationType="fade" onRequestClose={() => setShowSignOutModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Sair da Conta</Text>
+              <Text style={styles.modalMessage}>Tem certeza que deseja sair?</Text>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={[styles.modalButton, styles.modalButtonCancel]} onPress={() => setShowSignOutModal(false)} disabled={signingOut}>
+                  <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalButton, styles.modalButtonConfirm]} onPress={handleSignOut} disabled={signingOut}>
+                  <Text style={styles.modalButtonTextConfirm}>{signingOut ? "Saindo..." : "Sair"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </SafeAreaView>
+    );
+  }
+
+  // ─── Consultant Profile View ───────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <Stack.Screen
@@ -186,6 +243,9 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.userName}>{profile?.name || user?.name || "Consultora"}</Text>
           <Text style={styles.userEmail}>{user?.email}</Text>
+          <View style={[styles.roleBadge, { backgroundColor: colors.primary + "20" }]}>
+            <Text style={[styles.roleBadgeText, { color: colors.primary }]}>⭐ Consultora</Text>
+          </View>
           {profile && (
             <View style={styles.colorPreview}>
               <View style={[styles.colorDot, { backgroundColor: profile.primaryColor }]} />
@@ -194,7 +254,7 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {!profile && !profileLoading && (
+        {!profile && (
           <View style={styles.initCard}>
             <Text style={styles.initCardText}>Configure seu perfil de consultora para começar</Text>
             <TouchableOpacity style={styles.initButton} onPress={() => { setEditName(user?.name || ""); setShowEditProfile(true); }}>
@@ -232,42 +292,6 @@ export default function ProfileScreen() {
             <Text style={styles.menuItemText}>Personalizar Marca</Text>
             <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Janelas de Sono por Idade</Text>
-            <TouchableOpacity 
-              style={styles.addSmallBtn} 
-              onPress={() => {
-                console.log("Tapped add sleep window");
-                loadSleepWindows();
-                setShowAddSW(true);
-              }}
-            >
-              <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={16} color="#FFF" />
-              <Text style={styles.addSmallBtnText}>Adicionar</Text>
-            </TouchableOpacity>
-          </View>
-          
-          {sleepWindows.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Nenhuma janela de sono configurada</Text>
-              <Text style={styles.emptySubtext}>Configure as janelas de sono por faixa etária para cálculo automático</Text>
-            </View>
-          ) : (
-            sleepWindows.map((sw) => (
-              <View key={sw.id} style={styles.swCard}>
-                <View style={styles.swCardContent}>
-                  <IconSymbol ios_icon_name="clock.fill" android_material_icon_name="schedule" size={20} color={colors.primary} />
-                  <View style={styles.swCardInfo}>
-                    <Text style={styles.swText}>{sw.ageMonthsMin}-{sw.ageMonthsMax} meses</Text>
-                    <Text style={styles.swMinutes}>{sw.windowMinutes} minutos</Text>
-                  </View>
-                </View>
-              </View>
-            ))
-          )}
         </View>
 
         <TouchableOpacity
@@ -338,26 +362,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showAddSW} transparent animationType="slide" onRequestClose={() => setShowAddSW(false)}>
-        <View style={styles.slideModalOverlay}>
-          <View style={styles.slideModalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Adicionar Janela de Sono</Text>
-              <TouchableOpacity onPress={() => setShowAddSW(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
-            </View>
-            <Text style={styles.formLabel}>Idade mínima (meses)</Text>
-            <TextInput style={styles.formInput} placeholder="Ex: 0" value={swAgeMin} onChangeText={setSwAgeMin} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-            <Text style={styles.formLabel}>Idade máxima (meses)</Text>
-            <TextInput style={styles.formInput} placeholder="Ex: 3" value={swAgeMax} onChangeText={setSwAgeMax} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-            <Text style={styles.formLabel}>Janela de sono (minutos)</Text>
-            <TextInput style={styles.formInput} placeholder="Ex: 60" value={swMinutes} onChangeText={setSwMinutes} keyboardType="numeric" placeholderTextColor={colors.textSecondary} />
-            <TouchableOpacity style={[styles.saveButton, swLoading && { opacity: 0.6 }]} onPress={handleAddSleepWindow} disabled={swLoading}>
-              {swLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>Adicionar</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
       <Modal visible={showError} transparent animationType="fade" onRequestClose={() => setShowError(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -375,35 +379,34 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   scrollView: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 120 },
   profileHeader: { alignItems: "center", paddingVertical: 32 },
   avatarContainer: { marginBottom: 16 },
   userName: { fontSize: 24, fontWeight: "bold", color: colors.text, marginBottom: 4 },
-  userEmail: { fontSize: 14, color: colors.textSecondary },
+  userEmail: { fontSize: 14, color: colors.textSecondary, marginBottom: 8 },
+  roleBadge: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, backgroundColor: "#F0EBF8", marginTop: 8 },
+  roleBadgeText: { fontSize: 14, fontWeight: "600", color: colors.secondary },
   colorPreview: { flexDirection: "row", gap: 8, marginTop: 12 },
   colorDot: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: colors.border },
+  infoCard: { backgroundColor: colors.card, borderRadius: 16, padding: 16, marginBottom: 12, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
+  infoRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  infoTextContainer: { flex: 1 },
+  infoLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 2 },
+  infoValue: { fontSize: 15, color: colors.text, fontWeight: "500" },
+  infoCardTitle: { fontSize: 16, fontWeight: "bold", color: colors.text, marginBottom: 8 },
+  infoCardText: { fontSize: 14, color: colors.textSecondary, lineHeight: 20, marginBottom: 6 },
   initCard: { backgroundColor: colors.card, borderRadius: 16, padding: 20, marginBottom: 24, alignItems: "center" },
   initCardText: { fontSize: 15, color: colors.textSecondary, textAlign: "center", marginBottom: 16 },
   initButton: { backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: 24, paddingVertical: 12 },
   initButtonText: { fontSize: 15, fontWeight: "600", color: "#FFF" },
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 18, fontWeight: "bold", color: colors.text, marginBottom: 12 },
-  sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   menuItem: { flexDirection: "row", alignItems: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, marginBottom: 8, gap: 12 },
   menuItemText: { flex: 1, fontSize: 16, color: colors.text },
   signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, gap: 8, borderWidth: 1, borderColor: colors.error },
   signOutText: { fontSize: 16, fontWeight: "600", color: colors.error },
-  emptyCard: { backgroundColor: colors.card, borderRadius: 12, padding: 20, alignItems: "center" },
-  emptyText: { fontSize: 15, fontWeight: "600", color: colors.text, marginBottom: 4, textAlign: "center" },
-  emptySubtext: { fontSize: 13, color: colors.textSecondary, textAlign: "center" },
-  swCard: { backgroundColor: colors.card, borderRadius: 12, padding: 12, marginBottom: 8 },
-  swCardContent: { flexDirection: "row", alignItems: "center", gap: 12 },
-  swCardInfo: { flex: 1 },
-  swText: { fontSize: 15, fontWeight: "600", color: colors.text },
-  swMinutes: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  addSmallBtn: { flexDirection: "row", alignItems: "center", backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, gap: 4 },
-  addSmallBtnText: { fontSize: 12, fontWeight: "600", color: "#FFF" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
   slideModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   slideModalContent: { backgroundColor: colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 },

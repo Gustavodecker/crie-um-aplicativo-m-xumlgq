@@ -358,17 +358,28 @@ function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultan
   const [objectives, setObjectives] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdBabyToken, setCreatedBabyToken] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   const loadBabies = useCallback(async () => {
-    console.log("[API] Loading babies");
+    console.log("[API] Loading babies, showArchived:", showArchived);
     try {
       if (isConsultant) {
-        const data = await apiGet<Baby[]>("/api/consultant/babies");
+        const endpoint = showArchived 
+          ? "/api/consultant/babies?includeArchived=true" 
+          : "/api/consultant/babies";
+        const data = await apiGet<Baby[]>(endpoint);
         console.log("[API] Consultant babies loaded:", data.length);
-        setBabies(data);
+        
+        // Filter based on showArchived state
+        const filteredBabies = showArchived 
+          ? data.filter(b => b.archived) 
+          : data.filter(b => !b.archived);
+        
+        console.log("[API] Filtered babies:", filteredBabies.length, "archived:", showArchived);
+        setBabies(filteredBabies);
       } else {
         console.log("[API] User is a mother - fetching linked baby via /api/mother/baby");
         try {
@@ -392,7 +403,7 @@ function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultan
       setLoading(false);
       setRefreshing(false);
     }
-  }, [isConsultant]);
+  }, [isConsultant, showArchived]);
 
   useEffect(() => { loadBabies(); }, [loadBabies]);
 
@@ -468,8 +479,43 @@ function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultan
       >
         <View style={styles.header}>
           <Text style={styles.greeting}>Olá, {isConsultant ? "Consultora" : "Mamãe"}! 👋</Text>
-          <Text style={styles.subtitle}>{babies.length} bebê{babies.length !== 1 ? "s" : ""} cadastrado{babies.length !== 1 ? "s" : ""}</Text>
+          <Text style={styles.subtitle}>
+            {showArchived ? "Bebês Arquivados" : `${babies.length} bebê${babies.length !== 1 ? "s" : ""} cadastrado${babies.length !== 1 ? "s" : ""}`}
+          </Text>
         </View>
+
+        {isConsultant && (
+          <View style={styles.filterButtons}>
+            <TouchableOpacity 
+              style={[styles.filterButton, !showArchived && styles.filterButtonActive]} 
+              onPress={() => setShowArchived(false)}
+            >
+              <IconSymbol 
+                ios_icon_name="person.2.fill" 
+                android_material_icon_name="child-care" 
+                size={18} 
+                color={!showArchived ? "#FFF" : colors.text} 
+              />
+              <Text style={[styles.filterButtonText, !showArchived && styles.filterButtonTextActive]}>
+                Ativos
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.filterButton, showArchived && styles.filterButtonActive]} 
+              onPress={() => setShowArchived(true)}
+            >
+              <IconSymbol 
+                ios_icon_name="archivebox.fill" 
+                android_material_icon_name="archive" 
+                size={18} 
+                color={showArchived ? "#FFF" : colors.text} 
+              />
+              <Text style={[styles.filterButtonText, showArchived && styles.filterButtonTextActive]}>
+                Arquivados
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {babies.length === 0 && (
           <View style={styles.welcomeCard}>
@@ -2515,9 +2561,39 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background },
   scrollView: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 120 },
-  header: { marginBottom: 24 },
+  header: { marginBottom: 16 },
   greeting: { fontSize: 28, fontWeight: "bold", color: colors.text, marginBottom: 4 },
   subtitle: { fontSize: 16, color: colors.textSecondary },
+  filterButtons: { 
+    flexDirection: "row", 
+    gap: 12, 
+    marginBottom: 24 
+  },
+  filterButton: { 
+    flex: 1, 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "center", 
+    backgroundColor: colors.card, 
+    borderRadius: 12, 
+    paddingVertical: 12, 
+    paddingHorizontal: 16, 
+    gap: 8,
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  filterButtonActive: { 
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterButtonText: { 
+    fontSize: 15, 
+    fontWeight: "600", 
+    color: colors.text 
+  },
+  filterButtonTextActive: { 
+    color: "#FFF" 
+  },
   welcomeCard: { backgroundColor: colors.card, borderRadius: 20, padding: 24, marginBottom: 24, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 },
   welcomeIcon: { alignSelf: "center", marginBottom: 16 },
   welcomeTitle: { fontSize: 22, fontWeight: "bold", color: colors.text, textAlign: "center", marginBottom: 12 },
