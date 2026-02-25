@@ -61,10 +61,9 @@ export const apiCall = async <T = any>(
       ...options,
     };
 
-    // Only add Content-Type header if there's a body and it's NOT FormData
+    // Only add Content-Type header if there's a body
     // DELETE requests without body should NOT have Content-Type header
-    // FormData requests should NOT have Content-Type set (browser sets it with boundary automatically)
-    if (options?.body && !(options.body instanceof FormData)) {
+    if (options?.body) {
       fetchOptions.headers = {
         "Content-Type": "application/json",
         ...options?.headers,
@@ -123,25 +122,14 @@ export const apiGet = async <T = any>(endpoint: string): Promise<T> => {
 
 /**
  * POST request helper
- * Supports both JSON data and FormData (for file uploads)
  */
 export const apiPost = async <T = any>(
   endpoint: string,
-  data: any,
-  options?: { headers?: Record<string, string> }
+  data: any
 ): Promise<T> => {
-  // If data is FormData, send as-is (browser sets Content-Type with boundary automatically)
-  if (data instanceof FormData) {
-    return apiCall<T>(endpoint, {
-      method: "POST",
-      body: data,
-      headers: options?.headers,
-    });
-  }
   return apiCall<T>(endpoint, {
     method: "POST",
     body: JSON.stringify(data),
-    headers: options?.headers,
   });
 };
 
