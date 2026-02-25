@@ -9,8 +9,6 @@ export const consultants = pgTable('consultants', {
   name: text('name').notNull(),
   photo: text('photo'),
   logo: text('logo'),
-  professionalTitle: text('professional_title'),
-  description: text('description'),
   primaryColor: text('primary_color').default('#6B4CE6'),
   secondaryColor: text('secondary_color').default('#9D7FEA'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
