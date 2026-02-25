@@ -13,7 +13,7 @@ import {
 import { IconSymbol } from "@/components/IconSymbol";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/styles/commonStyles";
-import { apiGet, apiPost } from "@/utils/api";
+import { apiGet } from "@/utils/api";
 
 interface Nap {
   id: string;
@@ -41,7 +41,7 @@ interface NightWaking {
 interface NightSleep {
   id: string;
   routineId: string;
-  startTryTime: string;
+  startTryTime: string | null;
   fellAsleepTime: string | null;
   finalWakeTime: string | null;
   sleepMethod: string | null;
@@ -68,6 +68,8 @@ interface Routine {
 
 interface CalculatedNap {
   napNumber: number;
+  startTime: string;
+  endTime: string;
   displayText: string;
   windowText: string;
   durationMinutes: number;
@@ -83,9 +85,12 @@ interface DailyReport {
   dayNumber: number;
   dateDisplay: string;
   wakeUpTime: string | null;
+  firstNapWindow: string | null;
   naps: CalculatedNap[];
   daytimeSleepTotal: string | null;
   nightSleepStart: string | null;
+  nightSleepEnd: string | null;
+  nightSleepBrute: string | null;
   nightSleepLiquidTotal: string | null;
   wakings: CalculatedWaking[];
 }
@@ -276,9 +281,12 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
     dayNumber: dayIndex + 1,
     dateDisplay: formatDateToBR(routine.date),
     wakeUpTime: null,
+    firstNapWindow: null,
     naps: [],
     daytimeSleepTotal: null,
     nightSleepStart: null,
+    nightSleepEnd: null,
+    nightSleepBrute: null,
     nightSleepLiquidTotal: null,
     wakings: [],
   };
@@ -296,7 +304,7 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
     // Sort naps by napNumber to ensure correct order
     const sortedNaps = [...routine.naps].sort((a, b) => a.napNumber - b.napNumber);
 
-    sortedNaps.forEach((nap) => {
+    sortedNaps.forEach((nap, index) => {
       // Only process naps that have both start and wake times
       if (nap.startTryTime && nap.wakeUpTime) {
         const napDuration = calculateTimeDifference(nap.startTryTime, nap.wakeUpTime);
@@ -310,10 +318,17 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
         if (lastWakeTimeForWindow && nap.startTryTime) {
           const windowDuration = calculateTimeDifference(lastWakeTimeForWindow, nap.startTryTime);
           windowText = `Janela: ${formatTimeDuration(windowDuration)}`;
+          
+          // Store first nap window separately
+          if (index === 0) {
+            report.firstNapWindow = formatTimeDuration(windowDuration);
+          }
         }
 
         report.naps.push({
           napNumber: nap.napNumber,
+          startTime: nap.startTryTime,
+          endTime: nap.wakeUpTime,
           displayText,
           windowText,
           durationMinutes: napDuration,
@@ -358,21 +373,33 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
   
   console.log(`[DEBUG] Day ${dayIndex + 1} nightSleep check:`, {
     exists: !!routine.nightSleep,
-    hasId: hasValidNightSleep,
+    hasId: hasValidNightSleep ? (routine.nightSleep as any).id : null,
     startTryTime: routine.nightSleep?.startTryTime,
     fellAsleepTime: routine.nightSleep?.fellAsleepTime,
     finalWakeTime: routine.nightSleep?.finalWakeTime,
   });
 
-  if (hasValidNightSleep && routine.nightSleep!.startTryTime) {
-    report.nightSleepStart = routine.nightSleep!.startTryTime;
+  if (hasValidNightSleep) {
+    const ns = routine.nightSleep!;
+    
+    // Start time
+    if (ns.startTryTime) {
+      report.nightSleepStart = ns.startTryTime;
+    }
+    
+    // End time
+    if (ns.finalWakeTime) {
+      report.nightSleepEnd = ns.finalWakeTime;
+    }
 
-    // Calculate liquid night sleep (brute - wakings)
-    if (routine.nightSleep!.fellAsleepTime && routine.nightSleep!.finalWakeTime) {
+    // Calculate brute and liquid night sleep
+    if (ns.fellAsleepTime && ns.finalWakeTime) {
       const nightSleepBruteMinutes = calculateTimeDifference(
-        routine.nightSleep!.fellAsleepTime,
-        routine.nightSleep!.finalWakeTime
+        ns.fellAsleepTime,
+        ns.finalWakeTime
       );
+      report.nightSleepBrute = formatTimeDuration(nightSleepBruteMinutes);
+      
       const nightSleepLiquidMinutes = nightSleepBruteMinutes - totalWakingMinutes;
       report.nightSleepLiquidTotal = formatTimeDuration(nightSleepLiquidMinutes);
     }
@@ -448,29 +475,6 @@ export default function AcompanhamentoScreen() {
     return null;
   };
 
-  /**
-   * Fetches the full nightSleep record for a routine via POST /api/night-sleep (upsert).
-   * Used as a workaround when GET /api/routines/baby/:babyId returns nightSleep as {}
-   * due to Fastify response schema serialization stripping unknown fields.
-   */
-  const fetchNightSleepForRoutine = async (routineId: string): Promise<NightSleep | null> => {
-    try {
-      console.log(`[Night Sleep] Fetching via POST /api/night-sleep for routineId: ${routineId}`);
-      const result = await apiPost<NightSleep>("/api/night-sleep", { routineId });
-      if (result && result.id) {
-        console.log(`[Night Sleep] Fetched id: ${result.id}`);
-        return {
-          ...result,
-          wakings: Array.isArray(result.wakings) ? result.wakings : [],
-        };
-      }
-      return null;
-    } catch (error: any) {
-      console.error(`[Night Sleep] Error fetching via POST for routine ${routineId}:`, error);
-      return null;
-    }
-  };
-
   const loadData = useCallback(async () => {
     console.log("Acompanhamento: Loading data for babyId:", babyId);
     setLoading(true);
@@ -481,17 +485,31 @@ export default function AcompanhamentoScreen() {
       const routinesData = await apiGet<any[]>(`/api/routines/baby/${babyId}`);
       console.log("Acompanhamento: Loaded routines with full data:", routinesData?.length);
       
-      // Normalize each routine's nightSleep field
-      // If nightSleep comes back as {} (empty object without id) due to Fastify schema bug,
-      // fetch the full nightSleep data via POST /api/night-sleep (upsert endpoint)
+      // Normalize each routine's nightSleep field.
+      // NOTE: We do NOT call POST /api/night-sleep here as a workaround because that endpoint
+      // overwrites all nightSleep fields with null values when called with just { routineId },
+      // which causes data loss. Instead, we fetch each routine individually via GET /api/routines/:id
+      // which may also return {} due to the same Fastify schema issue, but we try it as a fallback.
+      // If nightSleep still comes back as {} after individual fetch, we mark it as having an unknown
+      // ID and skip it for display purposes (it has no data to show anyway).
       const normalized: Routine[] = await Promise.all((routinesData || []).map(async (r, i) => {
         let nightSleep = normalizeNightSleep(r.nightSleep);
         
         // If nightSleep is {} (not null, but also not a valid object with id),
-        // fetch the full data via the upsert endpoint
+        // try fetching the individual routine which may have better serialization
         if (!nightSleep && r.nightSleep !== null && r.nightSleep !== undefined) {
-          console.log(`[DEBUG] Routine ${i + 1} (${r.date}): nightSleep is {} - fetching full data`);
-          nightSleep = await fetchNightSleepForRoutine(r.id);
+          console.log(`[DEBUG] Routine ${i + 1} (${r.date}): nightSleep is {} - fetching individual routine`);
+          try {
+            const individualRoutine = await apiGet<any>(`/api/routines/${r.id}`);
+            nightSleep = normalizeNightSleep(individualRoutine.nightSleep);
+            if (nightSleep) {
+              console.log(`[Night Sleep] Fetched from individual routine, id: ${nightSleep.id}`);
+            } else {
+              console.log(`[Night Sleep] Individual routine also returned {} for nightSleep - backend schema issue`);
+            }
+          } catch (fetchErr: any) {
+            console.warn(`[Night Sleep] Could not fetch individual routine ${r.id}:`, fetchErr.message);
+          }
         }
         
         console.log(`[DEBUG] Routine ${i + 1} (${r.date}):`, {
@@ -582,15 +600,21 @@ export default function AcompanhamentoScreen() {
   const normalizedRoutines = routines;
 
   // Filter routines that have meaningful data
-  // Since backend now auto-creates nightSleep for every routine (with all null fields),
-  // we must check if nightSleep has actual data filled in (not just an empty shell)
+  // A routine has meaningful data if it has:
+  // - At least one nap with times filled, OR
+  // - Night sleep with at least one time field filled (startTryTime, fellAsleepTime, or finalWakeTime)
   const filledRoutines = normalizedRoutines.filter((r) => {
-    const hasWakeUp = r.wakeUpTime && r.wakeUpTime.trim() !== "" && r.wakeUpTime !== "07:00";
-    const hasNaps = r.naps && r.naps.length > 0;
-    // Only count nightSleep as "has data" if it has at least one time field filled
+    const hasNaps = r.naps && r.naps.length > 0 && r.naps.some(nap => 
+      nap.startTryTime || nap.fellAsleepTime || nap.wakeUpTime
+    );
+    
     const hasNightSleepData = r.nightSleep !== null && r.nightSleep !== undefined &&
-      (r.nightSleep.startTryTime !== null || r.nightSleep.fellAsleepTime !== null || r.nightSleep.finalWakeTime !== null);
-    return hasWakeUp || hasNaps || hasNightSleepData;
+      (r.nightSleep.startTryTime !== null || 
+       r.nightSleep.fellAsleepTime !== null || 
+       r.nightSleep.finalWakeTime !== null ||
+       (r.nightSleep.wakings && r.nightSleep.wakings.length > 0));
+    
+    return hasNaps || hasNightSleepData;
   });
 
   // Calculate reports for all filled routines
@@ -642,6 +666,14 @@ export default function AcompanhamentoScreen() {
                     </React.Fragment>
                   )}
 
+                  {/* JANELA DA PRIMEIRA SONECA */}
+                  {report.firstNapWindow && (
+                    <React.Fragment>
+                      <Text style={styles.sectionTitle}>JANELA DA 1ª SONECA</Text>
+                      <Text style={styles.infoText}>{report.firstNapWindow}</Text>
+                    </React.Fragment>
+                  )}
+
                   {/* SONECAS */}
                   {report.naps.map((nap) => {
                     const napTitleText = `SONECA ${nap.napNumber}`;
@@ -660,20 +692,32 @@ export default function AcompanhamentoScreen() {
                   {/* DURAÇÃO DO SONO DIURNO */}
                   {report.daytimeSleepTotal && (
                     <React.Fragment>
-                      <Text style={styles.sectionTitle}>DURAÇÃO DO SONO DIURNO</Text>
+                      <Text style={styles.sectionTitle}>SONO DIURNO</Text>
                       <Text style={styles.infoText}>
-                        Somatória das sonecas: {report.daytimeSleepTotal}
+                        Somatória: {report.daytimeSleepTotal}
                       </Text>
                     </React.Fragment>
                   )}
 
                   {/* SONO NOTURNO */}
-                  {report.nightSleepStart && (
+                  {(report.nightSleepStart || report.nightSleepEnd || report.nightSleepBrute || report.nightSleepLiquidTotal) && (
                     <React.Fragment>
                       <Text style={styles.sectionTitle}>SONO NOTURNO</Text>
-                      <Text style={styles.infoText}>
-                        Iniciou às {report.nightSleepStart}
-                      </Text>
+                      {report.nightSleepStart && (
+                        <Text style={styles.infoText}>
+                          Início: {report.nightSleepStart}
+                        </Text>
+                      )}
+                      {report.nightSleepEnd && (
+                        <Text style={styles.infoText}>
+                          Fim: {report.nightSleepEnd}
+                        </Text>
+                      )}
+                      {report.nightSleepBrute && (
+                        <Text style={styles.infoText}>
+                          Total bruto: {report.nightSleepBrute}
+                        </Text>
+                      )}
                       {report.nightSleepLiquidTotal && (
                         <Text style={styles.infoText}>
                           Total líquido: {report.nightSleepLiquidTotal}

@@ -139,21 +139,41 @@ export default function ReportsLandscapeScreen() {
       
       // GET /api/routines/baby/:babyId now returns full data including naps and nightSleep with wakings
       console.log("[API] Loading routines with full data for baby:", babyId);
-      const allRoutines = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
-      const filteredRoutines = allRoutines.filter(r => r.date >= startDate && r.date <= endDate);
+      const allRoutines = await apiGet<any[]>(`/api/routines/baby/${babyId}`);
+      const filteredRoutines = allRoutines.filter((r: any) => r.date >= startDate && r.date <= endDate);
       
       // Normalize routines: treat empty object {} as null for nightSleep
-      const normalizedRoutines = filteredRoutines.map((r) => ({
-        ...r,
-        nightSleep: r.nightSleep && typeof r.nightSleep === 'object' && (r.nightSleep as any).id
-          ? r.nightSleep
-          : null,
+      // If nightSleep comes back as {} (Fastify schema stripping), try fetching individual routine
+      const normalizedRoutines: Routine[] = await Promise.all(filteredRoutines.map(async (r: any, i: number) => {
+        let nightSleep: NightSleep | null = null;
+        
+        if (r.nightSleep && typeof r.nightSleep === 'object' && (r.nightSleep as any).id) {
+          // Valid nightSleep object
+          nightSleep = {
+            ...r.nightSleep,
+            wakings: Array.isArray(r.nightSleep.wakings) ? r.nightSleep.wakings : [],
+          };
+        } else if (r.nightSleep !== null && r.nightSleep !== undefined) {
+          // nightSleep is {} (Fastify schema stripping) - try individual routine fetch
+          console.log(`[API] Routine ${i + 1} (${r.date}): nightSleep is {} - fetching individual routine`);
+          try {
+            const individualRoutine = await apiGet<any>(`/api/routines/${r.id}`);
+            if (individualRoutine.nightSleep && typeof individualRoutine.nightSleep === 'object' && individualRoutine.nightSleep.id) {
+              nightSleep = {
+                ...individualRoutine.nightSleep,
+                wakings: Array.isArray(individualRoutine.nightSleep.wakings) ? individualRoutine.nightSleep.wakings : [],
+              };
+              console.log(`[API] Routine ${i + 1}: fetched nightSleep id=${nightSleep!.id}`);
+            }
+          } catch (fetchErr: any) {
+            console.warn(`[API] Could not fetch individual routine ${r.id}:`, fetchErr.message);
+          }
+        }
+        
+        console.log(`[API] Routine ${i + 1} (${r.date}) - nightSleep:`, nightSleep ? `id=${nightSleep.id}, wakings=${nightSleep.wakings?.length ?? 0}` : 'null');
+        
+        return { ...r, nightSleep };
       }));
-
-      // Log nightSleep data for debugging
-      normalizedRoutines.forEach((r, i) => {
-        console.log(`[API] Routine ${i + 1} (${r.date}) - nightSleep:`, r.nightSleep ? `id=${r.nightSleep.id}, wakings=${r.nightSleep.wakings?.length ?? 0}` : 'null');
-      });
       
       setRoutines(normalizedRoutines.sort((a, b) => a.date.localeCompare(b.date)));
     } catch (error: any) {

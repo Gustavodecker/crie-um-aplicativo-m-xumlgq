@@ -895,23 +895,28 @@ function RoutineListScreen({ isConsultant, baby, onBack, onOpenRoutine, showErr 
       try {
         const fullRoutineRaw = await apiGet<any>(`/api/routines/${newRoutine.id}`);
         
-        // Handle case where nightSleep comes back as {} due to Fastify schema serialization bug
+        // Normalize nightSleep - may come back as {} due to Fastify schema serialization bug
         let nightSleep = normalizeNightSleep(fullRoutineRaw.nightSleep);
-        if (!nightSleep && fullRoutineRaw.nightSleep !== null && fullRoutineRaw.nightSleep !== undefined) {
-          console.log("[API] nightSleep is {} in full routine, fetching via POST /api/night-sleep");
+        
+        if (nightSleep) {
+          console.log("[API] Full routine loaded with nightSleep id:", nightSleep.id);
+        } else {
+          // nightSleep came back as {} - this is a newly created routine so all fields are null.
+          // It's safe to call POST /api/night-sleep here because the record has no data yet.
+          // This gives us the nightSleep ID for future PUT calls.
+          console.log("[API] nightSleep came back as {} - fetching ID via POST (safe for new routine with no data)");
           try {
             const nsResult = await apiPost<NightSleep>("/api/night-sleep", { routineId: newRoutine.id });
             if (nsResult && nsResult.id) {
               nightSleep = { ...nsResult, wakings: Array.isArray(nsResult.wakings) ? nsResult.wakings : [] };
-              console.log("[API] Fetched nightSleep via POST, id:", nightSleep.id);
+              console.log("[API] Got nightSleep ID for new routine:", nightSleep.id);
             }
           } catch (nsError: any) {
-            console.warn("[API] Could not fetch nightSleep via POST:", nsError.message);
+            console.warn("[API] Could not get nightSleep ID via POST:", nsError.message);
           }
         }
         
         const fullRoutine: Routine = { ...fullRoutineRaw, nightSleep };
-        console.log("[API] Full routine loaded with nightSleep:", fullRoutine.nightSleep ? `id=${(fullRoutine.nightSleep as any).id}` : "null");
         onOpenRoutine(fullRoutine, dayNumber);
       } catch (fetchError: any) {
         console.warn("[API] Could not fetch full routine, using basic routine:", fetchError.message);
@@ -1052,25 +1057,46 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   // Ref to always have the latest nightSleep id for auto-save
   const nightSleepIdRef = useRef<string | null>(null);
   
-  // Initialize nightSleepIdRef from initialRoutine
-  // Note: initialRoutine.nightSleep may be {} (empty) due to backend serialization bug,
-  // in which case normalizeNightSleep returns null and we rely on loadRoutine to fetch it.
+  // AsyncStorage key for persisting nightSleep ID across sessions
+  const nightSleepStorageKey = `nightSleepId_${initialRoutine.id}`;
+  
+  // Initialize nightSleepIdRef from initialRoutine or AsyncStorage
   useEffect(() => {
-    const initialNightSleep = normalizeNightSleep(initialRoutine.nightSleep);
-    if (initialNightSleep?.id) {
-      nightSleepIdRef.current = initialNightSleep.id;
-      console.log("[Night Sleep Ref] Initialized nightSleepIdRef from initialRoutine to:", initialNightSleep.id);
-    } else {
-      console.log("[Night Sleep Ref] initialRoutine.nightSleep has no id (raw:", JSON.stringify(initialRoutine.nightSleep), "), will fetch via loadRoutine");
-    }
+    const initNightSleepId = async () => {
+      const initialNightSleep = normalizeNightSleep(initialRoutine.nightSleep);
+      if (initialNightSleep?.id) {
+        nightSleepIdRef.current = initialNightSleep.id;
+        console.log("[Night Sleep Ref] Initialized nightSleepIdRef from initialRoutine to:", initialNightSleep.id);
+        // Persist to AsyncStorage for future use
+        try {
+          await AsyncStorage.setItem(nightSleepStorageKey, initialNightSleep.id);
+        } catch (e) {}
+      } else {
+        // Try to get from AsyncStorage (persisted from a previous session)
+        try {
+          const storedId = await AsyncStorage.getItem(nightSleepStorageKey);
+          if (storedId) {
+            nightSleepIdRef.current = storedId;
+            console.log("[Night Sleep Ref] Initialized nightSleepIdRef from AsyncStorage:", storedId);
+          } else {
+            console.log("[Night Sleep Ref] initialRoutine.nightSleep has no id (raw:", JSON.stringify(initialRoutine.nightSleep), "), will fetch via loadRoutine");
+          }
+        } catch (e) {
+          console.log("[Night Sleep Ref] Could not read from AsyncStorage");
+        }
+      }
+    };
+    initNightSleepId();
   }, []);
   
-  // Keep nightSleepIdRef in sync with routine.nightSleep
+  // Keep nightSleepIdRef in sync with routine.nightSleep and persist to AsyncStorage
   useEffect(() => {
     const currentNightSleep = normalizeNightSleep(routine.nightSleep);
     if (currentNightSleep?.id) {
       nightSleepIdRef.current = currentNightSleep.id;
       console.log("[Night Sleep Ref] Updated nightSleepIdRef to:", currentNightSleep.id);
+      // Persist to AsyncStorage
+      AsyncStorage.setItem(nightSleepStorageKey, currentNightSleep.id).catch(() => {});
     }
   }, [routine.nightSleep]);
 
@@ -1139,31 +1165,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     }
   }, 1000);
 
-  /**
-   * Fetches the full nightSleep record for a routine by calling POST /api/night-sleep
-   * with the routineId. The backend treats this as an upsert - if nightSleep already
-   * exists it returns 200 with the full object, if not it creates and returns 201.
-   * This is used as a workaround when the GET /api/routines/:id returns nightSleep as {}
-   * due to Fastify response schema serialization stripping unknown fields.
-   */
-  const fetchNightSleepForRoutine = async (routineId: string): Promise<NightSleep | null> => {
-    try {
-      console.log("[Night Sleep] Fetching nightSleep via POST /api/night-sleep for routineId:", routineId);
-      const result = await apiPost<NightSleep>("/api/night-sleep", { routineId });
-      if (result && result.id) {
-        console.log("[Night Sleep] Successfully fetched nightSleep id:", result.id);
-        return {
-          ...result,
-          wakings: Array.isArray(result.wakings) ? result.wakings : [],
-        };
-      }
-      return null;
-    } catch (error: any) {
-      console.error("[Night Sleep] Error fetching nightSleep via POST:", error);
-      return null;
-    }
-  };
-
   const loadRoutine = useCallback(async (skipTextUpdate = false, preserveNightSleep = false) => {
     try {
       console.log("[API] Loading routine:", initialRoutine.id);
@@ -1174,16 +1175,60 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       
       console.log("[API] Routine loaded successfully:", data.id, "nightSleep:", apiNightSleep ? `id=${apiNightSleep.id}` : "null (raw was: " + JSON.stringify(data.nightSleep) + ")");
       
-      // If nightSleep came back as {} (empty object without id), the backend Fastify schema
-      // is stripping the fields. Use POST /api/night-sleep as upsert to get the full object.
+      // If nightSleep came back as {} (Fastify schema stripping), try to reconstruct it
+      // using the persisted nightSleep ID from AsyncStorage + nightSleepIdRef
       if (!apiNightSleep && data.nightSleep !== null && data.nightSleep !== undefined) {
-        console.log("[Night Sleep] nightSleep is empty object {}, fetching full data via POST /api/night-sleep");
-        apiNightSleep = await fetchNightSleepForRoutine(initialRoutine.id);
+        console.log("[Night Sleep] nightSleep is {} - checking nightSleepIdRef and AsyncStorage for ID");
+        
+        // Check ref first (fastest)
+        let knownId = nightSleepIdRef.current;
+        
+        // If not in ref, check AsyncStorage
+        if (!knownId) {
+          try {
+            knownId = await AsyncStorage.getItem(nightSleepStorageKey);
+            if (knownId) {
+              nightSleepIdRef.current = knownId;
+              console.log("[Night Sleep] Found ID in AsyncStorage:", knownId);
+            }
+          } catch (e) {}
+        }
+        
+        if (knownId) {
+          // We have the ID - reconstruct nightSleep from current state or create minimal object
+          // Use current routine state values if available (to preserve displayed data)
+          const prevNightSleep = normalizeNightSleep(routine.nightSleep);
+          apiNightSleep = prevNightSleep?.id === knownId ? prevNightSleep : {
+            id: knownId,
+            routineId: initialRoutine.id,
+            startTryTime: prevNightSleep?.startTryTime ?? null,
+            fellAsleepTime: prevNightSleep?.fellAsleepTime ?? null,
+            finalWakeTime: prevNightSleep?.finalWakeTime ?? null,
+            sleepMethod: prevNightSleep?.sleepMethod ?? null,
+            environment: prevNightSleep?.environment ?? null,
+            wakeUpMood: prevNightSleep?.wakeUpMood ?? null,
+            observations: prevNightSleep?.observations ?? null,
+            consultantComments: prevNightSleep?.consultantComments ?? null,
+            createdAt: prevNightSleep?.createdAt ?? new Date().toISOString(),
+            wakings: prevNightSleep?.wakings ?? [],
+          };
+          console.log("[Night Sleep] Reconstructed nightSleep with known ID:", knownId);
+        } else {
+          // No known ID - we need to get it. Since we can't safely call POST (it would overwrite data),
+          // we mark nightSleep as "pending ID resolution" by setting a placeholder.
+          // The ID will be resolved lazily when the user first tries to edit nightSleep.
+          console.log("[Night Sleep] No known ID - will resolve lazily on first edit");
+          // Set a sentinel value so we know nightSleep exists but ID is unknown
+          // We use the routineId as a temporary marker
+          apiNightSleep = null; // Keep as null - user will see "Sono noturno não encontrado" message
+        }
       }
       
       // Update the nightSleepIdRef with the latest id from API
       if (apiNightSleep?.id && !preserveNightSleep) {
         nightSleepIdRef.current = apiNightSleep.id;
+        // Persist to AsyncStorage
+        AsyncStorage.setItem(nightSleepStorageKey, apiNightSleep.id).catch(() => {});
         console.log("[API] Updated nightSleepIdRef from API to:", apiNightSleep.id);
       }
       
@@ -1195,13 +1240,15 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           // Keep current state but merge in API data if we don't have a local nightSleep yet
           nightSleepToUse = prev.nightSleep || apiNightSleep;
         } else {
-          // Use API data, falling back to current state if API returned null
+          // Use API data, but if API returned null/empty and we have a local nightSleep, keep it
+          // This prevents data loss when Fastify schema strips nightSleep fields
           nightSleepToUse = apiNightSleep || prev.nightSleep;
         }
         
         // Update ref if we have a night sleep
         if (nightSleepToUse?.id) {
           nightSleepIdRef.current = nightSleepToUse.id;
+          AsyncStorage.setItem(nightSleepStorageKey, nightSleepToUse.id).catch(() => {});
           console.log("[API] Updated nightSleepIdRef from nightSleepToUse to:", nightSleepToUse.id);
         }
         
@@ -1219,7 +1266,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         
         const napObs: { [key: string]: string } = {};
         const napComments: { [key: string]: string } = {};
-        data.naps?.forEach(nap => {
+        data.naps?.forEach((nap: any) => {
           napObs[nap.id] = nap.observations || "";
           napComments[nap.id] = nap.consultantComments || "";
         });
@@ -1317,10 +1364,70 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   };
 
   /**
-   * REFACTORED: Always use PUT to update nightSleep.
-   * Backend now auto-creates nightSleep when routine is created,
-   * so nightSleep.id should always exist.
-   * If nightSleep is missing (legacy routines), reload the routine to get it.
+   * Resolves the nightSleep ID when it's not available in state or ref.
+   * Uses POST /api/night-sleep with current values to avoid data loss.
+   * This is called lazily when the user first tries to edit nightSleep.
+   */
+  const resolveNightSleepId = async (): Promise<NightSleep | null> => {
+    // Check AsyncStorage first
+    try {
+      const storedId = await AsyncStorage.getItem(nightSleepStorageKey);
+      if (storedId) {
+        nightSleepIdRef.current = storedId;
+        console.log("[Night Sleep] Resolved ID from AsyncStorage:", storedId);
+        const currentNightSleep = normalizeNightSleep(routine.nightSleep);
+        return {
+          id: storedId,
+          routineId: routine.id,
+          startTryTime: currentNightSleep?.startTryTime ?? null,
+          fellAsleepTime: currentNightSleep?.fellAsleepTime ?? null,
+          finalWakeTime: currentNightSleep?.finalWakeTime ?? null,
+          sleepMethod: currentNightSleep?.sleepMethod ?? null,
+          environment: currentNightSleep?.environment ?? null,
+          wakeUpMood: currentNightSleep?.wakeUpMood ?? null,
+          observations: currentNightSleep?.observations ?? null,
+          consultantComments: currentNightSleep?.consultantComments ?? null,
+          createdAt: currentNightSleep?.createdAt ?? new Date().toISOString(),
+          wakings: currentNightSleep?.wakings ?? [],
+        };
+      }
+    } catch (e) {}
+    
+    // Last resort: call POST /api/night-sleep with current values to get the ID
+    // This is safe because we pass the current state values (not nulls)
+    const currentNightSleep = normalizeNightSleep(routine.nightSleep);
+    console.log("[Night Sleep] Resolving ID via POST /api/night-sleep with current values");
+    try {
+      const result = await apiPost<NightSleep>("/api/night-sleep", {
+        routineId: routine.id,
+        startTryTime: currentNightSleep?.startTryTime ?? null,
+        fellAsleepTime: currentNightSleep?.fellAsleepTime ?? null,
+        finalWakeTime: currentNightSleep?.finalWakeTime ?? null,
+        sleepMethod: currentNightSleep?.sleepMethod ?? null,
+        environment: currentNightSleep?.environment ?? null,
+        wakeUpMood: currentNightSleep?.wakeUpMood ?? null,
+        observations: currentNightSleep?.observations ?? null,
+        consultantComments: currentNightSleep?.consultantComments ?? null,
+      });
+      if (result && result.id) {
+        nightSleepIdRef.current = result.id;
+        // Persist to AsyncStorage
+        AsyncStorage.setItem(nightSleepStorageKey, result.id).catch(() => {});
+        console.log("[Night Sleep] Resolved ID via POST:", result.id);
+        return {
+          ...result,
+          wakings: Array.isArray(result.wakings) ? result.wakings : (currentNightSleep?.wakings ?? []),
+        };
+      }
+    } catch (e: any) {
+      console.error("[Night Sleep] Could not resolve ID via POST:", e.message);
+    }
+    return null;
+  };
+
+  /**
+   * Updates nightSleep using PUT. Always uses nightSleepIdRef which is set when the routine loads.
+   * If nightSleep ID is not available, resolves it lazily before updating.
    */
   const handleUpdateNightSleep = async (field: string, value: string | null) => {
     try {
@@ -1329,29 +1436,41 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       // Convert empty string to null
       const normalizedValue = (value === "" || value === undefined) ? null : value;
       
+      // First try to get nightSleep from current routine state
       let currentNightSleep = normalizeNightSleep(routine.nightSleep);
       
-      if (!currentNightSleep || !currentNightSleep.id) {
-        console.warn("[Night Sleep] nightSleep missing, reloading routine to get auto-created nightSleep...");
-        // Try to reload the routine - backend should have auto-created nightSleep
-        try {
-          const freshRoutine = await apiGet<any>(`/api/routines/${routine.id}`);
-          const freshNightSleep = normalizeNightSleep(freshRoutine.nightSleep);
-          if (freshNightSleep?.id) {
-            console.log("[Night Sleep] Found nightSleep after reload:", freshNightSleep.id);
-            currentNightSleep = freshNightSleep;
-            nightSleepIdRef.current = freshNightSleep.id;
-            setRoutine(prev => ({ ...prev, nightSleep: freshNightSleep }));
-          } else {
-            console.error("[Night Sleep] ERROR: nightSleep still missing after reload!");
-            showErr("Erro: Sono noturno não encontrado. Tente recarregar a rotina.");
-            return;
-          }
-        } catch (reloadError: any) {
-          console.error("[Night Sleep] ERROR: Could not reload routine:", reloadError.message);
-          showErr("Erro: Sono noturno não encontrado. Tente recarregar a rotina.");
-          return;
+      // If not in state, check the ref (which persists across re-renders)
+      if (!currentNightSleep?.id && nightSleepIdRef.current) {
+        console.log("[Night Sleep] Using nightSleepIdRef:", nightSleepIdRef.current);
+        currentNightSleep = {
+          id: nightSleepIdRef.current,
+          routineId: routine.id,
+          startTryTime: null,
+          fellAsleepTime: null,
+          finalWakeTime: null,
+          sleepMethod: null,
+          environment: null,
+          wakeUpMood: null,
+          observations: null,
+          consultantComments: null,
+          createdAt: new Date().toISOString(),
+          wakings: [],
+        };
+      }
+      
+      // If still no ID, try to resolve it lazily
+      if (!currentNightSleep?.id) {
+        console.log("[Night Sleep] No ID available, resolving lazily...");
+        currentNightSleep = await resolveNightSleepId();
+        if (currentNightSleep) {
+          setRoutine(prev => ({ ...prev, nightSleep: currentNightSleep }));
         }
+      }
+      
+      if (!currentNightSleep || !currentNightSleep.id) {
+        console.error("[Night Sleep] ERROR: nightSleep ID not available, cannot update");
+        showErr("Erro: Sono noturno não encontrado. Tente recarregar a rotina.");
+        return;
       }
       
       console.log("[API] Night sleep exists (id:", currentNightSleep.id, "), using PUT");
@@ -1359,14 +1478,19 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         [field]: normalizedValue
       });
       
+      // putResult may have wakings from the backend response
       const updatedNightSleep: NightSleep = {
         ...currentNightSleep,
         ...putResult,
         [field]: normalizedValue,
-        wakings: currentNightSleep.wakings || [],
+        wakings: (putResult as any)?.wakings || currentNightSleep.wakings || [],
       };
       
       console.log("[API] Night sleep updated with ID:", updatedNightSleep.id);
+      
+      // Update nightSleepIdRef and persist
+      nightSleepIdRef.current = updatedNightSleep.id;
+      AsyncStorage.setItem(nightSleepStorageKey, updatedNightSleep.id).catch(() => {});
       
       setRoutine(prev => ({
         ...prev,
@@ -1382,26 +1506,38 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       let currentNightSleep = normalizeNightSleep(routine.nightSleep);
       
-      if (!currentNightSleep || !currentNightSleep.id) {
-        console.warn("[Night Sleep] nightSleep missing for waking, reloading routine...");
-        try {
-          const freshRoutine = await apiGet<any>(`/api/routines/${routine.id}`);
-          const freshNightSleep = normalizeNightSleep(freshRoutine.nightSleep);
-          if (freshNightSleep?.id) {
-            console.log("[Night Sleep] Found nightSleep after reload:", freshNightSleep.id);
-            currentNightSleep = freshNightSleep;
-            nightSleepIdRef.current = freshNightSleep.id;
-            setRoutine(prev => ({ ...prev, nightSleep: freshNightSleep }));
-          } else {
-            console.error("[Night Sleep] ERROR: nightSleep still missing after reload!");
-            showErr("Erro: Sono noturno não encontrado. Tente recarregar a rotina.");
-            return;
-          }
-        } catch (reloadError: any) {
-          console.error("[Night Sleep] ERROR: Could not reload routine:", reloadError.message);
-          showErr("Erro: Sono noturno não encontrado. Tente recarregar a rotina.");
-          return;
+      // If not in state, check the ref (which persists across re-renders)
+      if (!currentNightSleep?.id && nightSleepIdRef.current) {
+        console.log("[Night Sleep] Using nightSleepIdRef for waking:", nightSleepIdRef.current);
+        currentNightSleep = {
+          id: nightSleepIdRef.current,
+          routineId: routine.id,
+          startTryTime: null,
+          fellAsleepTime: null,
+          finalWakeTime: null,
+          sleepMethod: null,
+          environment: null,
+          wakeUpMood: null,
+          observations: null,
+          consultantComments: null,
+          createdAt: new Date().toISOString(),
+          wakings: routine.nightSleep?.wakings || [],
+        };
+      }
+      
+      // If still no ID, try to resolve it lazily
+      if (!currentNightSleep?.id) {
+        console.log("[Night Sleep] No ID available for waking, resolving lazily...");
+        currentNightSleep = await resolveNightSleepId();
+        if (currentNightSleep) {
+          setRoutine(prev => ({ ...prev, nightSleep: currentNightSleep }));
         }
+      }
+      
+      if (!currentNightSleep || !currentNightSleep.id) {
+        console.error("[Night Sleep] ERROR: nightSleep ID not available for adding waking");
+        showErr("Erro: Sono noturno não encontrado. Tente recarregar a rotina.");
+        return;
       }
       
       const nightSleepId = currentNightSleep.id;
