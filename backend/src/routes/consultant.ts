@@ -108,7 +108,7 @@ export function registerConsultantRoutes(app: App) {
       querystring: {
         type: 'object',
         properties: {
-          includeArchived: { type: 'boolean' },
+          includeArchived: { type: 'string', enum: ['true', 'false'] },
         },
       },
       response: {

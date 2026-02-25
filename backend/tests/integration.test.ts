@@ -285,7 +285,7 @@ describe("API Integration Tests", () => {
 
     // Verify baby is deleted
     const verifyRes = await authenticatedApi(`/api/babies/${babyToDelete.id}`, authToken);
-    await expectStatus(res, 404, 204); // May return 404 or just pass
+    await expectStatus(verifyRes, 404);
   });
 
   test("Delete baby with nonexistent ID returns 404", async () => {
