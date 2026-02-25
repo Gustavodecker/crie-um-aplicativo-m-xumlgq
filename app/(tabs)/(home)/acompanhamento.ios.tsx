@@ -1,7 +1,11 @@
 
-import * as ScreenOrientation from 'expo-screen-orientation';
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { IconSymbol } from "@/components/IconSymbol";
 import React, { useState, useEffect, useCallback } from "react";
+import { apiGet } from "@/utils/api";
+import { colors } from "@/styles/commonStyles";
+import * as ScreenOrientation from 'expo-screen-orientation';
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   View,
   Text,
@@ -10,10 +14,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { IconSymbol } from "@/components/IconSymbol";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { colors } from "@/styles/commonStyles";
-import { apiGet } from "@/utils/api";
 
 interface Nap {
   id: string;
@@ -41,7 +41,7 @@ interface NightWaking {
 interface NightSleep {
   id: string;
   routineId: string;
-  startTryTime: string;
+  startTryTime: string | null;
   fellAsleepTime: string | null;
   finalWakeTime: string | null;
   sleepMethod: string | null;
@@ -100,187 +100,113 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  scrollContent: {
+    padding: 16,
+  },
+  card: {
     backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
+  dayTitle: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "bold",
     color: colors.text,
   },
-  placeholder: {
-    width: 40,
+  dateText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  section: {
+    marginTop: 12,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: 6,
+    textTransform: "uppercase",
+  },
+  infoText: {
+    fontSize: 14,
+    color: colors.text,
+    marginBottom: 4,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontStyle: "italic",
+    textAlign: "center",
+    marginVertical: 20,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  errorContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
   errorText: {
     fontSize: 16,
     color: colors.error,
     textAlign: "center",
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  scrollContainer: {
-    padding: 16,
-  },
-  cardsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  dayCard: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    width: "48%",
-  },
-  dayHeader: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 2,
-  },
-  dateText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.text,
-    marginTop: 10,
-    marginBottom: 4,
-    textTransform: "uppercase",
-  },
-  infoText: {
-    fontSize: 13,
-    color: colors.text,
-    marginBottom: 2,
-    lineHeight: 18,
-  },
-  napContainer: {
-    marginTop: 6,
-    marginBottom: 6,
-  },
-  napTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: 3,
-    textTransform: "uppercase",
-  },
-  napDetail: {
-    fontSize: 13,
-    color: colors.text,
-    marginBottom: 2,
-    lineHeight: 18,
-  },
-  wakingDetail: {
-    fontSize: 13,
-    color: colors.text,
-    marginBottom: 2,
-    lineHeight: 18,
+    marginTop: 20,
   },
 });
 
-// ========== UTILITY FUNCTIONS FOR TIME CALCULATIONS ==========
-
-/**
- * Converts time string (HH:MM) to total minutes from midnight
- */
 function timeToMinutes(time: string): number {
-  if (!time || time.trim() === "") return 0;
-  const parts = time.split(":");
-  if (parts.length !== 2) return 0;
-  const hours = parseInt(parts[0], 10);
-  const minutes = parseInt(parts[1], 10);
-  if (isNaN(hours) || isNaN(minutes)) return 0;
+  const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
 }
 
-/**
- * Calculates the difference between two time strings in minutes
- * Handles overnight periods (e.g., 23:00 to 02:00 = 3 hours)
- */
 function calculateTimeDifference(startTime: string, endTime: string): number {
-  if (!startTime || !endTime) return 0;
-  
   const startMinutes = timeToMinutes(startTime);
   const endMinutes = timeToMinutes(endTime);
-  
-  if (endMinutes >= startMinutes) {
-    return endMinutes - startMinutes;
-  } else {
-    // Overnight period
-    return (24 * 60 - startMinutes) + endMinutes;
-  }
+  let diff = endMinutes - startMinutes;
+  if (diff < 0) diff += 24 * 60;
+  return diff;
 }
 
-/**
- * Formats total minutes into "HhMMmin" string (e.g., 150 -> "2h30min")
- */
 function formatTimeDuration(totalMinutes: number): string {
-  if (totalMinutes <= 0) return "0h00min";
-  
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  
   return `${hours}h${minutes.toString().padStart(2, "0")}min`;
 }
 
-/**
- * Formats date string to Brazilian format
- */
 function formatDateToBR(dateStr: string): string {
-  const [year, month, day] = dateStr.split("-");
+  const date = new Date(dateStr);
+  const day = date.getDate().toString().padStart(2, "0");
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const year = date.getFullYear();
   return `${day}/${month}/${year}`;
 }
 
-// ========== MAIN CALCULATION FUNCTION ==========
-
-/**
- * Calculates a complete daily report from raw routine data
- */
 function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
-  console.log(`Calculating report for day ${dayIndex + 1}, routine:`, routine.id);
-  
+  console.log(`[Acompanhamento iOS] Calculating report for day ${dayIndex}:`, {
+    routineId: routine.id,
+    date: routine.date,
+    wakeUpTime: routine.wakeUpTime,
+    napsCount: routine.naps?.length || 0,
+    nightSleep: routine.nightSleep,
+  });
+
   const report: DailyReport = {
-    dayNumber: dayIndex + 1,
+    dayNumber: dayIndex,
     dateDisplay: formatDateToBR(routine.date),
-    wakeUpTime: null,
+    wakeUpTime: routine.wakeUpTime || null,
     firstNapWindow: null,
     naps: [],
     daytimeSleepTotal: null,
@@ -291,243 +217,242 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
     wakings: [],
   };
 
-  // ACORDOU
-  if (routine.wakeUpTime && routine.wakeUpTime.trim() !== "") {
-    report.wakeUpTime = routine.wakeUpTime;
-  }
+  // Calculate naps
+  const sortedNaps = (routine.naps || [])
+    .filter((n) => n.fellAsleepTime && n.wakeUpTime)
+    .sort((a, b) => a.napNumber - b.napNumber);
 
-  // SONECAS & JANELAS
-  let totalDaytimeNapMinutes = 0;
-  let lastWakeTimeForWindow = routine.wakeUpTime; // For calculating windows
+  let totalDaytimeSleep = 0;
+  let previousWakeTime = routine.wakeUpTime;
 
-  if (routine.naps && routine.naps.length > 0) {
-    // Sort naps by napNumber to ensure correct order
-    const sortedNaps = [...routine.naps].sort((a, b) => a.napNumber - b.napNumber);
+  sortedNaps.forEach((nap, index) => {
+    if (!nap.fellAsleepTime || !nap.wakeUpTime) return;
 
-    sortedNaps.forEach((nap, index) => {
-      // Only process naps that have both start and wake times
-      if (nap.startTryTime && nap.wakeUpTime) {
-        const napDuration = calculateTimeDifference(nap.startTryTime, nap.wakeUpTime);
-        totalDaytimeNapMinutes += napDuration;
+    const napDuration = calculateTimeDifference(nap.fellAsleepTime, nap.wakeUpTime);
+    totalDaytimeSleep += napDuration;
 
-        const napDurationFormatted = formatTimeDuration(napDuration);
-        const displayText = `Das ${nap.startTryTime} às ${nap.wakeUpTime} (${napDurationFormatted})`;
+    const windowMinutes = previousWakeTime
+      ? calculateTimeDifference(previousWakeTime, nap.startTryTime)
+      : 0;
 
-        // Calculate window (time from last wake to this nap start)
-        let windowText = "";
-        if (lastWakeTimeForWindow && nap.startTryTime) {
-          const windowDuration = calculateTimeDifference(lastWakeTimeForWindow, nap.startTryTime);
-          windowText = `Janela: ${formatTimeDuration(windowDuration)}`;
-          
-          // Store first nap window separately
-          if (index === 0) {
-            report.firstNapWindow = formatTimeDuration(windowDuration);
-          }
-        }
+    const calculatedNap: CalculatedNap = {
+      napNumber: nap.napNumber,
+      startTime: nap.fellAsleepTime,
+      endTime: nap.wakeUpTime,
+      displayText: `Das ${nap.fellAsleepTime} às ${nap.wakeUpTime}`,
+      windowText: `Janela: ${formatTimeDuration(windowMinutes)}`,
+      durationMinutes: napDuration,
+    };
 
-        report.naps.push({
-          napNumber: nap.napNumber,
-          startTime: nap.startTryTime,
-          endTime: nap.wakeUpTime,
-          displayText,
-          windowText,
-          durationMinutes: napDuration,
-        });
+    report.naps.push(calculatedNap);
 
-        // Update last wake time for next window calculation
-        lastWakeTimeForWindow = nap.wakeUpTime;
-      }
-    });
-  }
+    if (index === 0 && previousWakeTime) {
+      report.firstNapWindow = formatTimeDuration(windowMinutes);
+    }
 
-  // DURAÇÃO DO SONO DIURNO
-  if (totalDaytimeNapMinutes > 0) {
-    report.daytimeSleepTotal = formatTimeDuration(totalDaytimeNapMinutes);
-  }
-
-  // DESPERTARES (Night Wakings)
-  let totalWakingMinutes = 0;
-  if (routine.nightSleep && routine.nightSleep.wakings && routine.nightSleep.wakings.length > 0) {
-    routine.nightSleep.wakings.forEach((waking, index) => {
-      if (waking.startTime && waking.endTime) {
-        const duration = calculateTimeDifference(waking.startTime, waking.endTime);
-        totalWakingMinutes += duration;
-        
-        const durationFormatted = formatTimeDuration(duration);
-        const displayText = `${index + 1}º – ${waking.startTime} às ${waking.endTime} (${durationFormatted})`;
-        
-        report.wakings.push({
-          index: index + 1,
-          displayText,
-          durationMinutes: duration,
-        });
-      }
-    });
-  }
-
-  // SONO NOTURNO
-  // Check if nightSleep exists and has valid data (not just an empty object)
-  const hasValidNightSleep = routine.nightSleep && 
-    typeof routine.nightSleep === 'object' && 
-    (routine.nightSleep as any).id;
-  
-  console.log(`[DEBUG] Day ${dayIndex + 1} nightSleep check:`, {
-    exists: !!routine.nightSleep,
-    hasId: hasValidNightSleep ? (routine.nightSleep as any).id : null,
-    startTryTime: routine.nightSleep?.startTryTime,
-    fellAsleepTime: routine.nightSleep?.fellAsleepTime,
-    finalWakeTime: routine.nightSleep?.finalWakeTime,
+    previousWakeTime = nap.wakeUpTime;
   });
 
-  if (hasValidNightSleep) {
-    const ns = routine.nightSleep!;
-    
-    // Start time
-    if (ns.startTryTime) {
-      report.nightSleepStart = ns.startTryTime;
-    }
-    
-    // End time
-    if (ns.finalWakeTime) {
-      report.nightSleepEnd = ns.finalWakeTime;
-    }
-
-    // Calculate brute and liquid night sleep
-    if (ns.fellAsleepTime && ns.finalWakeTime) {
-      const nightSleepBruteMinutes = calculateTimeDifference(
-        ns.fellAsleepTime,
-        ns.finalWakeTime
-      );
-      report.nightSleepBrute = formatTimeDuration(nightSleepBruteMinutes);
-      
-      const nightSleepLiquidMinutes = nightSleepBruteMinutes - totalWakingMinutes;
-      report.nightSleepLiquidTotal = formatTimeDuration(nightSleepLiquidMinutes);
-    }
+  if (totalDaytimeSleep > 0) {
+    report.daytimeSleepTotal = formatTimeDuration(totalDaytimeSleep);
   }
 
-  console.log(`Report calculated for day ${dayIndex + 1}:`, report);
+  // Calculate night sleep
+  const nightSleep = routine.nightSleep;
+  console.log(`[Acompanhamento iOS] Night sleep data for day ${dayIndex}:`, nightSleep);
+
+  if (nightSleep && nightSleep.fellAsleepTime && nightSleep.finalWakeTime) {
+    report.nightSleepStart = nightSleep.fellAsleepTime;
+    report.nightSleepEnd = nightSleep.finalWakeTime;
+
+    const bruteDuration = calculateTimeDifference(
+      nightSleep.fellAsleepTime,
+      nightSleep.finalWakeTime
+    );
+    report.nightSleepBrute = formatTimeDuration(bruteDuration);
+
+    let totalWakingMinutes = 0;
+    const wakings = nightSleep.wakings || [];
+
+    wakings.forEach((waking, index) => {
+      if (waking.startTime && waking.endTime) {
+        const wakingDuration = calculateTimeDifference(waking.startTime, waking.endTime);
+        totalWakingMinutes += wakingDuration;
+
+        const calculatedWaking: CalculatedWaking = {
+          index: index + 1,
+          displayText: `${index + 1}º - ${waking.startTime} às ${waking.endTime}`,
+          durationMinutes: wakingDuration,
+        };
+
+        report.wakings.push(calculatedWaking);
+      }
+    });
+
+    const liquidDuration = bruteDuration - totalWakingMinutes;
+    report.nightSleepLiquidTotal = formatTimeDuration(liquidDuration);
+
+    console.log(`[Acompanhamento iOS] Night sleep calculated for day ${dayIndex}:`, {
+      start: report.nightSleepStart,
+      end: report.nightSleepEnd,
+      brute: report.nightSleepBrute,
+      liquid: report.nightSleepLiquidTotal,
+      wakingsCount: report.wakings.length,
+    });
+  } else {
+    console.log(`[Acompanhamento iOS] Night sleep incomplete for day ${dayIndex}:`, {
+      fellAsleepTime: nightSleep?.fellAsleepTime,
+      finalWakeTime: nightSleep?.finalWakeTime,
+    });
+  }
+
   return report;
 }
 
-// ========== MAIN COMPONENT ==========
-
 export default function AcompanhamentoScreen() {
+  const { babyId } = useLocalSearchParams<{ babyId: string }>();
   const router = useRouter();
-  const params = useLocalSearchParams();
-  const babyId = params.babyId as string;
-  const babyName = params.babyName as string;
-
-  const [routines, setRoutines] = useState<Routine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reports, setReports] = useState<DailyReport[]>([]);
 
-  useEffect(() => {
-    console.log("Acompanhamento: Locking screen orientation to landscape");
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch((err) => {
-      console.log("Acompanhamento: Failed to lock orientation:", err);
+  const normalizeNightSleep = useCallback((raw: any): NightSleep | null => {
+    if (!raw) {
+      console.log("[Acompanhamento iOS] normalizeNightSleep: raw is null/undefined");
+      return null;
+    }
+
+    if (Array.isArray(raw)) {
+      if (raw.length === 0) {
+        console.log("[Acompanhamento iOS] normalizeNightSleep: empty array");
+        return null;
+      }
+      const sorted = [...raw].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      raw = sorted[0];
+      console.log("[Acompanhamento iOS] normalizeNightSleep: using most recent from array", raw.id);
+    }
+
+    if (typeof raw === "object" && !raw.id) {
+      console.log("[Acompanhamento iOS] normalizeNightSleep: empty object without ID");
+      return null;
+    }
+
+    const wakings = Array.isArray(raw.wakings) ? raw.wakings : [];
+
+    const normalized: NightSleep = {
+      id: raw.id,
+      routineId: raw.routineId,
+      startTryTime: raw.startTryTime || null,
+      fellAsleepTime: raw.fellAsleepTime || null,
+      finalWakeTime: raw.finalWakeTime || null,
+      observations: raw.observations || null,
+      consultantComments: raw.consultantComments || null,
+      sleepMethod: raw.sleepMethod || null,
+      environment: raw.environment || null,
+      wakeUpMood: raw.wakeUpMood || null,
+      wakings: wakings,
+      createdAt: raw.createdAt,
+      updatedAt: raw.updatedAt,
+    };
+
+    console.log("[Acompanhamento iOS] normalizeNightSleep: normalized", {
+      id: normalized.id,
+      fellAsleepTime: normalized.fellAsleepTime,
+      finalWakeTime: normalized.finalWakeTime,
+      wakingsCount: normalized.wakings?.length || 0,
     });
 
-    return () => {
-      console.log("Acompanhamento: Unlocking screen orientation");
-      ScreenOrientation.unlockAsync().catch((err) => {
-        console.log("Acompanhamento: Failed to unlock orientation:", err);
-      });
-    };
+    return normalized;
   }, []);
 
-  /**
-   * Normalizes nightSleep from the API response.
-   * The backend ORM may return nightSleep as:
-   *   - null / undefined  → no night sleep record
-   *   - {}                → empty object (Fastify schema serialization bug, treat as null)
-   *   - { id, ... }       → valid object
-   *   - [{ id, ... }]     → array with one item (ORM "with" relation quirk)
-   *   - []                → empty array (treat as null)
-   */
-  const normalizeNightSleep = (raw: any): NightSleep | null => {
-    if (!raw) return null;
-    // Handle array form (ORM "with" relation returns array)
-    if (Array.isArray(raw)) {
-      if (raw.length === 0) return null;
-      const sorted = [...raw].sort((a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      const first = sorted[0];
-      if (!first || !first.id) return null;
-      return {
-        ...first,
-        wakings: Array.isArray(first.wakings) ? first.wakings : [],
-      } as NightSleep;
-    }
-    // Handle object form
-    if (typeof raw === 'object' && raw.id) {
-      return {
-        ...raw,
-        wakings: Array.isArray(raw.wakings) ? raw.wakings : [],
-      } as NightSleep;
-    }
-    // Empty object {} or anything else without an id
-    return null;
-  };
-
   const loadData = useCallback(async () => {
-    console.log("Acompanhamento: Loading data for babyId:", babyId);
-    setLoading(true);
-    setError(null);
+    if (!babyId) {
+      setError("ID do bebê não fornecido");
+      setLoading(false);
+      return;
+    }
+
+    console.log("[Acompanhamento iOS] Loading data for babyId:", babyId);
+
     try {
-      // GET /api/routines/baby/:babyId returns full data including naps and nightSleep with wakings
-      console.log(`[API] Calling: GET /api/routines/baby/${babyId}`);
-      const routinesData = await apiGet<any[]>(`/api/routines/baby/${babyId}`);
-      console.log("Acompanhamento: Loaded routines with full data:", routinesData?.length);
-      
-      // Normalize each routine's nightSleep field.
-      // NOTE: We do NOT call POST /api/night-sleep here as a workaround because that endpoint
-      // overwrites all nightSleep fields with null values when called with just { routineId },
-      // which causes data loss. Instead, we fetch each routine individually via GET /api/routines/:id
-      // which may also return {} due to the same Fastify schema issue, but we try it as a fallback.
-      const normalized: Routine[] = await Promise.all((routinesData || []).map(async (r, i) => {
-        let nightSleep = normalizeNightSleep(r.nightSleep);
-        
-        // If nightSleep is {} (not null, but also not a valid object with id),
-        // try fetching the individual routine which may have better serialization
-        if (!nightSleep && r.nightSleep !== null && r.nightSleep !== undefined) {
-          console.log(`[DEBUG] Routine ${i + 1} (${r.date}): nightSleep is {} - fetching individual routine`);
-          try {
-            const individualRoutine = await apiGet<any>(`/api/routines/${r.id}`);
-            nightSleep = normalizeNightSleep(individualRoutine.nightSleep);
-            if (nightSleep) {
-              console.log(`[Night Sleep] Fetched from individual routine, id: ${nightSleep.id}`);
-            } else {
-              console.log(`[Night Sleep] Individual routine also returned {} for nightSleep - backend schema issue`);
-            }
-          } catch (fetchErr: any) {
-            console.warn(`[Night Sleep] Could not fetch individual routine ${r.id}:`, fetchErr.message);
-          }
-        }
-        
-        console.log(`[DEBUG] Routine ${i + 1} (${r.date}):`, {
-          id: r.id,
-          rawNightSleep: r.nightSleep,
-          rawNightSleepIsArray: Array.isArray(r.nightSleep),
-          normalizedNightSleepId: nightSleep?.id ?? null,
-          wakingsCount: nightSleep?.wakings?.length ?? 0,
+      setLoading(true);
+      setError(null);
+
+      const routinesData = await apiGet<Routine[]>(`/routines/baby/${babyId}`);
+      console.log("[Acompanhamento iOS] Fetched routines:", routinesData.length);
+
+      const routinesWithCompleteData: Routine[] = [];
+
+      for (const routine of routinesData) {
+        console.log(`[Acompanhamento iOS] Processing routine ${routine.id}:`, {
+          date: routine.date,
+          nightSleepRaw: routine.nightSleep,
         });
-        if (nightSleep) {
-          console.log(`[Night Sleep] Found for routine ${r.id}: id=${nightSleep.id}`);
+
+        let completeRoutine = { ...routine };
+
+        const nightSleepNormalized = normalizeNightSleep(routine.nightSleep);
+
+        if (!nightSleepNormalized || !nightSleepNormalized.fellAsleepTime) {
+          console.log(`[Acompanhamento iOS] Night sleep incomplete for routine ${routine.id}, fetching individual routine`);
+          
+          try {
+            const individualRoutine = await apiGet<Routine>(`/routines/${routine.id}`);
+            console.log(`[Acompanhamento iOS] Individual routine fetched for ${routine.id}:`, {
+              nightSleep: individualRoutine.nightSleep,
+            });
+
+            const individualNightSleep = normalizeNightSleep(individualRoutine.nightSleep);
+            completeRoutine = {
+              ...individualRoutine,
+              nightSleep: individualNightSleep,
+            };
+          } catch (err) {
+            console.error(`[Acompanhamento iOS] Failed to fetch individual routine ${routine.id}:`, err);
+            completeRoutine.nightSleep = nightSleepNormalized;
+          }
         } else {
-          console.log(`[Night Sleep] No night sleep found for routine ${r.id}`);
+          completeRoutine.nightSleep = nightSleepNormalized;
         }
-        return { ...r, nightSleep };
-      }));
-      
-      setRoutines(normalized);
-    } catch (err: any) {
-      console.error("Acompanhamento: Error loading data:", err);
-      setError(err.message || "Erro ao carregar dados");
+
+        routinesWithCompleteData.push(completeRoutine);
+      }
+
+      const filledRoutines = routinesWithCompleteData.filter((r) => {
+        const hasNapData = r.naps && r.naps.length > 0;
+        const hasNightSleepData =
+          r.nightSleep &&
+          (r.nightSleep.fellAsleepTime ||
+            r.nightSleep.finalWakeTime ||
+            (r.nightSleep.wakings && r.nightSleep.wakings.length > 0));
+        return hasNapData || hasNightSleepData;
+      });
+
+      console.log("[Acompanhamento iOS] Filtered routines with data:", filledRoutines.length);
+
+      const sortedRoutines = filledRoutines.sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+
+      const calculatedReports = sortedRoutines.map((routine, index) =>
+        calculateDailyReport(routine, index + 1)
+      );
+
+      console.log("[Acompanhamento iOS] Calculated reports:", calculatedReports.length);
+      setReports(calculatedReports);
+    } catch (err) {
+      console.error("[Acompanhamento iOS] Error loading data:", err);
+      setError("Erro ao carregar dados de acompanhamento");
     } finally {
       setLoading(false);
     }
-  }, [babyId]);
+  }, [babyId, normalizeNightSleep]);
+
+  useEffect(() => {
+    ScreenOrientation.unlockAsync();
+  }, []);
 
   useEffect(() => {
     if (babyId) {
@@ -535,27 +460,28 @@ export default function AcompanhamentoScreen() {
     }
   }, [babyId, loadData]);
 
-  const handleBack = () => {
-    console.log("Acompanhamento: Navigating back");
+  const handleBack = useCallback(() => {
     router.back();
-  };
+  }, [router]);
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="arrow-back"
-              size={24}
-              color={colors.text}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Acompanhamento - {babyName}</Text>
-          <View style={styles.placeholder} />
-        </View>
+      <SafeAreaView style={styles.container}>
+        <Stack.Screen
+          options={{
+            title: "Acompanhamento",
+            headerLeft: () => (
+              <TouchableOpacity onPress={handleBack}>
+                <IconSymbol
+                  ios_icon_name="chevron.left"
+                  android_material_icon_name="arrow-back"
+                  size={24}
+                  color={colors.text}
+                />
+              </TouchableOpacity>
+            ),
+          }}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -565,175 +491,129 @@ export default function AcompanhamentoScreen() {
 
   if (error) {
     return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="arrow-back"
-              size={24}
-              color={colors.text}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Acompanhamento - {babyName}</Text>
-          <View style={styles.placeholder} />
-        </View>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity onPress={loadData} style={styles.retryButton}>
-            <Text style={styles.retryButtonText}>Tentar novamente</Text>
-          </TouchableOpacity>
-        </View>
+      <SafeAreaView style={styles.container}>
+        <Stack.Screen
+          options={{
+            title: "Acompanhamento",
+            headerLeft: () => (
+              <TouchableOpacity onPress={handleBack}>
+                <IconSymbol
+                  ios_icon_name="chevron.left"
+                  android_material_icon_name="arrow-back"
+                  size={24}
+                  color={colors.text}
+                />
+              </TouchableOpacity>
+            ),
+          }}
+        />
+        <Text style={styles.errorText}>{error}</Text>
       </SafeAreaView>
     );
   }
 
-  // Routines are already normalized on load (nightSleep is either a valid object or null)
-  const normalizedRoutines = routines;
-
-  // Filter routines that have meaningful data
-  // A routine has meaningful data if it has:
-  // - At least one nap with times filled, OR
-  // - Night sleep with at least one time field filled (startTryTime, fellAsleepTime, or finalWakeTime)
-  const filledRoutines = normalizedRoutines.filter((r) => {
-    const hasNaps = r.naps && r.naps.length > 0 && r.naps.some(nap => 
-      nap.startTryTime || nap.fellAsleepTime || nap.wakeUpTime
-    );
-    
-    const hasNightSleepData = r.nightSleep !== null && r.nightSleep !== undefined &&
-      (r.nightSleep.startTryTime !== null || 
-       r.nightSleep.fellAsleepTime !== null || 
-       r.nightSleep.finalWakeTime !== null ||
-       (r.nightSleep.wakings && r.nightSleep.wakings.length > 0));
-    
-    return hasNaps || hasNightSleepData;
-  });
-
-  // Calculate reports for all filled routines
-  const dailyReports = filledRoutines.map((routine, index) => 
-    calculateDailyReport(routine, index)
-  );
-
-  console.log("Acompanhamento: Generated daily reports:", dailyReports.length);
-
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
-            size={24}
-            color={colors.text}
-          />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Acompanhamento - {babyName}</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      <ScrollView style={styles.scrollContainer}>
-        {dailyReports.length === 0 ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>
-              Nenhuma rotina preenchida ainda.
-            </Text>
-          </View>
+    <SafeAreaView style={styles.container}>
+      <Stack.Screen
+        options={{
+          title: "Acompanhamento",
+          headerLeft: () => (
+            <TouchableOpacity onPress={handleBack}>
+              <IconSymbol
+                ios_icon_name="chevron.left"
+                android_material_icon_name="arrow-back"
+                size={24}
+                color={colors.text}
+              />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        {reports.length === 0 ? (
+          <Text style={styles.emptyText}>Nenhum dado de rotina disponível</Text>
         ) : (
-          <View style={styles.cardsGrid}>
-            {dailyReports.map((report) => {
-              const dayNumberText = `DIA ${report.dayNumber}`;
-              const dateText = report.dateDisplay;
+          reports.map((report) => {
+            const dayNumberText = `DIA ${report.dayNumber}`;
+            const wakeUpText = report.wakeUpTime || "Não registrado";
+            const firstNapWindowText = report.firstNapWindow || "N/A";
 
-              return (
-                <View key={report.dayNumber} style={styles.dayCard}>
-                  <Text style={styles.dayHeader}>{dayNumberText}</Text>
-                  <Text style={styles.dateText}>{dateText}</Text>
-
-                  {/* ACORDOU */}
-                  {report.wakeUpTime && (
-                    <React.Fragment>
-                      <Text style={styles.sectionTitle}>ACORDOU:</Text>
-                      <Text style={styles.infoText}>{report.wakeUpTime}</Text>
-                    </React.Fragment>
-                  )}
-
-                  {/* JANELA DA PRIMEIRA SONECA */}
-                  {report.firstNapWindow && (
-                    <React.Fragment>
-                      <Text style={styles.sectionTitle}>JANELA DA 1ª SONECA</Text>
-                      <Text style={styles.infoText}>{report.firstNapWindow}</Text>
-                    </React.Fragment>
-                  )}
-
-                  {/* SONECAS */}
-                  {report.naps.map((nap) => {
-                    const napTitleText = `SONECA ${nap.napNumber}`;
-                    
-                    return (
-                      <View key={nap.napNumber} style={styles.napContainer}>
-                        <Text style={styles.napTitle}>{napTitleText}</Text>
-                        <Text style={styles.napDetail}>{nap.displayText}</Text>
-                        {nap.windowText && (
-                          <Text style={styles.napDetail}>{nap.windowText}</Text>
-                        )}
-                      </View>
-                    );
-                  })}
-
-                  {/* DURAÇÃO DO SONO DIURNO */}
-                  {report.daytimeSleepTotal && (
-                    <React.Fragment>
-                      <Text style={styles.sectionTitle}>SONO DIURNO</Text>
-                      <Text style={styles.infoText}>
-                        Somatória: {report.daytimeSleepTotal}
-                      </Text>
-                    </React.Fragment>
-                  )}
-
-                  {/* SONO NOTURNO */}
-                  {(report.nightSleepStart || report.nightSleepEnd || report.nightSleepBrute || report.nightSleepLiquidTotal) && (
-                    <React.Fragment>
-                      <Text style={styles.sectionTitle}>SONO NOTURNO</Text>
-                      {report.nightSleepStart && (
-                        <Text style={styles.infoText}>
-                          Início: {report.nightSleepStart}
-                        </Text>
-                      )}
-                      {report.nightSleepEnd && (
-                        <Text style={styles.infoText}>
-                          Fim: {report.nightSleepEnd}
-                        </Text>
-                      )}
-                      {report.nightSleepBrute && (
-                        <Text style={styles.infoText}>
-                          Total bruto: {report.nightSleepBrute}
-                        </Text>
-                      )}
-                      {report.nightSleepLiquidTotal && (
-                        <Text style={styles.infoText}>
-                          Total líquido: {report.nightSleepLiquidTotal}
-                        </Text>
-                      )}
-                    </React.Fragment>
-                  )}
-
-                  {/* DESPERTARES */}
-                  {report.wakings.length > 0 && (
-                    <React.Fragment>
-                      <Text style={styles.sectionTitle}>DESPERTARES</Text>
-                      {report.wakings.map((waking) => (
-                        <Text key={waking.index} style={styles.wakingDetail}>
-                          {waking.displayText}
-                        </Text>
-                      ))}
-                    </React.Fragment>
-                  )}
+            return (
+              <View key={report.dayNumber} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.dayTitle}>{dayNumberText}</Text>
+                  <Text style={styles.dateText}>{report.dateDisplay}</Text>
                 </View>
-              );
-            })}
-          </View>
+
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>ACORDOU:</Text>
+                  <Text style={styles.infoText}>{wakeUpText}</Text>
+                </View>
+
+                {report.firstNapWindow && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>JANELA DA 1ª SONECA</Text>
+                    <Text style={styles.infoText}>{firstNapWindowText}</Text>
+                  </View>
+                )}
+
+                {report.naps.length > 0 && (
+                  <View style={styles.section}>
+                    {report.naps.map((nap) => {
+                      const napTitle = `SONECA ${nap.napNumber}`;
+                      const napDurationText = formatTimeDuration(nap.durationMinutes);
+
+                      return (
+                        <React.Fragment key={nap.napNumber}>
+                          <Text style={styles.sectionTitle}>{napTitle}</Text>
+                          <Text style={styles.infoText}>{nap.displayText}</Text>
+                          <Text style={styles.infoText}>({napDurationText})</Text>
+                          <Text style={styles.infoText}>{nap.windowText}</Text>
+                        </React.Fragment>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {report.daytimeSleepTotal && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>SONO DIURNO</Text>
+                    <Text style={styles.infoText}>Total: {report.daytimeSleepTotal}</Text>
+                  </View>
+                )}
+
+                {report.nightSleepStart && report.nightSleepEnd && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>SONO NOTURNO</Text>
+                    <Text style={styles.infoText}>Início: {report.nightSleepStart}</Text>
+                    <Text style={styles.infoText}>Fim: {report.nightSleepEnd}</Text>
+                    {report.nightSleepBrute && (
+                      <Text style={styles.infoText}>Total bruto: {report.nightSleepBrute}</Text>
+                    )}
+                    {report.nightSleepLiquidTotal && (
+                      <Text style={styles.infoText}>Total líquido: {report.nightSleepLiquidTotal}</Text>
+                    )}
+                  </View>
+                )}
+
+                {report.wakings.length > 0 && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>DESPERTARES</Text>
+                    {report.wakings.map((waking) => {
+                      const wakingDurationText = `(${formatTimeDuration(waking.durationMinutes)})`;
+
+                      return (
+                        <React.Fragment key={waking.index}>
+                          <Text style={styles.infoText}>{waking.displayText}</Text>
+                          <Text style={styles.infoText}>{wakingDurationText}</Text>
+                        </React.Fragment>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            );
+          })
         )}
       </ScrollView>
     </SafeAreaView>
