@@ -105,6 +105,12 @@ export function registerConsultantRoutes(app: App) {
     schema: {
       description: 'Get all babies for consultant',
       tags: ['consultant', 'babies'],
+      querystring: {
+        type: 'object',
+        properties: {
+          includeArchived: { type: 'boolean' },
+        },
+      },
       response: {
         200: {
           type: 'array',
@@ -122,6 +128,7 @@ export function registerConsultantRoutes(app: App) {
               consultantId: { type: 'string', format: 'uuid' },
               objectives: { type: ['string', 'null'] },
               conclusion: { type: ['string', 'null'] },
+              archived: { type: 'boolean' },
               createdAt: { type: 'string', format: 'date-time' },
               ageMonths: { type: 'integer' },
               ageDays: { type: 'integer' },
@@ -141,11 +148,12 @@ export function registerConsultantRoutes(app: App) {
         401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Querystring: { includeArchived?: string } }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
-    app.logger.info({ userId: session.user.id }, 'Fetching consultant babies');
+    const includeArchived = request.query.includeArchived === 'true';
+    app.logger.info({ userId: session.user.id, includeArchived }, 'Fetching consultant babies');
 
     const consultant = await app.db.query.consultants.findFirst({
       where: eq(schema.consultants.userId, session.user.id),
@@ -155,8 +163,12 @@ export function registerConsultantRoutes(app: App) {
       return reply.status(401).send({ error: 'Not a consultant' });
     }
 
+    const whereConditions = includeArchived
+      ? eq(schema.babies.consultantId, consultant.id)
+      : and(eq(schema.babies.consultantId, consultant.id), eq(schema.babies.archived, false));
+
     const babyRecords = await app.db.query.babies.findMany({
-      where: eq(schema.babies.consultantId, consultant.id),
+      where: whereConditions,
       with: {
         contracts: {
           orderBy: (c) => [c.createdAt],

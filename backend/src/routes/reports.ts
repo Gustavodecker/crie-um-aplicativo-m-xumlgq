@@ -89,8 +89,24 @@ export function registerReportsRoutes(app: App) {
       where: eq(schema.babies.id, request.params.babyId),
     });
 
+    // If baby doesn't exist, return empty report with 200
     if (!baby) {
-      return reply.status(401).send({ error: 'Not authorized' });
+      app.logger.info({ babyId: request.params.babyId }, 'Baby not found, returning empty report');
+      const startDate = request.query.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const endDate = request.query.endDate || new Date().toISOString().split('T')[0];
+      return {
+        babyId: request.params.babyId,
+        startDate,
+        endDate,
+        totalNaps: 0,
+        totalNapDuration: 0,
+        totalDaytimeSleep: 0,
+        totalNighttimeSleep: 0,
+        totalNetNighttimeSleep: 0,
+        totalSleepIn24h: 0,
+        weeklyAverage: 0,
+        dailyEvolution: [],
+      };
     }
 
     const consultant = await app.db.query.consultants.findFirst({

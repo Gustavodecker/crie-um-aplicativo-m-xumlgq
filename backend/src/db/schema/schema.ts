@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, integer, date, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, uuid, timestamp, integer, date, uniqueIndex, index, boolean } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { user } from './auth-schema.js';
 
@@ -27,6 +27,7 @@ export const babies = pgTable('babies', {
   consultantId: uuid('consultant_id').notNull().references(() => consultants.id, { onDelete: 'cascade' }),
   objectives: text('objectives'),
   conclusion: text('conclusion'),
+  archived: boolean('archived').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('babies_consultant_id_idx').on(table.consultantId),

@@ -39,6 +39,7 @@ export function registerBabiesRoutes(app: App) {
             consultantId: { type: 'string', format: 'uuid' },
             objectives: { type: ['string', 'null'] },
             conclusion: { type: ['string', 'null'] },
+            archived: { type: 'boolean' },
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
@@ -130,6 +131,7 @@ export function registerBabiesRoutes(app: App) {
           type: 'object',
           properties: {
             id: { type: 'string', format: 'uuid' },
+            token: { type: ['string', 'null'] },
             name: { type: 'string' },
             birthDate: { type: 'string', format: 'date' },
             motherName: { type: 'string' },
@@ -139,6 +141,7 @@ export function registerBabiesRoutes(app: App) {
             consultantId: { type: 'string', format: 'uuid' },
             objectives: { type: ['string', 'null'] },
             conclusion: { type: ['string', 'null'] },
+            archived: { type: 'boolean' },
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
@@ -206,6 +209,7 @@ export function registerBabiesRoutes(app: App) {
             consultantId: { type: 'string', format: 'uuid' },
             objectives: { type: ['string', 'null'] },
             conclusion: { type: ['string', 'null'] },
+            archived: { type: 'boolean' },
             createdAt: { type: 'string', format: 'date-time' },
             ageMonths: { type: 'integer' },
             ageDays: { type: 'integer' },
@@ -260,6 +264,144 @@ export function registerBabiesRoutes(app: App) {
       ageDays = dayDiff;
     }
 
-    return { ...baby, ageMonths, ageDays };
+    return {
+      id: baby.id,
+      token: baby.token,
+      name: baby.name,
+      birthDate: baby.birthDate,
+      motherName: baby.motherName,
+      motherPhone: baby.motherPhone,
+      motherEmail: baby.motherEmail,
+      motherUserId: baby.motherUserId,
+      consultantId: baby.consultantId,
+      objectives: baby.objectives,
+      conclusion: baby.conclusion,
+      archived: baby.archived,
+      createdAt: baby.createdAt,
+      ageMonths,
+      ageDays,
+    };
+  });
+
+  // PUT /api/babies/:id/archive - Archives a baby (consultant only)
+  app.fastify.put('/api/babies/:id/archive', {
+    schema: {
+      description: 'Archive a baby',
+      tags: ['babies'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+        },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          archived: { type: 'boolean' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            token: { type: ['string', 'null'] },
+            name: { type: 'string' },
+            birthDate: { type: 'string', format: 'date' },
+            motherName: { type: 'string' },
+            motherPhone: { type: 'string' },
+            motherEmail: { type: 'string' },
+            motherUserId: { type: ['string', 'null'] },
+            consultantId: { type: 'string', format: 'uuid' },
+            objectives: { type: ['string', 'null'] },
+            conclusion: { type: ['string', 'null'] },
+            archived: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Params: { id: string }; Body: { archived: boolean } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    app.logger.info({ userId: session.user.id, babyId: request.params.id, archived: request.body.archived }, 'Archiving baby');
+
+    const baby = await app.db.query.babies.findFirst({
+      where: eq(schema.babies.id, request.params.id),
+    });
+
+    if (!baby) {
+      app.logger.warn({ babyId: request.params.id }, 'Baby not found');
+      return reply.status(404).send({ error: 'Baby not found' });
+    }
+
+    const consultant = await app.db.query.consultants.findFirst({
+      where: eq(schema.consultants.userId, session.user.id),
+    });
+
+    if (!consultant || baby.consultantId !== consultant.id) {
+      app.logger.warn({ userId: session.user.id, babyId: request.params.id }, 'Not authorized to archive baby');
+      return reply.status(401).send({ error: 'Not authorized' });
+    }
+
+    const [updated] = await app.db.update(schema.babies)
+      .set({ archived: request.body.archived })
+      .where(eq(schema.babies.id, request.params.id))
+      .returning();
+
+    app.logger.info({ babyId: updated.id, archived: updated.archived }, 'Baby archived successfully');
+    return updated;
+  });
+
+  // DELETE /api/babies/:id - Deletes baby permanently (consultant only)
+  app.fastify.delete('/api/babies/:id', {
+    schema: {
+      description: 'Delete a baby permanently',
+      tags: ['babies'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+        },
+      },
+      response: {
+        204: { type: 'null' },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    app.logger.info({ userId: session.user.id, babyId: request.params.id }, 'Deleting baby');
+
+    const baby = await app.db.query.babies.findFirst({
+      where: eq(schema.babies.id, request.params.id),
+    });
+
+    if (!baby) {
+      app.logger.warn({ babyId: request.params.id }, 'Baby not found');
+      return reply.status(404).send({ error: 'Baby not found' });
+    }
+
+    const consultant = await app.db.query.consultants.findFirst({
+      where: eq(schema.consultants.userId, session.user.id),
+    });
+
+    if (!consultant || baby.consultantId !== consultant.id) {
+      app.logger.warn({ userId: session.user.id, babyId: request.params.id }, 'Not authorized to delete baby');
+      return reply.status(401).send({ error: 'Not authorized' });
+    }
+
+    await app.db.delete(schema.babies).where(eq(schema.babies.id, request.params.id));
+
+    app.logger.info({ babyId: request.params.id }, 'Baby deleted successfully');
+    return reply.status(204).send();
   });
 }
