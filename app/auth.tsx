@@ -17,7 +17,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { LoadingButton } from "@/components/LoadingButton";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { apiPost } from "@/utils/api";
+import { apiPost, apiGet } from "@/utils/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors, typography, spacing, shadows } from "@/styles/commonStyles";
@@ -67,8 +67,27 @@ export default function AuthScreen() {
       if (isLogin) {
         console.log("Attempting sign in with email:", email);
         await signInWithEmail(email, password);
-        console.log("Sign in successful, navigating to home");
-        router.replace("/(tabs)/(home)");
+        console.log("Sign in successful, checking user role...");
+        
+        // Check user role after login
+        let userRole: UserRole = "mother"; // Default to mother
+        try {
+          await apiGet("/api/consultant/profile");
+          userRole = "consultant";
+          console.log("USER ROLE: consultant");
+        } catch (error) {
+          console.log("USER ROLE: mother");
+          userRole = "mother";
+        }
+        
+        // Redirect based on role
+        if (userRole === "mother") {
+          console.log("Redirecting to mother dashboard");
+          router.replace("/(tabs)/(home)/mother-dashboard");
+        } else {
+          console.log("Redirecting to consultant dashboard (home)");
+          router.replace("/(tabs)/(home)");
+        }
       } else {
         console.log("Attempting sign up with email:", email, "role:", role);
         await signUpWithEmail(email, password, name);
@@ -77,24 +96,28 @@ export default function AuthScreen() {
           console.log("[API] Initializing consultant profile");
           try {
             await apiPost("/api/init/consultant", { name });
+            console.log("USER ROLE: consultant");
           } catch (initErr) {
             console.warn("[API] Consultant init error (may already exist):", initErr);
           }
+          console.log("Redirecting to consultant dashboard (home)");
+          router.replace("/(tabs)/(home)");
         } else if (role === "mother" && babyToken) {
           console.log("[API] Linking mother to baby with token:", babyToken);
           try {
             const response = await apiPost<{ id: string }>("/api/init/mother", { token: babyToken.toUpperCase() });
             console.log("[API] Mother linked successfully, baby ID:", response.id);
             await AsyncStorage.setItem("motherBabyId", response.id);
+            console.log("USER ROLE: mother");
           } catch (initErr: any) {
             console.error("[API] Mother init error:", initErr);
             showErrorModal(initErr.message || "Erro ao vincular bebê. Verifique o código.");
             setLoading(false);
             return;
           }
+          console.log("Redirecting to mother dashboard");
+          router.replace("/(tabs)/(home)/mother-dashboard");
         }
-        console.log("Sign up successful, navigating to home");
-        router.replace("/(tabs)/(home)");
       }
     } catch (error: any) {
       console.error("Auth error:", error);
