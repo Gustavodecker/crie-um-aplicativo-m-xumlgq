@@ -314,6 +314,17 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Create contract without required fields returns 400", async () => {
+    const res = await authenticatedApi("/api/contracts", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyId: babyId,
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ===== Routines =====
 
   test("Create routine", async () => {
@@ -690,7 +701,7 @@ describe("API Integration Tests", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        routineId: routineId,
+        // Missing routineId - should fail
       }),
     });
     await expectStatus(res, 400);
@@ -1197,5 +1208,11 @@ describe("API Integration Tests", () => {
   test("Get mother baby without auth returns 401", async () => {
     const res = await api("/api/mother/baby");
     await expectStatus(res, 401);
+  });
+
+  test("Get mother baby when not registered returns 404", async () => {
+    const { token: newMotherToken } = await signUpTestUser();
+    const res = await authenticatedApi("/api/mother/baby", newMotherToken);
+    await expectStatus(res, 404);
   });
 });

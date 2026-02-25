@@ -84,7 +84,7 @@ export const naps = pgTable('naps', {
 export const nightSleep = pgTable('night_sleep', {
   id: uuid('id').primaryKey().defaultRandom(),
   routineId: uuid('routine_id').notNull().references(() => dailyRoutines.id, { onDelete: 'cascade' }),
-  startTryTime: text('start_try_time').notNull(), // HH:mm
+  startTryTime: text('start_try_time'), // HH:mm
   fellAsleepTime: text('fell_asleep_time'), // HH:mm
   finalWakeTime: text('final_wake_time'), // HH:mm
   sleepMethod: text('sleep_method'),

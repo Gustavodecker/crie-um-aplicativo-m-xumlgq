@@ -13,10 +13,10 @@ export function registerNightSleepRoutes(app: App) {
       tags: ['night-sleep'],
       body: {
         type: 'object',
-        required: ['routineId', 'startTryTime'],
+        required: ['routineId'],
         properties: {
           routineId: { type: 'string', format: 'uuid' },
-          startTryTime: { type: 'string' },
+          startTryTime: { type: ['string', 'null'] },
           fellAsleepTime: { type: ['string', 'null'] },
           finalWakeTime: { type: ['string', 'null'] },
           sleepMethod: { type: ['string', 'null'] },
@@ -32,7 +32,7 @@ export function registerNightSleepRoutes(app: App) {
           properties: {
             id: { type: 'string', format: 'uuid' },
             routineId: { type: 'string', format: 'uuid' },
-            startTryTime: { type: 'string' },
+            startTryTime: { type: ['string', 'null'] },
             fellAsleepTime: { type: ['string', 'null'] },
             finalWakeTime: { type: ['string', 'null'] },
             sleepMethod: { type: ['string', 'null'] },
@@ -47,7 +47,7 @@ export function registerNightSleepRoutes(app: App) {
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: { routineId: string; startTryTime: string; fellAsleepTime?: string | null; finalWakeTime?: string | null; sleepMethod?: string | null; environment?: string | null; wakeUpMood?: string | null; observations?: string | null; consultantComments?: string | null } }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: { routineId: string; startTryTime?: string | null; fellAsleepTime?: string | null; finalWakeTime?: string | null; sleepMethod?: string | null; environment?: string | null; wakeUpMood?: string | null; observations?: string | null; consultantComments?: string | null } }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
@@ -86,9 +86,9 @@ export function registerNightSleepRoutes(app: App) {
       // Update existing record
       const [updated] = await app.db.update(schema.nightSleep)
         .set({
-          startTryTime: request.body.startTryTime,
-          fellAsleepTime: request.body.fellAsleepTime || null,
-          finalWakeTime: request.body.finalWakeTime || null,
+          startTryTime: (request.body.startTryTime && request.body.startTryTime.trim()) ? request.body.startTryTime : null,
+          fellAsleepTime: (request.body.fellAsleepTime && request.body.fellAsleepTime.trim()) ? request.body.fellAsleepTime : null,
+          finalWakeTime: (request.body.finalWakeTime && request.body.finalWakeTime.trim()) ? request.body.finalWakeTime : null,
           sleepMethod: request.body.sleepMethod || null,
           environment: request.body.environment || null,
           wakeUpMood: request.body.wakeUpMood || null,
@@ -103,9 +103,9 @@ export function registerNightSleepRoutes(app: App) {
       // Create new record
       const [created] = await app.db.insert(schema.nightSleep).values({
         routineId: request.body.routineId,
-        startTryTime: request.body.startTryTime,
-        fellAsleepTime: request.body.fellAsleepTime || null,
-        finalWakeTime: request.body.finalWakeTime || null,
+        startTryTime: (request.body.startTryTime && request.body.startTryTime.trim()) ? request.body.startTryTime : null,
+        fellAsleepTime: (request.body.fellAsleepTime && request.body.fellAsleepTime.trim()) ? request.body.fellAsleepTime : null,
+        finalWakeTime: (request.body.finalWakeTime && request.body.finalWakeTime.trim()) ? request.body.finalWakeTime : null,
         sleepMethod: request.body.sleepMethod || null,
         environment: request.body.environment || null,
         wakeUpMood: request.body.wakeUpMood || null,
@@ -134,7 +134,7 @@ export function registerNightSleepRoutes(app: App) {
       body: {
         type: 'object',
         properties: {
-          startTryTime: { type: 'string' },
+          startTryTime: { type: ['string', 'null'] },
           fellAsleepTime: { type: ['string', 'null'] },
           finalWakeTime: { type: ['string', 'null'] },
           sleepMethod: { type: ['string', 'null'] },
@@ -150,7 +150,7 @@ export function registerNightSleepRoutes(app: App) {
           properties: {
             id: { type: 'string', format: 'uuid' },
             routineId: { type: 'string', format: 'uuid' },
-            startTryTime: { type: 'string' },
+            startTryTime: { type: ['string', 'null'] },
             fellAsleepTime: { type: ['string', 'null'] },
             finalWakeTime: { type: ['string', 'null'] },
             sleepMethod: { type: ['string', 'null'] },
@@ -165,7 +165,7 @@ export function registerNightSleepRoutes(app: App) {
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Params: { id: string }; Body: Partial<{ startTryTime: string; fellAsleepTime: string | null; finalWakeTime: string | null; sleepMethod: string | null; environment: string | null; wakeUpMood: string | null; observations: string | null; consultantComments: string | null }> }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Params: { id: string }; Body: Partial<{ startTryTime: string | null; fellAsleepTime: string | null; finalWakeTime: string | null; sleepMethod: string | null; environment: string | null; wakeUpMood: string | null; observations: string | null; consultantComments: string | null }> }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
@@ -195,8 +195,20 @@ export function registerNightSleepRoutes(app: App) {
       return reply.status(401).send({ error: 'Not authorized' });
     }
 
+    // Normalize time fields: convert empty strings to null
+    const updateData: any = { ...request.body };
+    if ('startTryTime' in updateData && updateData.startTryTime !== null && (!updateData.startTryTime || !updateData.startTryTime.trim())) {
+      updateData.startTryTime = null;
+    }
+    if ('fellAsleepTime' in updateData && updateData.fellAsleepTime !== null && (!updateData.fellAsleepTime || !updateData.fellAsleepTime.trim())) {
+      updateData.fellAsleepTime = null;
+    }
+    if ('finalWakeTime' in updateData && updateData.finalWakeTime !== null && (!updateData.finalWakeTime || !updateData.finalWakeTime.trim())) {
+      updateData.finalWakeTime = null;
+    }
+
     const [updated] = await app.db.update(schema.nightSleep)
-      .set(request.body)
+      .set(updateData)
       .where(eq(schema.nightSleep.id, request.params.id))
       .returning();
 
