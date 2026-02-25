@@ -121,6 +121,19 @@ export function createTestFile(filename = "test.txt", content = "test file conte
   if (filename.endsWith(".pdf")) {
     type = "application/pdf";
   }
+  // For image files, use the correct MIME type
+  if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) {
+    type = "image/jpeg";
+  }
+  if (filename.endsWith(".png")) {
+    type = "image/png";
+  }
+  if (filename.endsWith(".gif")) {
+    type = "image/gif";
+  }
+  if (filename.endsWith(".webp")) {
+    type = "image/webp";
+  }
   return new File([content], filename, { type });
 }
 
