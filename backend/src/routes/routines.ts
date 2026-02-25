@@ -108,7 +108,7 @@ export function registerRoutinesRoutes(app: App) {
       createdAt: routine.createdAt,
       updatedAt: routine.updatedAt,
       naps: routine.naps,
-      nightSleep: routine.nightSleep && routine.nightSleep.length > 0 ? routine.nightSleep[0] : null,
+      nightSleep: routine.nightSleep || null,
     }));
   });
 
@@ -178,8 +178,6 @@ export function registerRoutinesRoutes(app: App) {
       return reply.status(401).send({ error: 'Not authorized' });
     }
 
-    const nightSleepRecord = routine.nightSleep && routine.nightSleep.length > 0 ? routine.nightSleep[0] : null;
-
     return {
       id: routine.id,
       babyId: routine.babyId,
@@ -190,7 +188,7 @@ export function registerRoutinesRoutes(app: App) {
       createdAt: routine.createdAt,
       updatedAt: routine.updatedAt,
       naps: routine.naps,
-      nightSleep: nightSleepRecord,
+      nightSleep: routine.nightSleep || null,
     };
   });
 
