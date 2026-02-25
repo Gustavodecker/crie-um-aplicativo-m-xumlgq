@@ -400,26 +400,17 @@ export default function AcompanhamentoScreen() {
     setLoading(true);
     setError(null);
     try {
+      // GET /api/routines/baby/:babyId now returns full data including naps and nightSleep with wakings
       console.log(`[API] Calling: GET /api/routines/baby/${babyId}`);
-      const basicRoutines = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
-      console.log("Acompanhamento: Loaded basic routines:", basicRoutines?.length);
+      const routinesData = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
+      console.log("Acompanhamento: Loaded routines with full data:", routinesData?.length);
       
-      // Load full details for each routine (includes naps and nightSleep)
-      const fullRoutines = await Promise.all(
-        (basicRoutines || []).map(async (r) => {
-          try {
-            console.log(`[API] Calling: GET /api/routines/${r.id}`);
-            const full = await apiGet<Routine>(`/api/routines/${r.id}`);
-            return full;
-          } catch (err) {
-            console.warn(`Acompanhamento: Failed to load full routine ${r.id}:`, err);
-            return r;
-          }
-        })
-      );
+      // Log nightSleep data for debugging
+      (routinesData || []).forEach((r, i) => {
+        console.log(`Acompanhamento: Routine ${i + 1} (${r.date}) - nightSleep:`, r.nightSleep ? `id=${r.nightSleep.id}, wakings=${r.nightSleep.wakings?.length ?? 0}` : 'null');
+      });
       
-      console.log("Acompanhamento: Loaded full routines:", fullRoutines.length);
-      setRoutines(fullRoutines);
+      setRoutines(routinesData || []);
     } catch (err: any) {
       console.error("Acompanhamento: Error loading data:", err);
       setError(err.message || "Erro ao carregar dados");
@@ -488,8 +479,16 @@ export default function AcompanhamentoScreen() {
     );
   }
 
+  // Normalize routines: treat empty object {} as null for nightSleep
+  const normalizedRoutines = routines.map((r) => ({
+    ...r,
+    nightSleep: r.nightSleep && typeof r.nightSleep === 'object' && (r.nightSleep as any).id
+      ? r.nightSleep
+      : null,
+  }));
+
   // Filter routines that have meaningful data
-  const filledRoutines = routines.filter((r) => {
+  const filledRoutines = normalizedRoutines.filter((r) => {
     const hasWakeUp = r.wakeUpTime && r.wakeUpTime.trim() !== "";
     const hasNaps = r.naps && r.naps.length > 0;
     const hasNightSleep = r.nightSleep !== null && r.nightSleep !== undefined;

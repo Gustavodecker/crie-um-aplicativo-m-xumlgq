@@ -137,24 +137,25 @@ export default function ReportsLandscapeScreen() {
       const reportData = await apiGet<Report>(`/api/reports/baby/${babyId}?startDate=${startDate}&endDate=${endDate}`);
       setReport(reportData);
       
-      console.log("[API] Loading routines for baby:", babyId);
-      const basicRoutines = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
-      const filteredBasic = basicRoutines.filter(r => r.date >= startDate && r.date <= endDate);
+      // GET /api/routines/baby/:babyId now returns full data including naps and nightSleep with wakings
+      console.log("[API] Loading routines with full data for baby:", babyId);
+      const allRoutines = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
+      const filteredRoutines = allRoutines.filter(r => r.date >= startDate && r.date <= endDate);
       
-      // Load full details for each routine (includes naps and nightSleep)
-      const fullRoutines = await Promise.all(
-        filteredBasic.map(async (r) => {
-          try {
-            const full = await apiGet<Routine>(`/api/routines/${r.id}`);
-            return full;
-          } catch (err) {
-            console.warn(`Failed to load full routine ${r.id}:`, err);
-            return r;
-          }
-        })
-      );
+      // Normalize routines: treat empty object {} as null for nightSleep
+      const normalizedRoutines = filteredRoutines.map((r) => ({
+        ...r,
+        nightSleep: r.nightSleep && typeof r.nightSleep === 'object' && (r.nightSleep as any).id
+          ? r.nightSleep
+          : null,
+      }));
+
+      // Log nightSleep data for debugging
+      normalizedRoutines.forEach((r, i) => {
+        console.log(`[API] Routine ${i + 1} (${r.date}) - nightSleep:`, r.nightSleep ? `id=${r.nightSleep.id}, wakings=${r.nightSleep.wakings?.length ?? 0}` : 'null');
+      });
       
-      setRoutines(fullRoutines.sort((a, b) => a.date.localeCompare(b.date)));
+      setRoutines(normalizedRoutines.sort((a, b) => a.date.localeCompare(b.date)));
     } catch (error: any) {
       console.error("Error loading data:", error);
     } finally {
@@ -350,8 +351,8 @@ export default function ReportsLandscapeScreen() {
                       </View>
                     )}
 
-                    {/* Night sleep */}
-                    {routine.nightSleep && (routine.nightSleep as any).id && (
+                    {/* Night sleep - normalize empty object {} to null */}
+                    {routine.nightSleep && typeof routine.nightSleep === 'object' && (routine.nightSleep as any).id && (
                       <View style={styles.subsection}>
                         <Text style={styles.subsectionTitle}>Sono Noturno</Text>
                         <View style={styles.napCard}>
