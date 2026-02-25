@@ -734,11 +734,15 @@ function BabiesListScreen({
               <IconSymbol ios_icon_name="moon.stars.fill" android_material_icon_name="bedtime" size={48} color={colors.primary} />
             </View>
             <Text style={styles.welcomeTitle}>
-              {isConsultant ? "Bem-vinda ao seu Consultório de Sono! 🌙" : "Bem-vinda, Mamãe! 🌙"}
+              {isConsultant 
+                ? (showArchived ? "Nenhum bebê arquivado" : "Bem-vinda ao seu Consultório de Sono! 🌙")
+                : "Bem-vinda, Mamãe! 🌙"}
             </Text>
             <Text style={styles.welcomeText}>
               {isConsultant 
-                ? "Comece cadastrando seu primeiro bebê para iniciar o acompanhamento de rotina de sono."
+                ? (showArchived 
+                    ? "Bebês arquivados aparecerão aqui quando você arquivar algum bebê da lista principal."
+                    : "Comece cadastrando seu primeiro bebê para iniciar o acompanhamento de rotina de sono.")
                 : "Sua consultora de sono irá cadastrar o bebê e gerenciar as rotinas. Você receberá as orientações e poderá acompanhar o progresso aqui."}
             </Text>
             {!isConsultant && (
@@ -1539,29 +1543,287 @@ function RoutineDetailScreen({ isConsultant, baby, routine, dayNumber, onBack, s
   );
 }
 
-// ─── Placeholder Screens (to fix linting errors) ──────────────────────────────
+// ─── Orientations Screen ──────────────────────────────────────────────────────
 
 function OrientationsScreen({ isConsultant, baby, onBack, showErr }: { isConsultant: boolean; baby: Baby; onBack: () => void; showErr: (m: string) => void }) {
+  const [orientations, setOrientations] = useState<Orientation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingOrientation, setEditingOrientation] = useState<Orientation | null>(null);
+  const [orientationText, setOrientationText] = useState("");
+  const [results, setResults] = useState("");
+  const [saveLoading, setSaveLoading] = useState(false);
+
+  const loadOrientations = useCallback(async () => {
+    console.log("[API] Loading orientations for baby:", baby.id);
+    try {
+      const data = await apiGet<Orientation[]>(`/api/orientations/baby/${baby.id}`);
+      console.log("[API] Orientations loaded:", data.length);
+      const sorted = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setOrientations(sorted);
+    } catch (error: any) {
+      console.error("Error loading orientations:", error);
+      showErr(error.message || "Erro ao carregar orientações");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [baby.id, showErr]);
+
+  useEffect(() => { loadOrientations(); }, [loadOrientations]);
+
+  const handleAddOrientation = async () => {
+    if (!orientationText) {
+      showErr("Por favor, preencha o texto da orientação");
+      return;
+    }
+    setSaveLoading(true);
+    try {
+      console.log("[API] Creating orientation for baby:", baby.id);
+      await apiPost("/api/orientations", {
+        babyId: baby.id,
+        date: new Date().toISOString().split("T")[0],
+        orientationText,
+        results: results || null,
+      });
+      setShowAddModal(false);
+      setOrientationText("");
+      setResults("");
+      loadOrientations();
+    } catch (error: any) {
+      showErr(error.message || "Erro ao criar orientação");
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  const handleEditOrientation = async () => {
+    if (!editingOrientation || !orientationText) {
+      showErr("Por favor, preencha o texto da orientação");
+      return;
+    }
+    setSaveLoading(true);
+    try {
+      console.log("[API] Updating orientation:", editingOrientation.id);
+      await apiPut(`/api/orientations/${editingOrientation.id}`, {
+        orientationText,
+        results: results || null,
+      });
+      setShowEditModal(false);
+      setEditingOrientation(null);
+      setOrientationText("");
+      setResults("");
+      loadOrientations();
+    } catch (error: any) {
+      showErr(error.message || "Erro ao atualizar orientação");
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
+  const openEditModal = (orientation: Orientation) => {
+    setEditingOrientation(orientation);
+    setOrientationText(orientation.orientationText);
+    setResults(orientation.results || "");
+    setShowEditModal(true);
+  };
+
+  if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Stack.Screen options={{ headerShown: true, title: "Orientações", headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerLeft: () => (
-        <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}><IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} /></TouchableOpacity>
-      )}} />
-      <View style={styles.loadingContainer}>
-        <Text style={styles.infoCardText}>Orientações em desenvolvimento...</Text>
-      </View>
+      <Stack.Screen options={{ 
+        headerShown: true, 
+        title: "Orientações", 
+        headerStyle: { backgroundColor: colors.background }, 
+        headerTintColor: colors.text, 
+        headerLeft: () => (
+          <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}>
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        )
+      }} />
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadOrientations(); }} />}
+      >
+        {orientations.length === 0 ? (
+          <View style={styles.emptyState}>
+            <IconSymbol ios_icon_name="list.bullet.clipboard.fill" android_material_icon_name="assignment" size={64} color={colors.textSecondary} />
+            <Text style={styles.emptyStateText}>Nenhuma orientação cadastrada</Text>
+            <Text style={styles.emptyStateSubtext}>
+              {isConsultant ? "Toque em + para adicionar uma orientação" : "As orientações da consultora aparecerão aqui"}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.babiesList}>
+            {orientations.map((orientation) => (
+              <TouchableOpacity 
+                key={orientation.id} 
+                style={styles.babyCard}
+                onPress={() => isConsultant && openEditModal(orientation)}
+              >
+                <View style={styles.babyCardHeader}>
+                  <View style={styles.babyIcon}>
+                    <IconSymbol ios_icon_name="list.bullet.clipboard.fill" android_material_icon_name="assignment" size={24} color={colors.secondary} />
+                  </View>
+                  <View style={styles.babyInfo}>
+                    <Text style={styles.babyName}>{formatDateToBR(orientation.date)}</Text>
+                    <Text style={styles.motherName} numberOfLines={2}>{orientation.orientationText}</Text>
+                  </View>
+                  {isConsultant && (
+                    <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={20} color={colors.textSecondary} />
+                  )}
+                </View>
+                {orientation.results && (
+                  <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border }}>
+                    <Text style={styles.formSectionTitle}>Resultados:</Text>
+                    <Text style={styles.infoCardText}>{orientation.results}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {isConsultant && (
+          <TouchableOpacity style={styles.addButton} onPress={() => setShowAddModal(true)}>
+            <IconSymbol ios_icon_name="plus.circle.fill" android_material_icon_name="add-circle" size={24} color="#FFF" />
+            <Text style={styles.addButtonText}>Nova Orientação</Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+
+      {isConsultant && (
+        <>
+          <Modal visible={showAddModal} transparent animationType="slide" onRequestClose={() => setShowAddModal(false)}>
+            <View style={styles.slideModalOverlay}>
+              <View style={styles.slideModalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Nova Orientação</Text>
+                  <TouchableOpacity onPress={() => setShowAddModal(false)}>
+                    <Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                  <Text style={styles.formSectionTitle}>Orientação *</Text>
+                  <TextInput
+                    style={[styles.formInput, styles.textArea]}
+                    placeholder="Descreva a orientação para a mãe..."
+                    value={orientationText}
+                    onChangeText={setOrientationText}
+                    multiline
+                    numberOfLines={6}
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                  <Text style={styles.formSectionTitle}>Resultados (opcional)</Text>
+                  <TextInput
+                    style={[styles.formInput, styles.textArea]}
+                    placeholder="Registre os resultados observados..."
+                    value={results}
+                    onChangeText={setResults}
+                    multiline
+                    numberOfLines={4}
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                  <TouchableOpacity
+                    style={[styles.addButton, saveLoading && { opacity: 0.6 }]}
+                    onPress={handleAddOrientation}
+                    disabled={saveLoading}
+                  >
+                    {saveLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar Orientação</Text>}
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+
+          <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => setShowEditModal(false)}>
+            <View style={styles.slideModalOverlay}>
+              <View style={styles.slideModalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Editar Orientação</Text>
+                  <TouchableOpacity onPress={() => setShowEditModal(false)}>
+                    <Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                  <Text style={styles.formSectionTitle}>Orientação *</Text>
+                  <TextInput
+                    style={[styles.formInput, styles.textArea]}
+                    placeholder="Descreva a orientação para a mãe..."
+                    value={orientationText}
+                    onChangeText={setOrientationText}
+                    multiline
+                    numberOfLines={6}
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                  <Text style={styles.formSectionTitle}>Resultados (opcional)</Text>
+                  <TextInput
+                    style={[styles.formInput, styles.textArea]}
+                    placeholder="Registre os resultados observados..."
+                    value={results}
+                    onChangeText={setResults}
+                    multiline
+                    numberOfLines={4}
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                  <TouchableOpacity
+                    style={[styles.addButton, saveLoading && { opacity: 0.6 }]}
+                    onPress={handleEditOrientation}
+                    disabled={saveLoading}
+                  >
+                    {saveLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.addButtonText}>Salvar Alterações</Text>}
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+        </>
+      )}
     </SafeAreaView>
   );
 }
 
+// ─── Reports Screen ───────────────────────────────────────────────────────────
+
 function ReportsScreen({ baby, onBack, showErr }: { baby: Baby; onBack: () => void; showErr: (m: string) => void }) {
+  const router = useRouter();
+
+  const handleOpenReports = () => {
+    console.log("[Navigation] Opening reports landscape for baby:", baby.id, baby.name);
+    router.push({
+      pathname: "/(tabs)/(home)/reports-landscape",
+      params: { babyId: baby.id, babyName: baby.name },
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Stack.Screen options={{ headerShown: true, title: "Relatórios", headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerLeft: () => (
-        <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}><IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} /></TouchableOpacity>
-      )}} />
+      <Stack.Screen options={{ 
+        headerShown: true, 
+        title: "Relatórios", 
+        headerStyle: { backgroundColor: colors.background }, 
+        headerTintColor: colors.text, 
+        headerLeft: () => (
+          <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}>
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        )
+      }} />
       <View style={styles.loadingContainer}>
-        <Text style={styles.infoCardText}>Relatórios em desenvolvimento...</Text>
+        <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar-chart" size={64} color={colors.success} />
+        <Text style={[styles.emptyStateText, { marginTop: 16 }]}>Relatórios de Sono</Text>
+        <Text style={[styles.emptyStateSubtext, { marginBottom: 24 }]}>
+          Visualize gráficos e estatísticas detalhadas do sono do bebê
+        </Text>
+        <TouchableOpacity style={styles.addButton} onPress={handleOpenReports}>
+          <IconSymbol ios_icon_name="chart.bar.fill" android_material_icon_name="bar-chart" size={24} color="#FFF" />
+          <Text style={styles.addButtonText}>Ver Relatórios Completos</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
