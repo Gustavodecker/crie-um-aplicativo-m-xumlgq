@@ -968,15 +968,25 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const [nightSleepConsultantComments, setNightSleepConsultantComments] = useState("");
 
   // Ref to always have the latest nightSleep id for auto-save
-  const nightSleepIdRef = useRef<string | null>(initialRoutine.nightSleep?.id || null);
+  const nightSleepIdRef = useRef<string | null>(null);
+  
+  // Initialize nightSleepIdRef from initialRoutine
+  useEffect(() => {
+    const initialNightSleep = initialRoutine.nightSleep;
+    if (initialNightSleep && typeof initialNightSleep === 'object' && 'id' in initialNightSleep && initialNightSleep.id) {
+      nightSleepIdRef.current = initialNightSleep.id;
+      console.log("[Night Sleep Ref] Initialized nightSleepIdRef from initialRoutine to:", initialNightSleep.id);
+    }
+  }, []);
   
   // Keep nightSleepIdRef in sync with routine.nightSleep
   useEffect(() => {
-    if (routine.nightSleep?.id) {
-      nightSleepIdRef.current = routine.nightSleep.id;
-      console.log("[Night Sleep Ref] Updated nightSleepIdRef to:", routine.nightSleep.id);
+    const currentNightSleep = routine.nightSleep;
+    if (currentNightSleep && typeof currentNightSleep === 'object' && 'id' in currentNightSleep && currentNightSleep.id) {
+      nightSleepIdRef.current = currentNightSleep.id;
+      console.log("[Night Sleep Ref] Updated nightSleepIdRef to:", currentNightSleep.id);
     }
-  }, [routine.nightSleep?.id]);
+  }, [routine.nightSleep]);
 
   // Auto-save functions with debounce
   const autoSaveRoutineObservations = useDebounce(async (text: string) => {
@@ -1047,12 +1057,18 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       console.log("[API] Loading routine:", initialRoutine.id);
       const data = await apiGet<Routine>(`/api/routines/${initialRoutine.id}`);
-      console.log("[API] Routine loaded successfully:", data.id, "nightSleep:", data.nightSleep ? `id=${(data.nightSleep as any).id}` : "null");
       
       // Validate that nightSleep has an id field (it's a real object, not just a placeholder)
-      const apiNightSleep: NightSleep | null = (data.nightSleep && (data.nightSleep as any).id)
-        ? (data.nightSleep as NightSleep)
-        : null;
+      // The backend sometimes returns {} instead of null for nightSleep
+      const apiNightSleep: NightSleep | null = 
+        (data.nightSleep && 
+         typeof data.nightSleep === 'object' && 
+         'id' in data.nightSleep && 
+         data.nightSleep.id)
+          ? (data.nightSleep as NightSleep)
+          : null;
+      
+      console.log("[API] Routine loaded successfully:", data.id, "nightSleep:", apiNightSleep ? `id=${apiNightSleep.id}` : "null or empty object");
       
       // Update the nightSleepIdRef with the latest id from API
       if (apiNightSleep?.id && !preserveNightSleep) {
@@ -1191,8 +1207,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
   const handleAddOrUpdateNightSleep = async () => {
     try {
-      if (routine.nightSleep && routine.nightSleep.id) {
-        console.log("[API] Night sleep already exists:", routine.nightSleep.id, "- just expanding");
+      const currentNightSleep = routine.nightSleep;
+      if (currentNightSleep && typeof currentNightSleep === 'object' && 'id' in currentNightSleep && currentNightSleep.id) {
+        console.log("[API] Night sleep already exists:", currentNightSleep.id, "- just expanding");
         setExpandedNightSleep(true);
         return;
       }
@@ -1238,7 +1255,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       const currentNightSleep = routine.nightSleep;
       let updatedNightSleep: NightSleep;
 
-      if (currentNightSleep && currentNightSleep.id) {
+      if (currentNightSleep && typeof currentNightSleep === 'object' && 'id' in currentNightSleep && currentNightSleep.id) {
         console.log("[API] Night sleep exists (id:", currentNightSleep.id, "), using PUT");
         const putResult = await apiPut<NightSleep>(`/api/night-sleep/${currentNightSleep.id}`, {
           [field]: normalizedValue
@@ -1282,7 +1299,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
   const handleAddWaking = async () => {
     try {
-      let nightSleepId = routine.nightSleep?.id;
+      let nightSleepId = nightSleepIdRef.current;
       let currentNightSleep = routine.nightSleep;
       
       if (!nightSleepId) {
@@ -1460,11 +1477,14 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       }
     } else if (field.startsWith("nightSleep_")) {
       const nsField = field.split("_")[1];
-      const timeValue = routine.nightSleep?.[nsField as keyof NightSleep];
-      if (timeValue && typeof timeValue === "string" && timeValue.includes(":")) {
-        const [h, m] = timeValue.split(":").map(Number);
-        if (!isNaN(h) && !isNaN(m)) {
-          initialTime.setHours(h, m);
+      const currentNightSleep = routine.nightSleep;
+      if (currentNightSleep && typeof currentNightSleep === 'object' && nsField in currentNightSleep) {
+        const timeValue = currentNightSleep[nsField as keyof NightSleep];
+        if (timeValue && typeof timeValue === "string" && timeValue.includes(":")) {
+          const [h, m] = timeValue.split(":").map(Number);
+          if (!isNaN(h) && !isNaN(m)) {
+            initialTime.setHours(h, m);
+          }
         }
       }
     } else if (field.startsWith("waking_") && wakingId) {
@@ -1484,7 +1504,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
 
   const naps = routine.naps || [];
-  const nightSleep = routine.nightSleep && routine.nightSleep.id ? routine.nightSleep : null;
+  const nightSleep = (routine.nightSleep && typeof routine.nightSleep === 'object' && 'id' in routine.nightSleep && routine.nightSleep.id) ? routine.nightSleep : null;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
