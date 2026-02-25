@@ -20,8 +20,6 @@ export function registerConsultantRoutes(app: App) {
             name: { type: 'string' },
             photo: { type: ['string', 'null'] },
             logo: { type: ['string', 'null'] },
-            professionalTitle: { type: ['string', 'null'] },
-            description: { type: ['string', 'null'] },
             primaryColor: { type: 'string' },
             secondaryColor: { type: 'string' },
             createdAt: { type: 'string', format: 'date-time' },
@@ -60,8 +58,6 @@ export function registerConsultantRoutes(app: App) {
           name: { type: 'string' },
           photo: { type: ['string', 'null'] },
           logo: { type: ['string', 'null'] },
-          professionalTitle: { type: ['string', 'null'] },
-          description: { type: ['string', 'null'] },
           primaryColor: { type: 'string' },
           secondaryColor: { type: 'string' },
         },
@@ -75,8 +71,6 @@ export function registerConsultantRoutes(app: App) {
             name: { type: 'string' },
             photo: { type: ['string', 'null'] },
             logo: { type: ['string', 'null'] },
-            professionalTitle: { type: ['string', 'null'] },
-            description: { type: ['string', 'null'] },
             primaryColor: { type: 'string' },
             secondaryColor: { type: 'string' },
             createdAt: { type: 'string', format: 'date-time' },
@@ -86,7 +80,7 @@ export function registerConsultantRoutes(app: App) {
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: Partial<{ name: string; photo: string | null; logo: string | null; professionalTitle: string | null; description: string | null; primaryColor: string; secondaryColor: string }> }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: Partial<{ name: string; photo: string | null; logo: string | null; primaryColor: string; secondaryColor: string }> }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 

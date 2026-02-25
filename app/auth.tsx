@@ -10,16 +10,21 @@ import {
   ScrollView,
   Modal,
   TouchableOpacity,
+  ImageBackground,
+  Dimensions,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { LoadingButton } from "@/components/LoadingButton";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors } from "@/styles/commonStyles";
 import { apiPost } from "@/utils/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
+import { colors, typography, spacing, shadows } from "@/styles/commonStyles";
 
 type UserRole = "consultant" | "mother";
+
+const { width, height } = Dimensions.get("window");
 
 export default function AuthScreen() {
   const [isLogin, setIsLogin] = useState(true);
@@ -32,9 +37,10 @@ export default function AuthScreen() {
   const [errorMessage, setErrorMessage] = useState("");
   const [showError, setShowError] = useState(false);
   const router = useRouter();
-  const { signInWithEmail, signUpWithEmail, fetchUser } = useAuth();
+  const { signInWithEmail, signUpWithEmail } = useAuth();
 
   const showErrorModal = (msg: string) => {
+    console.log("Showing error modal:", msg);
     setErrorMessage(msg);
     setShowError(true);
   };
@@ -79,7 +85,6 @@ export default function AuthScreen() {
           try {
             const response = await apiPost<{ id: string }>("/api/init/mother", { token: babyToken.toUpperCase() });
             console.log("[API] Mother linked successfully, baby ID:", response.id);
-            // Store baby ID for future logins
             await AsyncStorage.setItem("motherBabyId", response.id);
           } catch (initErr: any) {
             console.error("[API] Mother init error:", initErr);
@@ -100,131 +105,159 @@ export default function AuthScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardView}
+    <View style={styles.container}>
+      <ImageBackground
+        source={{ uri: "https://images.unsplash.com/photo-1519689373023-dd07c7988603?w=1200&q=80" }}
+        style={styles.heroBackground}
+        resizeMode="cover"
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
+        <LinearGradient
+          colors={["rgba(47, 62, 70, 0.88)", "rgba(47, 62, 70, 0.94)"]}
+          style={styles.overlay}
         >
-          <View style={styles.content}>
-            <View style={styles.header}>
-              <Text style={styles.icon}>😴</Text>
-              <Text style={styles.title}>Consultoria do Sono</Text>
-            </View>
-            
-            <Text style={styles.subtitle}>
-              {isLogin ? "Entre para continuar" : "Crie sua conta"}
-            </Text>
-
-            {!isLogin && (
-              <>
-                <View style={styles.roleContainer}>
-                  <Text style={styles.roleLabel}>Tipo de conta:</Text>
-                  <View style={styles.roleButtons}>
-                    <TouchableOpacity
-                      style={[
-                        styles.roleButton,
-                        role === "consultant" && styles.roleButtonActive,
-                      ]}
-                      onPress={() => setRole("consultant")}
-                    >
-                      <Text
-                        style={[
-                          styles.roleButtonText,
-                          role === "consultant" && styles.roleButtonTextActive,
-                        ]}
-                      >
-                        Consultora
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.roleButton,
-                        role === "mother" && styles.roleButtonActive,
-                      ]}
-                      onPress={() => setRole("mother")}
-                    >
-                      <Text
-                        style={[
-                          styles.roleButtonText,
-                          role === "mother" && styles.roleButtonTextActive,
-                        ]}
-                      >
-                        Mãe
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+          <SafeAreaView style={styles.safeArea}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={styles.keyboardView}
+            >
+              <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.headerSection}>
+                  <Text style={styles.appName}>NanaLeve</Text>
+                  <Text style={styles.tagline}>
+                    Leveza e ciência para noites mais tranquilas
+                  </Text>
                 </View>
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nome completo"
-                  value={name}
-                  onChangeText={setName}
-                  autoCapitalize="words"
-                  placeholderTextColor={colors.textSecondary}
-                />
+                <View style={styles.loginCard}>
+                  <Text style={styles.cardTitle}>
+                    {isLogin ? "Bem-vindo de volta" : "Criar conta"}
+                  </Text>
 
-                {role === "mother" && (
-                  <View style={styles.tokenInputContainer}>
+                  {!isLogin && (
+                    <>
+                      <View style={styles.roleContainer}>
+                        <Text style={styles.label}>Tipo de conta</Text>
+                        <View style={styles.roleButtons}>
+                          <TouchableOpacity
+                            style={[
+                              styles.roleButton,
+                              role === "consultant" && styles.roleButtonActive,
+                            ]}
+                            onPress={() => setRole("consultant")}
+                          >
+                            <Text
+                              style={[
+                                styles.roleButtonText,
+                                role === "consultant" && styles.roleButtonTextActive,
+                              ]}
+                            >
+                              Consultora
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.roleButton,
+                              role === "mother" && styles.roleButtonActive,
+                            ]}
+                            onPress={() => setRole("mother")}
+                          >
+                            <Text
+                              style={[
+                                styles.roleButtonText,
+                                role === "mother" && styles.roleButtonTextActive,
+                              ]}
+                            >
+                              Mãe
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Nome completo</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Digite seu nome"
+                          value={name}
+                          onChangeText={setName}
+                          autoCapitalize="words"
+                          placeholderTextColor="#9CA3AF"
+                        />
+                      </View>
+
+                      {role === "mother" && (
+                        <View style={styles.inputGroup}>
+                          <Text style={styles.label}>Código do bebê</Text>
+                          <TextInput
+                            style={[styles.input, styles.tokenInput]}
+                            placeholder="XXXX"
+                            value={babyToken}
+                            onChangeText={(text) => setBabyToken(text.toUpperCase())}
+                            autoCapitalize="characters"
+                            maxLength={4}
+                            placeholderTextColor="#9CA3AF"
+                          />
+                          <Text style={styles.hint}>
+                            Código fornecido pela consultora
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>E-mail</Text>
                     <TextInput
-                      style={[styles.input, styles.tokenInput]}
-                      placeholder="Código do bebê (4 caracteres)"
-                      value={babyToken}
-                      onChangeText={(text) => setBabyToken(text.toUpperCase())}
-                      autoCapitalize="characters"
-                      maxLength={4}
-                      placeholderTextColor={colors.textSecondary}
+                      style={styles.input}
+                      placeholder="seu@email.com"
+                      value={email}
+                      onChangeText={setEmail}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      placeholderTextColor="#9CA3AF"
                     />
-                    <Text style={styles.tokenHint}>
-                      💡 Código fornecido pela consultora
-                    </Text>
                   </View>
-                )}
-              </>
-            )}
 
-            <TextInput
-              style={styles.input}
-              placeholder="E-mail"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              placeholderTextColor={colors.textSecondary}
-            />
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Senha</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="••••••••"
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Senha"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholderTextColor={colors.textSecondary}
-            />
+                  <LoadingButton
+                    title={isLogin ? "Entrar" : "Criar Conta"}
+                    onPress={handleAuth}
+                    loading={loading}
+                    style={styles.button}
+                  />
 
-            <LoadingButton
-              title={isLogin ? "Entrar" : "Criar Conta"}
-              onPress={handleAuth}
-              loading={loading}
-              style={styles.button}
-            />
-
-            <Text style={styles.switchText}>
-              {isLogin ? "Não tem uma conta? " : "Já tem uma conta? "}
-              <Text
-                style={styles.switchLink}
-                onPress={() => setIsLogin(!isLogin)}
-              >
-                {isLogin ? "Criar Conta" : "Entrar"}
-              </Text>
-            </Text>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+                  <TouchableOpacity
+                    onPress={() => setIsLogin(!isLogin)}
+                    style={styles.switchContainer}
+                  >
+                    <Text style={styles.switchText}>
+                      {isLogin ? "Não tem uma conta? " : "Já tem uma conta? "}
+                      <Text style={styles.switchLink}>
+                        {isLogin ? "Criar Conta" : "Entrar"}
+                      </Text>
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </KeyboardAvoidingView>
+          </SafeAreaView>
+        </LinearGradient>
+      </ImageBackground>
 
       <Modal
         visible={showError}
@@ -234,7 +267,7 @@ export default function AuthScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Erro</Text>
+            <Text style={styles.modalTitle}>Atenção</Text>
             <Text style={styles.modalMessage}>{errorMessage}</Text>
             <TouchableOpacity
               style={styles.modalButton}
@@ -245,63 +278,83 @@ export default function AuthScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.text,
+  },
+  heroBackground: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+  },
+  overlay: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+  },
+  safeArea: {
+    flex: 1,
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: "center",
+    paddingHorizontal: spacing.xxl,
+    paddingTop: height * 0.08,
+    paddingBottom: 40,
   },
-  content: {
-    padding: 24,
-  },
-  header: {
+  headerSection: {
     alignItems: "center",
-    marginBottom: 16,
+    marginBottom: 56,
   },
-  icon: {
-    fontSize: 64,
-    marginBottom: 16,
+  appName: {
+    fontSize: 52,
+    fontWeight: "300",
+    color: "#FFFFFF",
+    letterSpacing: 3,
+    marginBottom: spacing.lg,
+    fontFamily: Platform.OS === "ios" ? "System" : "sans-serif-light",
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: colors.text,
+  tagline: {
+    ...typography.subtitle2,
+    color: "rgba(255, 255, 255, 0.9)",
     textAlign: "center",
+    letterSpacing: 0.5,
+    maxWidth: 340,
   },
-  subtitle: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginBottom: 32,
+  loginCard: {
+    backgroundColor: colors.background,
+    borderRadius: 24,
+    padding: spacing.xxxl,
+    ...shadows.xl,
+  },
+  cardTitle: {
+    ...typography.h2,
+    marginBottom: spacing.xxxl,
     textAlign: "center",
   },
   roleContainer: {
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
   },
-  roleLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: 12,
+  label: {
+    ...typography.label,
+    marginBottom: spacing.md,
   },
   roleButtons: {
     flexDirection: "row",
-    gap: 12,
+    gap: spacing.md,
   },
   roleButton: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    borderRadius: 16,
     borderWidth: 2,
     borderColor: colors.border,
     backgroundColor: colors.card,
@@ -312,47 +365,44 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   roleButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
+    ...typography.label,
+    color: colors.textSecondary,
   },
   roleButtonTextActive: {
     color: "#FFFFFF",
   },
+  inputGroup: {
+    marginBottom: spacing.xl,
+  },
   input: {
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    fontSize: 16,
-    borderWidth: 1,
+    borderRadius: 16,
+    padding: spacing.lg,
+    ...typography.body1,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    color: colors.text,
-  },
-  tokenInputContainer: {
-    marginBottom: 16,
   },
   tokenInput: {
-    marginBottom: 8,
-    fontSize: 20,
-    fontWeight: "bold",
-    letterSpacing: 4,
+    fontSize: 22,
+    fontWeight: "600",
+    letterSpacing: 8,
     textAlign: "center",
   },
-  tokenHint: {
-    fontSize: 12,
-    color: colors.textSecondary,
+  hint: {
+    ...typography.caption,
+    marginTop: spacing.sm,
     fontStyle: "italic",
-    textAlign: "center",
   },
   button: {
-    marginTop: 8,
+    backgroundColor: colors.primary,
+    marginTop: spacing.md,
+  },
+  switchContainer: {
+    marginTop: spacing.xxl,
+    alignItems: "center",
   },
   switchText: {
-    textAlign: "center",
-    marginTop: 24,
-    fontSize: 14,
-    color: colors.textSecondary,
+    ...typography.body2,
   },
   switchLink: {
     color: colors.primary,
@@ -360,38 +410,38 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(47, 62, 70, 0.7)",
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
+    padding: spacing.xxl,
   },
   modalContent: {
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 24,
+    borderRadius: 24,
+    padding: spacing.xxxl,
     width: "100%",
-    maxWidth: 400,
+    maxWidth: 420,
+    ...shadows.xl,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: colors.text,
-    marginBottom: 8,
+    ...typography.h3,
+    marginBottom: spacing.md,
   },
   modalMessage: {
-    fontSize: 16,
+    ...typography.body1,
     color: colors.textSecondary,
-    marginBottom: 24,
+    marginBottom: spacing.xxl,
   },
   modalButton: {
     backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: 16,
+    paddingVertical: spacing.lg,
     alignItems: "center",
+    ...shadows.sm,
   },
   modalButtonText: {
+    ...typography.label,
     fontSize: 16,
-    fontWeight: "600",
     color: "#FFFFFF",
   },
 });
