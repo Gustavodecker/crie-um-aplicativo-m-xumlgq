@@ -351,14 +351,27 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
   }
 
   // SONO NOTURNO
-  if (routine.nightSleep && routine.nightSleep.startTryTime) {
-    report.nightSleepStart = routine.nightSleep.startTryTime;
+  // Check if nightSleep exists and has valid data (not just an empty object)
+  const hasValidNightSleep = routine.nightSleep && 
+    typeof routine.nightSleep === 'object' && 
+    (routine.nightSleep as any).id;
+  
+  console.log(`[DEBUG] Day ${dayIndex + 1} nightSleep check:`, {
+    exists: !!routine.nightSleep,
+    hasId: hasValidNightSleep,
+    startTryTime: routine.nightSleep?.startTryTime,
+    fellAsleepTime: routine.nightSleep?.fellAsleepTime,
+    finalWakeTime: routine.nightSleep?.finalWakeTime,
+  });
+
+  if (hasValidNightSleep && routine.nightSleep!.startTryTime) {
+    report.nightSleepStart = routine.nightSleep!.startTryTime;
 
     // Calculate liquid night sleep (brute - wakings)
-    if (routine.nightSleep.finalWakeTime) {
+    if (routine.nightSleep!.fellAsleepTime && routine.nightSleep!.finalWakeTime) {
       const nightSleepBruteMinutes = calculateTimeDifference(
-        routine.nightSleep.startTryTime,
-        routine.nightSleep.finalWakeTime
+        routine.nightSleep!.fellAsleepTime,
+        routine.nightSleep!.finalWakeTime
       );
       const nightSleepLiquidMinutes = nightSleepBruteMinutes - totalWakingMinutes;
       report.nightSleepLiquidTotal = formatTimeDuration(nightSleepLiquidMinutes);
@@ -395,22 +408,68 @@ export default function AcompanhamentoScreen() {
     };
   }, []);
 
+  /**
+   * Normalizes nightSleep from the API response.
+   * The backend ORM may return nightSleep as:
+   *   - null / undefined  → no night sleep record
+   *   - {}                → empty object (legacy bug, treat as null)
+   *   - { id, ... }       → valid object
+   *   - [{ id, ... }]     → array with one item (ORM "with" relation quirk)
+   *   - []                → empty array (treat as null)
+   */
+  const normalizeNightSleep = (raw: any): NightSleep | null => {
+    if (!raw) return null;
+    // Handle array form (ORM "with" relation returns array)
+    if (Array.isArray(raw)) {
+      if (raw.length === 0) return null;
+      const first = raw[0];
+      if (!first || !first.id) return null;
+      // Normalize wakings inside the array item as well
+      return {
+        ...first,
+        wakings: Array.isArray(first.wakings) ? first.wakings : [],
+      } as NightSleep;
+    }
+    // Handle object form
+    if (typeof raw === 'object' && raw.id) {
+      return {
+        ...raw,
+        wakings: Array.isArray(raw.wakings) ? raw.wakings : [],
+      } as NightSleep;
+    }
+    // Empty object {} or anything else without an id
+    return null;
+  };
+
   const loadData = useCallback(async () => {
     console.log("Acompanhamento: Loading data for babyId:", babyId);
     setLoading(true);
     setError(null);
     try {
-      // GET /api/routines/baby/:babyId now returns full data including naps and nightSleep with wakings
+      // GET /api/routines/baby/:babyId returns full data including naps and nightSleep with wakings
       console.log(`[API] Calling: GET /api/routines/baby/${babyId}`);
-      const routinesData = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
+      const routinesData = await apiGet<any[]>(`/api/routines/baby/${babyId}`);
       console.log("Acompanhamento: Loaded routines with full data:", routinesData?.length);
       
-      // Log nightSleep data for debugging
-      (routinesData || []).forEach((r, i) => {
-        console.log(`Acompanhamento: Routine ${i + 1} (${r.date}) - nightSleep:`, r.nightSleep ? `id=${r.nightSleep.id}, wakings=${r.nightSleep.wakings?.length ?? 0}` : 'null');
+      // Normalize each routine's nightSleep field
+      const normalized: Routine[] = (routinesData || []).map((r, i) => {
+        const nightSleep = normalizeNightSleep(r.nightSleep);
+        console.log(`[DEBUG] Routine ${i + 1} (${r.date}):`, {
+          id: r.id,
+          rawNightSleep: r.nightSleep,
+          rawNightSleepIsArray: Array.isArray(r.nightSleep),
+          normalizedNightSleepId: nightSleep?.id ?? null,
+          wakingsCount: nightSleep?.wakings?.length ?? 0,
+        });
+        if (nightSleep) {
+          console.log(`[Night Sleep] Found for routine ${r.id}: id=${nightSleep.id}`);
+        } else {
+          console.log(`[Night Sleep] No night sleep found for routine ${r.id}`);
+        }
+        return { ...r, nightSleep };
       });
       
-      setRoutines(routinesData || []);
+      setRoutines(normalized);
     } catch (err: any) {
       console.error("Acompanhamento: Error loading data:", err);
       setError(err.message || "Erro ao carregar dados");
@@ -479,13 +538,8 @@ export default function AcompanhamentoScreen() {
     );
   }
 
-  // Normalize routines: treat empty object {} as null for nightSleep
-  const normalizedRoutines = routines.map((r) => ({
-    ...r,
-    nightSleep: r.nightSleep && typeof r.nightSleep === 'object' && (r.nightSleep as any).id
-      ? r.nightSleep
-      : null,
-  }));
+  // Routines are already normalized on load (nightSleep is either a valid object or null)
+  const normalizedRoutines = routines;
 
   // Filter routines that have meaningful data
   const filledRoutines = normalizedRoutines.filter((r) => {

@@ -972,8 +972,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   
   // Initialize nightSleepIdRef from initialRoutine
   useEffect(() => {
-    const initialNightSleep = initialRoutine.nightSleep;
-    if (initialNightSleep && typeof initialNightSleep === 'object' && 'id' in initialNightSleep && initialNightSleep.id) {
+    const initialNightSleep = normalizeNightSleep(initialRoutine.nightSleep);
+    if (initialNightSleep?.id) {
       nightSleepIdRef.current = initialNightSleep.id;
       console.log("[Night Sleep Ref] Initialized nightSleepIdRef from initialRoutine to:", initialNightSleep.id);
     }
@@ -981,8 +981,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   
   // Keep nightSleepIdRef in sync with routine.nightSleep
   useEffect(() => {
-    const currentNightSleep = routine.nightSleep;
-    if (currentNightSleep && typeof currentNightSleep === 'object' && 'id' in currentNightSleep && currentNightSleep.id) {
+    const currentNightSleep = normalizeNightSleep(routine.nightSleep);
+    if (currentNightSleep?.id) {
       nightSleepIdRef.current = currentNightSleep.id;
       console.log("[Night Sleep Ref] Updated nightSleepIdRef to:", currentNightSleep.id);
     }
@@ -1053,20 +1053,45 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     }
   }, 1000);
 
+  /**
+   * Normalizes nightSleep from the API response.
+   * The backend ORM may return nightSleep as:
+   *   - null / undefined  → no night sleep record
+   *   - {}                → empty object (legacy bug, treat as null)
+   *   - { id, ... }       → valid object
+   *   - [{ id, ... }]     → array with one item (ORM "with" relation quirk)
+   *   - []                → empty array (treat as null)
+   */
+  const normalizeNightSleep = (raw: any): NightSleep | null => {
+    if (!raw) return null;
+    // Handle array form (ORM "with" relation returns array)
+    if (Array.isArray(raw)) {
+      if (raw.length === 0) return null;
+      const first = raw[0];
+      if (!first || !first.id) return null;
+      return {
+        ...first,
+        wakings: Array.isArray(first.wakings) ? first.wakings : [],
+      } as NightSleep;
+    }
+    // Handle object form
+    if (typeof raw === 'object' && raw.id) {
+      return {
+        ...raw,
+        wakings: Array.isArray(raw.wakings) ? raw.wakings : [],
+      } as NightSleep;
+    }
+    // Empty object {} or anything else without an id
+    return null;
+  };
+
   const loadRoutine = useCallback(async (skipTextUpdate = false, preserveNightSleep = false) => {
     try {
       console.log("[API] Loading routine:", initialRoutine.id);
-      const data = await apiGet<Routine>(`/api/routines/${initialRoutine.id}`);
+      const data = await apiGet<any>(`/api/routines/${initialRoutine.id}`);
       
-      // Validate that nightSleep has an id field (it's a real object, not just a placeholder)
-      // The backend sometimes returns {} instead of null for nightSleep
-      const apiNightSleep: NightSleep | null = 
-        (data.nightSleep && 
-         typeof data.nightSleep === 'object' && 
-         'id' in data.nightSleep && 
-         data.nightSleep.id)
-          ? (data.nightSleep as NightSleep)
-          : null;
+      // Normalize nightSleep: handles null, {}, object, array forms from the API
+      const apiNightSleep: NightSleep | null = normalizeNightSleep(data.nightSleep);
       
       console.log("[API] Routine loaded successfully:", data.id, "nightSleep:", apiNightSleep ? `id=${apiNightSleep.id}` : "null or empty object");
       
@@ -1207,8 +1232,8 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
   const handleAddOrUpdateNightSleep = async () => {
     try {
-      const currentNightSleep = routine.nightSleep;
-      if (currentNightSleep && typeof currentNightSleep === 'object' && 'id' in currentNightSleep && currentNightSleep.id) {
+      const currentNightSleep = normalizeNightSleep(routine.nightSleep);
+      if (currentNightSleep && currentNightSleep.id) {
         console.log("[API] Night sleep already exists:", currentNightSleep.id, "- just expanding");
         setExpandedNightSleep(true);
         return;
@@ -1252,10 +1277,10 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       // Convert empty string to null
       const normalizedValue = (value === "" || value === undefined) ? null : value;
       
-      const currentNightSleep = routine.nightSleep;
+      const currentNightSleep = normalizeNightSleep(routine.nightSleep);
       let updatedNightSleep: NightSleep;
 
-      if (currentNightSleep && typeof currentNightSleep === 'object' && 'id' in currentNightSleep && currentNightSleep.id) {
+      if (currentNightSleep && currentNightSleep.id) {
         console.log("[API] Night sleep exists (id:", currentNightSleep.id, "), using PUT");
         const putResult = await apiPut<NightSleep>(`/api/night-sleep/${currentNightSleep.id}`, {
           [field]: normalizedValue
@@ -1504,7 +1529,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
 
   const naps = routine.naps || [];
-  const nightSleep = (routine.nightSleep && typeof routine.nightSleep === 'object' && 'id' in routine.nightSleep && routine.nightSleep.id) ? routine.nightSleep : null;
+  const nightSleep = normalizeNightSleep(routine.nightSleep);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
