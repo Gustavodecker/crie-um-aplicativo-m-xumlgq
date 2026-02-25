@@ -79,9 +79,12 @@ interface NightWaking {
 interface NightSleep {
   id: string;
   routineId: string;
-  startTryTime: string;
+  startTryTime: string | null;
   fellAsleepTime: string | null;
   finalWakeTime: string | null;
+  sleepMethod: string | null;
+  environment: string | null;
+  wakeUpMood: string | null;
   observations: string | null;
   consultantComments: string | null;
   createdAt: string;
@@ -1044,9 +1047,12 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     try {
       console.log("[API] Loading routine:", initialRoutine.id);
       const data = await apiGet<Routine>(`/api/routines/${initialRoutine.id}`);
-      console.log("[API] Routine loaded successfully:", data.id);
+      console.log("[API] Routine loaded successfully:", data.id, "nightSleep:", data.nightSleep ? `id=${(data.nightSleep as any).id}` : "null");
       
-      const apiNightSleep = data.nightSleep && (data.nightSleep as any).id ? data.nightSleep : null;
+      // Validate that nightSleep has an id field (it's a real object, not just a placeholder)
+      const apiNightSleep: NightSleep | null = (data.nightSleep && (data.nightSleep as any).id)
+        ? (data.nightSleep as NightSleep)
+        : null;
       
       // Update the nightSleepIdRef with the latest id from API
       if (apiNightSleep?.id && !preserveNightSleep) {
@@ -1055,9 +1061,16 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       }
       
       setRoutine(prev => {
-        const nightSleepToUse = preserveNightSleep 
-          ? prev.nightSleep 
-          : (apiNightSleep || prev.nightSleep);
+        // When preserveNightSleep is true, keep the current nightSleep state (e.g., after adding a nap)
+        // But if the API returned a nightSleep and we don't have one locally, always use the API version
+        let nightSleepToUse: NightSleep | null | undefined;
+        if (preserveNightSleep) {
+          // Keep current state but merge in API data if we don't have a local nightSleep yet
+          nightSleepToUse = prev.nightSleep || apiNightSleep;
+        } else {
+          // Use API data, falling back to current state if API returned null
+          nightSleepToUse = apiNightSleep || prev.nightSleep;
+        }
         
         // Update ref if we have a night sleep
         if (nightSleepToUse?.id) {
@@ -1101,16 +1114,13 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
   useEffect(() => { loadRoutine(); }, [loadRoutine]);
 
-  const handleSaveWakeUp = async () => {
-    setSaving(true);
+  const handleSaveWakeUp = async (time: string) => {
     try {
-      console.log("[API] Saving wake up time for routine:", routine.id);
-      await apiPut(`/api/routines/${routine.id}`, { wakeUpTime });
-      await loadRoutine(true, true);
+      console.log("[API] Auto-saving wake up time for routine:", routine.id, "time:", time);
+      await apiPut(`/api/routines/${routine.id}`, { wakeUpTime: time });
     } catch (error: any) {
+      console.error("[API] Error auto-saving wake up time:", error);
       showErr(error.message || "Erro ao salvar horário");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -1190,10 +1200,14 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       console.log("[API] Creating night sleep for routine:", routine.id);
       const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
         routineId: routine.id,
-        startTryTime: "20:00",
+        startTryTime: null,
         fellAsleepTime: null,
         finalWakeTime: null,
-        observations: null
+        sleepMethod: null,
+        environment: null,
+        wakeUpMood: null,
+        observations: null,
+        consultantComments: null,
       });
       
       console.log("[API] Night sleep created with ID:", newNightSleep.id);
@@ -1202,9 +1216,11 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       nightSleepIdRef.current = newNightSleep.id;
       console.log("[API] Updated nightSleepIdRef after creation to:", newNightSleep.id);
       
-      setRoutine(prev => ({ ...prev, nightSleep: { ...newNightSleep, wakings: [] } }));
-      setNightSleepObservations("");
-      setNightSleepConsultantComments("");
+      // Update local state immediately with the created night sleep
+      const nightSleepWithWakings: NightSleep = { ...newNightSleep, wakings: [] };
+      setRoutine(prev => ({ ...prev, nightSleep: nightSleepWithWakings }));
+      setNightSleepObservations(newNightSleep.observations || "");
+      setNightSleepConsultantComments(newNightSleep.consultantComments || "");
       setExpandedNightSleep(true);
     } catch (error: any) {
       console.error("[API] Error creating night sleep:", error);
@@ -1212,9 +1228,12 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     }
   };
 
-  const handleUpdateNightSleep = async (field: string, value: string) => {
+  const handleUpdateNightSleep = async (field: string, value: string | null) => {
     try {
       console.log("[API] Updating night sleep field:", field, "value:", value);
+      
+      // Convert empty string to null
+      const normalizedValue = (value === "" || value === undefined) ? null : value;
       
       const currentNightSleep = routine.nightSleep;
       let updatedNightSleep: NightSleep;
@@ -1222,24 +1241,26 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       if (currentNightSleep && currentNightSleep.id) {
         console.log("[API] Night sleep exists (id:", currentNightSleep.id, "), using PUT");
         const putResult = await apiPut<NightSleep>(`/api/night-sleep/${currentNightSleep.id}`, {
-          [field]: value
+          [field]: normalizedValue
         });
         updatedNightSleep = {
           ...currentNightSleep,
-          [field]: value,
           ...putResult,
+          [field]: normalizedValue,
           wakings: currentNightSleep.wakings || [],
         };
       } else {
-        console.log("[API] Night sleep does not exist yet, using POST (upsert) for routine:", routine.id);
-        // POST endpoint handles upsert - creates or updates based on routineId
+        console.log("[API] Night sleep does not exist yet, creating via POST for routine:", routine.id);
         const postResult = await apiPost<NightSleep>("/api/night-sleep", {
           routineId: routine.id,
-          startTryTime: field === "startTryTime" ? value : "20:00",
-          fellAsleepTime: field === "fellAsleepTime" ? value : null,
-          finalWakeTime: field === "finalWakeTime" ? value : null,
-          observations: field === "observations" ? value : null,
-          consultantComments: field === "consultantComments" ? value : null,
+          startTryTime: field === "startTryTime" ? normalizedValue : null,
+          fellAsleepTime: field === "fellAsleepTime" ? normalizedValue : null,
+          finalWakeTime: field === "finalWakeTime" ? normalizedValue : null,
+          sleepMethod: field === "sleepMethod" ? normalizedValue : null,
+          environment: field === "environment" ? normalizedValue : null,
+          wakeUpMood: field === "wakeUpMood" ? normalizedValue : null,
+          observations: field === "observations" ? normalizedValue : null,
+          consultantComments: field === "consultantComments" ? normalizedValue : null,
         });
         updatedNightSleep = { ...postResult, wakings: [] };
         // Update the ref immediately so auto-save functions can use it
@@ -1268,10 +1289,14 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         console.log("[API] Night sleep doesn't exist yet, creating it for routine:", routine.id);
         const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
           routineId: routine.id,
-          startTryTime: "20:00",
+          startTryTime: null,
           fellAsleepTime: null,
           finalWakeTime: null,
-          observations: null
+          sleepMethod: null,
+          environment: null,
+          wakeUpMood: null,
+          observations: null,
+          consultantComments: null,
         });
         
         console.log("[API] Night sleep created with ID:", newNightSleep.id);
@@ -1345,6 +1370,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       try {
         if (currentTimeField === "wakeUpTime") {
           setWakeUpTime(timeString);
+          await handleSaveWakeUp(timeString);
         } else if (currentTimeField.startsWith("nap_") && currentNapId) {
           const field = currentTimeField.split("_")[1];
           
@@ -1435,9 +1461,11 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     } else if (field.startsWith("nightSleep_")) {
       const nsField = field.split("_")[1];
       const timeValue = routine.nightSleep?.[nsField as keyof NightSleep];
-      if (timeValue && typeof timeValue === "string") {
+      if (timeValue && typeof timeValue === "string" && timeValue.includes(":")) {
         const [h, m] = timeValue.split(":").map(Number);
-        initialTime.setHours(h, m);
+        if (!isNaN(h) && !isNaN(m)) {
+          initialTime.setHours(h, m);
+        }
       }
     } else if (field.startsWith("waking_") && wakingId) {
       const waking = routine.nightSleep?.wakings?.find(w => w.id === wakingId);
@@ -1477,17 +1505,13 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         <View style={styles.sectionCard}>
           <Text style={styles.sectionCardTitle}>☀️ Acordou</Text>
           
-          <Text style={styles.fieldLabel}>Horário</Text>
+          <Text style={styles.fieldLabel}>Horário (salva automaticamente)</Text>
           <TouchableOpacity 
             style={styles.timePickerButton} 
             onPress={() => openTimePicker("wakeUpTime")}
           >
             <Text style={styles.timePickerText}>{wakeUpTime}</Text>
             <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSaveWakeUp} disabled={saving}>
-            {saving ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.saveBtnText}>Salvar Horário</Text>}
           </TouchableOpacity>
           
           <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações (salva automaticamente)</Text>
@@ -1703,9 +1727,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Text style={styles.expandableTitle}>Sono Noturno</Text>
-                {!expandedNightSleep && nightSleep.startTryTime && nightSleep.finalWakeTime && (
+                {!expandedNightSleep && (nightSleep.startTryTime || nightSleep.finalWakeTime) && (
                   <Text style={styles.expandableSubtitle}>
-                    {nightSleep.startTryTime} - {nightSleep.finalWakeTime}
+                    {nightSleep.startTryTime || "—"} - {nightSleep.finalWakeTime || "—"}
                   </Text>
                 )}
               </View>
@@ -1719,30 +1743,36 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
             
             {expandedNightSleep && (
               <View style={styles.expandableContent}>
-                <Text style={styles.fieldLabel}>Início</Text>
+                <Text style={styles.fieldLabel}>Início (toque para definir)</Text>
                 <TouchableOpacity 
                   style={styles.timePickerButton} 
                   onPress={() => openTimePicker("nightSleep_startTryTime")}
                 >
-                  <Text style={styles.timePickerText}>{nightSleep.startTryTime || "20:00"}</Text>
+                  <Text style={[styles.timePickerText, !nightSleep.startTryTime && { color: colors.textSecondary }]}>
+                    {nightSleep.startTryTime || "—"}
+                  </Text>
                   <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                 </TouchableOpacity>
                 
-                <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Dormiu</Text>
+                <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Dormiu (toque para definir)</Text>
                 <TouchableOpacity 
                   style={styles.timePickerButton} 
                   onPress={() => openTimePicker("nightSleep_fellAsleepTime")}
                 >
-                  <Text style={styles.timePickerText}>{nightSleep.fellAsleepTime || "—"}</Text>
+                  <Text style={[styles.timePickerText, !nightSleep.fellAsleepTime && { color: colors.textSecondary }]}>
+                    {nightSleep.fellAsleepTime || "—"}
+                  </Text>
                   <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                 </TouchableOpacity>
                 
-                <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Acordou</Text>
+                <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Acordou (toque para definir)</Text>
                 <TouchableOpacity 
                   style={styles.timePickerButton} 
                   onPress={() => openTimePicker("nightSleep_finalWakeTime")}
                 >
-                  <Text style={styles.timePickerText}>{nightSleep.finalWakeTime || "—"}</Text>
+                  <Text style={[styles.timePickerText, !nightSleep.finalWakeTime && { color: colors.textSecondary }]}>
+                    {nightSleep.finalWakeTime || "—"}
+                  </Text>
                   <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                 </TouchableOpacity>
                 
