@@ -52,6 +52,13 @@ export const typography = {
     lineHeight: 28,
     color: colors.text,
   },
+  h4: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    letterSpacing: 0,
+    lineHeight: 24,
+    color: colors.text,
+  },
   
   // Subtitles
   subtitle1: {
@@ -70,6 +77,13 @@ export const typography = {
   },
   
   // Body text
+  body: {
+    fontSize: 16,
+    fontWeight: '400' as const,
+    letterSpacing: 0,
+    lineHeight: 24,
+    color: colors.text,
+  },
   body1: {
     fontSize: 16,
     fontWeight: '400' as const,
@@ -102,6 +116,15 @@ export const typography = {
     lineHeight: 20,
     color: colors.text,
   },
+  
+  // Button text
+  button: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    letterSpacing: 0.5,
+    lineHeight: 24,
+    color: colors.text,
+  },
 };
 
 // Premium spacing system
@@ -113,6 +136,16 @@ export const spacing = {
   xl: 20,
   xxl: 24,
   xxxl: 32,
+};
+
+// Border radius system
+export const borderRadius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+  full: 9999,
 };
 
 // Premium shadow system
