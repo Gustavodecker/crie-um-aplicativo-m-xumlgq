@@ -1,3 +1,24 @@
+/**
+ * Loading Button Component Template
+ *
+ * A button that shows a loading indicator when processing.
+ * Commonly used for API calls, form submissions, etc.
+ *
+ * Features:
+ * - Shows loading spinner when loading=true
+ * - Disables interaction when loading
+ * - Customizable styles
+ * - Works with Pressable for better touch feedback
+ *
+ * Usage:
+ * ```tsx
+ * <LoadingButton
+ *   loading={isSubmitting}
+ *   onPress={handleSubmit}
+ *   title="Submit"
+ * />
+ * ```
+ */
 
 import React from "react";
 import {
@@ -8,7 +29,6 @@ import {
   ViewStyle,
   TextStyle,
 } from "react-native";
-import { colors, typography, spacing, shadows } from "@/styles/commonStyles";
 
 interface LoadingButtonProps {
   onPress: () => void;
@@ -47,7 +67,7 @@ export function LoadingButton({
     >
       {loading ? (
         <ActivityIndicator
-          color={loadingColor || (variant === "outline" ? colors.primary : "#fff")}
+          color={loadingColor || (variant === "outline" ? "#007AFF" : "#fff")}
         />
       ) : (
         <Text
@@ -66,34 +86,32 @@ export function LoadingButton({
 
 const styles = StyleSheet.create({
   button: {
-    height: 56,
-    borderRadius: 16,
+    height: 50,
+    borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: spacing.xl,
-    ...shadows.sm,
+    paddingHorizontal: 24,
   },
   primary: {
-    backgroundColor: colors.primary,
+    backgroundColor: "#007AFF",
   },
   secondary: {
-    backgroundColor: colors.secondary,
+    backgroundColor: "#5856D6",
   },
   outline: {
     backgroundColor: "transparent",
-    borderWidth: 2,
-    borderColor: colors.primary,
+    borderWidth: 1,
+    borderColor: "#007AFF",
   },
   pressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
+    opacity: 0.8,
   },
   disabled: {
     opacity: 0.5,
   },
   text: {
-    ...typography.label,
     fontSize: 16,
+    fontWeight: "600",
   },
   primaryText: {
     color: "#fff",
@@ -102,6 +120,6 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   outlineText: {
-    color: colors.primary,
+    color: "#007AFF",
   },
 });

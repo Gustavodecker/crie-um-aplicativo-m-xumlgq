@@ -8,7 +8,7 @@ import {
   Modal,
   ActivityIndicator,
 } from "react-native";
-import { colors, typography, spacing, shadows } from "@/styles/commonStyles";
+import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 
 interface ConfirmModalProps {
@@ -54,7 +54,7 @@ export function ConfirmModal({
               <IconSymbol
                 ios_icon_name={icon.ios}
                 android_material_icon_name={icon.android}
-                size={56}
+                size={48}
                 color={icon.color}
               />
             </View>
@@ -95,47 +95,49 @@ export function ConfirmModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(47, 62, 70, 0.6)",
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
-    padding: spacing.xxl,
+    padding: 24,
   },
   content: {
     backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: spacing.xxxl,
+    borderRadius: 16,
+    padding: 24,
     width: "100%",
-    maxWidth: 420,
+    maxWidth: 400,
     alignItems: "center",
-    ...shadows.xl,
   },
   iconContainer: {
-    marginBottom: spacing.xl,
+    marginBottom: 16,
   },
   title: {
-    ...typography.h3,
-    marginBottom: spacing.md,
+    fontSize: 20,
+    fontWeight: "bold",
+    color: colors.text,
+    marginBottom: 12,
     textAlign: "center",
   },
   message: {
-    ...typography.body1,
+    fontSize: 16,
     color: colors.textSecondary,
-    marginBottom: spacing.xxl,
+    marginBottom: 24,
     textAlign: "center",
+    lineHeight: 24,
   },
   buttonRow: {
     flexDirection: "row",
-    gap: spacing.md,
+    gap: 12,
     width: "100%",
   },
   button: {
     flex: 1,
-    borderRadius: 16,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 56,
+    minHeight: 48,
   },
   cancelButton: {
     backgroundColor: colors.background,
@@ -144,16 +146,15 @@ const styles = StyleSheet.create({
   },
   confirmButton: {
     backgroundColor: colors.error,
-    ...shadows.sm,
   },
   cancelButtonText: {
-    ...typography.label,
     fontSize: 16,
+    fontWeight: "600",
     color: colors.text,
   },
   confirmButtonText: {
-    ...typography.label,
     fontSize: 16,
+    fontWeight: "600",
     color: "#FFFFFF",
   },
 });
