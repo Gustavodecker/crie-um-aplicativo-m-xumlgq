@@ -373,12 +373,13 @@ function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultan
         const data = await apiGet<Baby[]>(endpoint);
         console.log("[API] Consultant babies loaded:", data.length);
         
-        // Filter based on showArchived state
+        // When showArchived is true, backend returns ALL babies, so we filter to show only archived ones
+        // When showArchived is false, backend returns only non-archived babies, so no filtering needed
         const filteredBabies = showArchived 
-          ? data.filter(b => b.archived) 
-          : data.filter(b => !b.archived);
+          ? data.filter(b => b.archived === true) 
+          : data;
         
-        console.log("[API] Filtered babies:", filteredBabies.length, "archived:", showArchived);
+        console.log("[API] Filtered babies:", filteredBabies.length, "showArchived:", showArchived);
         setBabies(filteredBabies);
       } else {
         console.log("[API] User is a mother - fetching linked baby via /api/mother/baby");
