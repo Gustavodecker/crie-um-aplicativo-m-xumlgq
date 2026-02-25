@@ -9,6 +9,7 @@ import {
   Modal,
   TextInput,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,6 +17,7 @@ import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiGet, apiPut, apiPost } from "@/utils/api";
+import * as ImagePicker from "expo-image-picker";
 
 interface ConsultantProfile {
   id: string;
@@ -23,6 +25,8 @@ interface ConsultantProfile {
   name: string;
   photo: string | null;
   logo: string | null;
+  professionalTitle: string | null;
+  description: string | null;
   primaryColor: string;
   secondaryColor: string;
   createdAt: string;
@@ -42,6 +46,9 @@ export default function ProfileScreen() {
   const [errorMessage, setErrorMessage] = useState("");
   const [showError, setShowError] = useState(false);
   const [editName, setEditName] = useState("");
+  const [editProfessionalTitle, setEditProfessionalTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editPhotoUri, setEditPhotoUri] = useState<string | undefined>(undefined);
   const [editPrimaryColor, setEditPrimaryColor] = useState("");
   const [editSecondaryColor, setEditSecondaryColor] = useState("");
 
@@ -54,6 +61,8 @@ export default function ProfileScreen() {
       setProfile(data);
       setIsConsultant(true);
       setEditName(data.name);
+      setEditProfessionalTitle(data.professionalTitle || "");
+      setEditDescription(data.description || "");
       setEditPrimaryColor(data.primaryColor);
       setEditSecondaryColor(data.secondaryColor);
       console.log("[Role] User is a consultant");
@@ -83,13 +92,63 @@ export default function ProfileScreen() {
     }
   };
 
+  const handlePickImage = async () => {
+    try {
+      console.log("[Image Picker] Requesting permissions");
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        showErr("Permissão para acessar a galeria é necessária");
+        return;
+      }
+      console.log("[Image Picker] Launching image picker");
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        console.log("[Image Picker] Image selected:", result.assets[0].uri);
+        setEditPhotoUri(result.assets[0].uri);
+      }
+    } catch (error: any) {
+      console.error("[Image Picker] Error:", error);
+      showErr(error.message || "Erro ao selecionar imagem");
+    }
+  };
+
   const handleSaveProfile = async () => {
     if (!editName) { showErr("Nome é obrigatório"); return; }
     setEditLoading(true);
     try {
+      let photoUrl = profile?.photo;
+
+      // Upload photo if a new one was selected
+      if (editPhotoUri) {
+        console.log("[API] Uploading profile photo");
+        const formData = new FormData();
+        const uriParts = editPhotoUri.split('/');
+        const filename = uriParts[uriParts.length - 1];
+        // @ts-expect-error - FormData append with file object for React Native
+        formData.append('file', {
+          uri: editPhotoUri,
+          type: 'image/jpeg',
+          name: filename,
+        });
+        const uploadResponse = await apiPost<{ url: string; filename: string }>('/api/upload/profile-photo', formData);
+        photoUrl = uploadResponse.url;
+        console.log("[API] Photo uploaded:", photoUrl);
+      }
+
       console.log("[API] Updating consultant profile");
-      const updated = await apiPut<ConsultantProfile>("/api/consultant/profile", { name: editName });
+      const updated = await apiPut<ConsultantProfile>("/api/consultant/profile", {
+        name: editName,
+        professionalTitle: editProfessionalTitle || null,
+        description: editDescription || null,
+        photo: photoUrl,
+      });
       setProfile(updated);
+      setEditPhotoUri(undefined);
       setShowEditProfile(false);
     } catch (error: any) {
       showErr(error.message || "Erro ao atualizar perfil");
@@ -118,7 +177,16 @@ export default function ProfileScreen() {
     try {
       console.log("[API] Initializing consultant profile");
       const created = await apiPost<ConsultantProfile>("/api/init/consultant", { name: editName });
-      setProfile(created);
+      // After init, update with professional title and description if provided
+      if (editProfessionalTitle || editDescription) {
+        const updated = await apiPut<ConsultantProfile>("/api/consultant/profile", {
+          professionalTitle: editProfessionalTitle || null,
+          description: editDescription || null,
+        });
+        setProfile(updated);
+      } else {
+        setProfile(created);
+      }
       setIsConsultant(true);
       setShowEditProfile(false);
     } catch (error: any) {
@@ -234,14 +302,21 @@ export default function ProfileScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <View style={styles.profileHeader}>
           <View style={styles.avatarContainer}>
-            <IconSymbol
-              ios_icon_name="person.circle.fill"
-              android_material_icon_name="account-circle"
-              size={80}
-              color={colors.primary}
-            />
+            {profile?.photo ? (
+              <Image source={{ uri: profile.photo }} style={styles.profilePhoto} />
+            ) : (
+              <IconSymbol
+                ios_icon_name="person.circle.fill"
+                android_material_icon_name="account-circle"
+                size={80}
+                color={colors.primary}
+              />
+            )}
           </View>
           <Text style={styles.userName}>{profile?.name || user?.name || "Consultora"}</Text>
+          {profile?.professionalTitle ? (
+            <Text style={styles.professionalTitle}>{profile.professionalTitle}</Text>
+          ) : null}
           <Text style={styles.userEmail}>{user?.email}</Text>
           <View style={[styles.roleBadge, { backgroundColor: colors.primary + "20" }]}>
             <Text style={[styles.roleBadgeText, { color: colors.primary }]}>⭐ Consultora</Text>
@@ -253,6 +328,12 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+
+        {profile?.description ? (
+          <View style={styles.descriptionCard}>
+            <Text style={styles.descriptionText}>{profile.description}</Text>
+          </View>
+        ) : null}
 
         {!profile && (
           <View style={styles.initCard}>
@@ -271,6 +352,9 @@ export default function ProfileScreen() {
             onPress={() => {
               console.log("Tapped edit profile");
               setEditName(profile?.name || user?.name || "");
+              setEditProfessionalTitle(profile?.professionalTitle || "");
+              setEditDescription(profile?.description || "");
+              setEditPhotoUri(undefined);
               setShowEditProfile(true);
             }}
           >
@@ -329,13 +413,56 @@ export default function ProfileScreen() {
         <View style={styles.slideModalOverlay}>
           <View style={styles.slideModalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{profile ? "Editar Perfil" : "Configurar Perfil"}</Text>
+              <Text style={styles.modalTitle}>{profile ? "Editar Perfil Profissional" : "Configurar Perfil"}</Text>
               <TouchableOpacity onPress={() => setShowEditProfile(false)}><Text style={{ fontSize: 24, color: colors.textSecondary }}>✕</Text></TouchableOpacity>
             </View>
-            <TextInput style={styles.formInput} placeholder="Nome da consultora *" value={editName} onChangeText={setEditName} autoCapitalize="words" placeholderTextColor={colors.textSecondary} />
-            <TouchableOpacity style={[styles.saveButton, editLoading && { opacity: 0.6 }]} onPress={profile ? handleSaveProfile : handleInitProfile} disabled={editLoading}>
-              {editLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>Salvar</Text>}
-            </TouchableOpacity>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={styles.formLabel}>Foto de Perfil</Text>
+              <TouchableOpacity style={styles.photoUploadContainer} onPress={handlePickImage}>
+                {(editPhotoUri || profile?.photo) ? (
+                  <Image source={{ uri: editPhotoUri || profile?.photo || "" }} style={styles.photoPreview} />
+                ) : (
+                  <View style={styles.photoPlaceholder}>
+                    <IconSymbol
+                      ios_icon_name="person.fill"
+                      android_material_icon_name="person"
+                      size={40}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.photoPlaceholderText}>Toque para adicionar foto</Text>
+                  </View>
+                )}
+                <View style={styles.photoEditBadge}>
+                  <IconSymbol
+                    ios_icon_name="camera.fill"
+                    android_material_icon_name="camera"
+                    size={14}
+                    color="#FFF"
+                  />
+                </View>
+              </TouchableOpacity>
+
+              <Text style={styles.formLabel}>Nome Profissional *</Text>
+              <TextInput style={styles.formInput} placeholder="Ex: Debora Miguel" value={editName} onChangeText={setEditName} autoCapitalize="words" placeholderTextColor={colors.textSecondary} />
+
+              <Text style={styles.formLabel}>Título Profissional</Text>
+              <TextInput style={styles.formInput} placeholder="Ex: Especialista em Neurociência do Sono Infantil" value={editProfessionalTitle} onChangeText={setEditProfessionalTitle} autoCapitalize="words" placeholderTextColor={colors.textSecondary} />
+
+              <Text style={styles.formLabel}>Descrição Profissional</Text>
+              <TextInput
+                style={[styles.formInput, styles.textArea]}
+                placeholder="Descreva sua formação, metodologia, diferencial, abordagem e tempo de experiência..."
+                value={editDescription}
+                onChangeText={setEditDescription}
+                multiline
+                numberOfLines={6}
+                placeholderTextColor={colors.textSecondary}
+              />
+
+              <TouchableOpacity style={[styles.saveButton, editLoading && { opacity: 0.6 }]} onPress={profile ? handleSaveProfile : handleInitProfile} disabled={editLoading}>
+                {editLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>Salvar Perfil</Text>}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -426,8 +553,39 @@ const styles = StyleSheet.create({
   modalButtonTextConfirm: { fontSize: 16, fontWeight: "600", color: "#FFFFFF" },
   formInput: { backgroundColor: colors.background, borderRadius: 10, padding: 12, marginBottom: 10, fontSize: 15, borderWidth: 1, borderColor: colors.border, color: colors.text },
   formLabel: { fontSize: 14, fontWeight: "600", color: colors.text, marginBottom: 6 },
-  saveButton: { backgroundColor: colors.primary, borderRadius: 12, padding: 14, alignItems: "center", marginTop: 8 },
+  textArea: { height: 120, textAlignVertical: "top" },
+  saveButton: { backgroundColor: colors.primary, borderRadius: 12, padding: 14, alignItems: "center", marginTop: 8, marginBottom: 16 },
   saveButtonText: { fontSize: 16, fontWeight: "600", color: "#FFF" },
   colorInputRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
   colorPreviewBox: { width: 40, height: 40, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
+  profilePhoto: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.background },
+  professionalTitle: { fontSize: 14, color: colors.secondary, fontWeight: "600", marginBottom: 4, textAlign: "center" },
+  descriptionCard: { backgroundColor: colors.card, borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3, elevation: 2 },
+  descriptionText: { fontSize: 14, color: colors.textSecondary, lineHeight: 22 },
+  photoUploadContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 16,
+    backgroundColor: colors.background,
+    alignSelf: "center",
+    marginBottom: 16,
+    position: "relative",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  photoPreview: { width: "100%", height: "100%", borderRadius: 16 },
+  photoPlaceholder: { width: "100%", height: "100%", justifyContent: "center", alignItems: "center", gap: 4 },
+  photoPlaceholderText: { fontSize: 11, color: colors.textSecondary, textAlign: "center" },
+  photoEditBadge: {
+    position: "absolute",
+    bottom: 6,
+    right: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
 });
