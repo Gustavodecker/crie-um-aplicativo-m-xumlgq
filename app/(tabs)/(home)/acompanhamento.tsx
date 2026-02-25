@@ -6,6 +6,7 @@ import { apiGet } from "@/utils/api";
 import { colors } from "@/styles/commonStyles";
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Platform } from "react-native";
 import {
   View,
   Text,
@@ -380,7 +381,7 @@ export default function AcompanhamentoScreen() {
       setLoading(true);
       setError(null);
 
-      const routinesData = await apiGet<Routine[]>(`/routines/baby/${babyId}`);
+      const routinesData = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
       console.log("[Acompanhamento] Fetched routines:", routinesData.length);
 
       const routinesWithCompleteData: Routine[] = [];
@@ -399,7 +400,7 @@ export default function AcompanhamentoScreen() {
           console.log(`[Acompanhamento] Night sleep incomplete for routine ${routine.id}, fetching individual routine`);
           
           try {
-            const individualRoutine = await apiGet<Routine>(`/routines/${routine.id}`);
+            const individualRoutine = await apiGet<Routine>(`/api/routines/${routine.id}`);
             console.log(`[Acompanhamento] Individual routine fetched for ${routine.id}:`, {
               nightSleep: individualRoutine.nightSleep,
             });
@@ -451,7 +452,12 @@ export default function AcompanhamentoScreen() {
   }, [babyId, normalizeNightSleep]);
 
   useEffect(() => {
-    ScreenOrientation.unlockAsync();
+    // Only unlock orientation on native platforms
+    if (Platform.OS !== 'web') {
+      ScreenOrientation.unlockAsync().catch((err) => {
+        console.log("[Acompanhamento] Screen orientation unlock not supported:", err.message);
+      });
+    }
   }, []);
 
   useEffect(() => {
