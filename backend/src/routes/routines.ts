@@ -101,15 +101,28 @@ export function registerRoutinesRoutes(app: App) {
     return routines.map((routine) => {
       // Sort nightSleep by createdAt DESC and get the most recent one
       let nightSleepRecord = null;
+
+      app.logger.debug({
+        routineId: routine.id,
+        nightSleepRawData: routine.nightSleep,
+        nightSleepLength: routine.nightSleep?.length || 0
+      }, '[GET /api/routines/baby/:babyId] Raw nightSleep data from query');
+
       if (routine.nightSleep && routine.nightSleep.length > 0) {
         const sortedNightSleep = routine.nightSleep.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         nightSleepRecord = sortedNightSleep[0];
       }
 
       if (nightSleepRecord) {
-        app.logger.info({ routineId: routine.id, nightSleepId: nightSleepRecord.id, wakingsCount: nightSleepRecord.wakings?.length || 0 }, 'Night sleep found for routine');
+        app.logger.info({
+          routineId: routine.id,
+          routineDate: routine.date,
+          nightSleepId: nightSleepRecord.id,
+          nightSleepStartTime: nightSleepRecord.startTryTime,
+          wakingsCount: nightSleepRecord.wakings?.length || 0
+        }, '[GET /api/routines/baby/:babyId] Night sleep FOUND for routine');
       } else {
-        app.logger.debug({ routineId: routine.id }, 'No night sleep found for routine');
+        app.logger.info({ routineId: routine.id, routineDate: routine.date }, '[GET /api/routines/baby/:babyId] Night sleep NOT FOUND for routine');
       }
 
       return {
@@ -195,15 +208,28 @@ export function registerRoutinesRoutes(app: App) {
 
     // Sort nightSleep by createdAt DESC and get the most recent one
     let nightSleepRecord = null;
+
+    app.logger.debug({
+      routineId: routine.id,
+      nightSleepRawData: routine.nightSleep,
+      nightSleepLength: routine.nightSleep?.length || 0
+    }, '[GET /api/routines/:id] Raw nightSleep data from query');
+
     if (routine.nightSleep && routine.nightSleep.length > 0) {
       const sortedNightSleep = routine.nightSleep.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       nightSleepRecord = sortedNightSleep[0];
     }
 
     if (nightSleepRecord) {
-      app.logger.info({ routineId: routine.id, nightSleepId: nightSleepRecord.id, wakingsCount: nightSleepRecord.wakings?.length || 0 }, 'Night sleep found for routine');
+      app.logger.info({
+        routineId: routine.id,
+        routineDate: routine.date,
+        nightSleepId: nightSleepRecord.id,
+        nightSleepStartTime: nightSleepRecord.startTryTime,
+        wakingsCount: nightSleepRecord.wakings?.length || 0
+      }, '[GET /api/routines/:id] Night sleep FOUND for routine');
     } else {
-      app.logger.debug({ routineId: routine.id }, 'No night sleep found for routine');
+      app.logger.info({ routineId: routine.id, routineDate: routine.date }, '[GET /api/routines/:id] Night sleep NOT FOUND for routine');
     }
 
     return {

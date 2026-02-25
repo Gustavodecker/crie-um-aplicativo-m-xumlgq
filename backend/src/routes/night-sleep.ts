@@ -51,7 +51,7 @@ export function registerNightSleepRoutes(app: App) {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
-    app.logger.info({ userId: session.user.id, body: request.body }, 'Creating or updating night sleep record');
+    app.logger.info({ userId: session.user.id, routineId: request.body.routineId }, '[POST /api/night-sleep] STARTING - Received routineId');
 
     const routine = await app.db.query.dailyRoutines.findFirst({
       where: eq(schema.dailyRoutines.id, request.body.routineId),
@@ -59,7 +59,7 @@ export function registerNightSleepRoutes(app: App) {
     });
 
     if (!routine) {
-      app.logger.warn({ routineId: request.body.routineId }, 'Routine not found');
+      app.logger.warn({ routineId: request.body.routineId }, '[POST /api/night-sleep] Routine not found');
       return reply.status(404).send({ error: 'Routine not found' });
     }
 
@@ -71,19 +71,27 @@ export function registerNightSleepRoutes(app: App) {
     const isConsultant = consultant && routine.baby.consultantId === consultant.id;
 
     if (!isMother && !isConsultant) {
-      app.logger.warn({ userId: session.user.id, routineId: request.body.routineId }, 'Not authorized');
+      app.logger.warn({ userId: session.user.id, routineId: request.body.routineId }, '[POST /api/night-sleep] Not authorized');
       return reply.status(401).send({ error: 'Not authorized' });
     }
 
     // Check if night sleep record already exists for this routine
+    app.logger.debug({ routineId: request.body.routineId }, '[POST /api/night-sleep] Checking for existing record');
     const existingRecord = await app.db.query.nightSleep.findFirst({
       where: eq(schema.nightSleep.routineId, request.body.routineId),
     });
+
+    if (existingRecord) {
+      app.logger.info({ existingNightSleepId: existingRecord.id, routineId: request.body.routineId }, '[POST /api/night-sleep] Found existing night sleep record');
+    } else {
+      app.logger.info({ routineId: request.body.routineId }, '[POST /api/night-sleep] No existing night sleep record found, creating new one');
+    }
 
     let nightSleepRecord;
 
     if (existingRecord) {
       // Update existing record
+      app.logger.debug({ nightSleepId: existingRecord.id, routineId: request.body.routineId }, '[POST /api/night-sleep] Updating existing record');
       const [updated] = await app.db.update(schema.nightSleep)
         .set({
           startTryTime: (request.body.startTryTime && request.body.startTryTime.trim()) ? request.body.startTryTime : null,
@@ -98,9 +106,15 @@ export function registerNightSleepRoutes(app: App) {
         .where(eq(schema.nightSleep.id, existingRecord.id))
         .returning();
       nightSleepRecord = updated;
-      app.logger.info({ nightSleepId: nightSleepRecord.id, routineId: request.body.routineId }, 'Night sleep record updated successfully');
+      app.logger.info({
+        nightSleepId: nightSleepRecord.id,
+        routineId: nightSleepRecord.routineId,
+        createdAt: nightSleepRecord.createdAt,
+        startTryTime: nightSleepRecord.startTryTime
+      }, '[POST /api/night-sleep] UPDATED - Record persisted');
     } else {
       // Create new record
+      app.logger.debug({ routineId: request.body.routineId }, '[POST /api/night-sleep] Inserting new record');
       const [created] = await app.db.insert(schema.nightSleep).values({
         routineId: request.body.routineId,
         startTryTime: (request.body.startTryTime && request.body.startTryTime.trim()) ? request.body.startTryTime : null,
@@ -113,7 +127,27 @@ export function registerNightSleepRoutes(app: App) {
         consultantComments: request.body.consultantComments || null,
       }).returning();
       nightSleepRecord = created;
-      app.logger.info({ nightSleepId: nightSleepRecord.id, routineId: request.body.routineId }, 'Night sleep record created successfully');
+      app.logger.info({
+        nightSleepId: nightSleepRecord.id,
+        routineId: nightSleepRecord.routineId,
+        createdAt: nightSleepRecord.createdAt,
+        startTryTime: nightSleepRecord.startTryTime
+      }, '[POST /api/night-sleep] CREATED - Record persisted');
+    }
+
+    // Verification query - manually check if record exists in database
+    const verifyRecord = await app.db.query.nightSleep.findFirst({
+      where: eq(schema.nightSleep.routineId, request.body.routineId),
+    });
+
+    if (verifyRecord) {
+      app.logger.info({
+        verifiedNightSleepId: verifyRecord.id,
+        routineId: verifyRecord.routineId,
+        createdAt: verifyRecord.createdAt
+      }, '[POST /api/night-sleep] VERIFICATION SUCCESS - Record confirmed in database');
+    } else {
+      app.logger.error({ routineId: request.body.routineId }, '[POST /api/night-sleep] VERIFICATION FAILED - Record not found after insert/update!');
     }
 
     return reply.status(existingRecord ? 200 : 201).send(nightSleepRecord);
@@ -169,7 +203,7 @@ export function registerNightSleepRoutes(app: App) {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
-    app.logger.info({ userId: session.user.id, nightSleepId: request.params.id, body: request.body }, 'Updating night sleep record');
+    app.logger.info({ userId: session.user.id, nightSleepId: request.params.id }, '[PUT /api/night-sleep/:id] STARTING - Updating night sleep record');
 
     const nightSleepRecord = await app.db.query.nightSleep.findFirst({
       where: eq(schema.nightSleep.id, request.params.id),
@@ -179,9 +213,15 @@ export function registerNightSleepRoutes(app: App) {
     });
 
     if (!nightSleepRecord) {
-      app.logger.warn({ nightSleepId: request.params.id }, 'Night sleep record not found');
+      app.logger.warn({ nightSleepId: request.params.id }, '[PUT /api/night-sleep/:id] Night sleep record not found');
       return reply.status(404).send({ error: 'Night sleep record not found' });
     }
+
+    app.logger.info({
+      nightSleepId: nightSleepRecord.id,
+      routineId: nightSleepRecord.routineId,
+      updatingFields: Object.keys(request.body)
+    }, '[PUT /api/night-sleep/:id] Record found, updating fields');
 
     const consultant = await app.db.query.consultants.findFirst({
       where: eq(schema.consultants.userId, session.user.id),
@@ -191,7 +231,7 @@ export function registerNightSleepRoutes(app: App) {
     const isConsultant = consultant && nightSleepRecord.routine.baby.consultantId === consultant.id;
 
     if (!isMother && !isConsultant) {
-      app.logger.warn({ userId: session.user.id, nightSleepId: request.params.id }, 'Not authorized');
+      app.logger.warn({ userId: session.user.id, nightSleepId: request.params.id }, '[PUT /api/night-sleep/:id] Not authorized');
       return reply.status(401).send({ error: 'Not authorized' });
     }
 
@@ -207,12 +247,20 @@ export function registerNightSleepRoutes(app: App) {
       updateData.finalWakeTime = null;
     }
 
+    app.logger.debug({ nightSleepId: request.params.id, normalizedData: updateData }, '[PUT /api/night-sleep/:id] Executing update');
     const [updated] = await app.db.update(schema.nightSleep)
       .set(updateData)
       .where(eq(schema.nightSleep.id, request.params.id))
       .returning();
 
-    app.logger.info({ nightSleepId: updated.id }, 'Night sleep record updated successfully');
+    app.logger.info({
+      nightSleepId: updated.id,
+      routineId: updated.routineId,
+      startTryTime: updated.startTryTime,
+      fellAsleepTime: updated.fellAsleepTime,
+      finalWakeTime: updated.finalWakeTime
+    }, '[PUT /api/night-sleep/:id] UPDATED - Record persisted successfully');
+
     return updated;
   });
 
