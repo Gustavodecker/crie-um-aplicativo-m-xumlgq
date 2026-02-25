@@ -98,18 +98,28 @@ export function registerRoutinesRoutes(app: App) {
     });
 
     // Transform each routine to match the expected response format
-    return routines.map((routine) => ({
-      id: routine.id,
-      babyId: routine.babyId,
-      date: routine.date,
-      wakeUpTime: routine.wakeUpTime,
-      motherObservations: routine.motherObservations,
-      consultantComments: routine.consultantComments,
-      createdAt: routine.createdAt,
-      updatedAt: routine.updatedAt,
-      naps: routine.naps,
-      nightSleep: (routine.nightSleep && routine.nightSleep.length > 0) ? routine.nightSleep[0] : null,
-    }));
+    return routines.map((routine) => {
+      const nightSleepRecord = (routine.nightSleep && routine.nightSleep.length > 0) ? routine.nightSleep[0] : null;
+
+      if (nightSleepRecord) {
+        app.logger.info({ routineId: routine.id, nightSleepId: nightSleepRecord.id, wakingsCount: nightSleepRecord.wakings?.length || 0 }, 'Night sleep found for routine');
+      } else {
+        app.logger.debug({ routineId: routine.id }, 'No night sleep found for routine');
+      }
+
+      return {
+        id: routine.id,
+        babyId: routine.babyId,
+        date: routine.date,
+        wakeUpTime: routine.wakeUpTime,
+        motherObservations: routine.motherObservations,
+        consultantComments: routine.consultantComments,
+        createdAt: routine.createdAt,
+        updatedAt: routine.updatedAt,
+        naps: routine.naps,
+        nightSleep: nightSleepRecord,
+      };
+    });
   });
 
   // GET /api/routines/:id - Returns specific routine with naps and night sleep
@@ -178,6 +188,14 @@ export function registerRoutinesRoutes(app: App) {
       return reply.status(401).send({ error: 'Not authorized' });
     }
 
+    const nightSleepRecord = (routine.nightSleep && routine.nightSleep.length > 0) ? routine.nightSleep[0] : null;
+
+    if (nightSleepRecord) {
+      app.logger.info({ routineId: routine.id, nightSleepId: nightSleepRecord.id, wakingsCount: nightSleepRecord.wakings?.length || 0 }, 'Night sleep found for routine');
+    } else {
+      app.logger.debug({ routineId: routine.id }, 'No night sleep found for routine');
+    }
+
     return {
       id: routine.id,
       babyId: routine.babyId,
@@ -188,7 +206,7 @@ export function registerRoutinesRoutes(app: App) {
       createdAt: routine.createdAt,
       updatedAt: routine.updatedAt,
       naps: routine.naps,
-      nightSleep: (routine.nightSleep && routine.nightSleep.length > 0) ? routine.nightSleep[0] : null,
+      nightSleep: nightSleepRecord,
     };
   });
 
