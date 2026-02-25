@@ -549,11 +549,15 @@ export default function AcompanhamentoScreen() {
   const normalizedRoutines = routines;
 
   // Filter routines that have meaningful data
+  // Since backend now auto-creates nightSleep for every routine (with all null fields),
+  // we must check if nightSleep has actual data filled in (not just an empty shell)
   const filledRoutines = normalizedRoutines.filter((r) => {
-    const hasWakeUp = r.wakeUpTime && r.wakeUpTime.trim() !== "";
+    const hasWakeUp = r.wakeUpTime && r.wakeUpTime.trim() !== "" && r.wakeUpTime !== "07:00";
     const hasNaps = r.naps && r.naps.length > 0;
-    const hasNightSleep = r.nightSleep !== null && r.nightSleep !== undefined;
-    return hasWakeUp || hasNaps || hasNightSleep;
+    // Only count nightSleep as "has data" if it has at least one time field filled
+    const hasNightSleepData = r.nightSleep !== null && r.nightSleep !== undefined &&
+      (r.nightSleep.startTryTime !== null || r.nightSleep.fellAsleepTime !== null || r.nightSleep.finalWakeTime !== null);
+    return hasWakeUp || hasNaps || hasNightSleepData;
   });
 
   // Calculate reports for all filled routines

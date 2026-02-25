@@ -833,8 +833,17 @@ function RoutineListScreen({ isConsultant, baby, onBack, onOpenRoutine, showErr 
         consultantComments: null
       });
       
-      console.log("[API] Routine created:", newRoutine.id);
-      onOpenRoutine(newRoutine, dayNumber);
+      console.log("[API] Routine created:", newRoutine.id, "- fetching full routine with nightSleep");
+      
+      // Fetch the full routine with nightSleep (auto-created by backend)
+      try {
+        const fullRoutine = await apiGet<Routine>(`/api/routines/${newRoutine.id}`);
+        console.log("[API] Full routine loaded with nightSleep:", fullRoutine.nightSleep ? `id=${(fullRoutine.nightSleep as any).id}` : "null");
+        onOpenRoutine(fullRoutine, dayNumber);
+      } catch (fetchError: any) {
+        console.warn("[API] Could not fetch full routine, using basic routine:", fetchError.message);
+        onOpenRoutine(newRoutine, dayNumber);
+      }
     } catch (error: any) {
       showErr(error.message || "Erro ao criar rotina");
     }
@@ -1055,19 +1064,12 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
 
   /**
    * Normalizes nightSleep from the API response.
-   * The backend ORM may return nightSleep as:
-   *   - null / undefined  → no night sleep record
-   *   - {}                → empty object (legacy bug, treat as null)
-   *   - { id, ... }       → valid object
-   *   - [{ id, ... }]     → array with one or more items (ORM "with" relation quirk or legacy duplicates)
-   *   - []                → empty array (treat as null)
-   *
-   * When an array is returned, always picks the most recent record (sorted by createdAt DESC)
-   * to handle legacy duplicate records in the database.
+   * The backend now guarantees nightSleep is always a single object (not array) or null.
+   * This function handles legacy data and ensures consistent structure.
    */
   const normalizeNightSleep = (raw: any): NightSleep | null => {
     if (!raw) return null;
-    // Handle array form (ORM "with" relation returns array, or legacy duplicates)
+    // Handle array form (legacy data or ORM quirk)
     if (Array.isArray(raw)) {
       if (raw.length === 0) return null;
       // Sort by createdAt DESC to always get the most recent record
@@ -1097,10 +1099,10 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       console.log("[API] Loading routine:", initialRoutine.id);
       const data = await apiGet<any>(`/api/routines/${initialRoutine.id}`);
       
-      // Normalize nightSleep: handles null, {}, object, array forms from the API
+      // Normalize nightSleep: backend now returns single object or null
       const apiNightSleep: NightSleep | null = normalizeNightSleep(data.nightSleep);
       
-      console.log("[API] Routine loaded successfully:", data.id, "nightSleep:", apiNightSleep ? `id=${apiNightSleep.id}` : "null or empty object");
+      console.log("[API] Routine loaded successfully:", data.id, "nightSleep:", apiNightSleep ? `id=${apiNightSleep.id}` : "null");
       
       // Update the nightSleepIdRef with the latest id from API
       if (apiNightSleep?.id && !preserveNightSleep) {
@@ -1237,46 +1239,12 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     }
   };
 
-  const handleAddOrUpdateNightSleep = async () => {
-    try {
-      const currentNightSleep = normalizeNightSleep(routine.nightSleep);
-      if (currentNightSleep && currentNightSleep.id) {
-        console.log("[API] Night sleep already exists:", currentNightSleep.id, "- just expanding");
-        setExpandedNightSleep(true);
-        return;
-      }
-      
-      console.log("[API] Creating night sleep for routine:", routine.id);
-      const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
-        routineId: routine.id,
-        startTryTime: null,
-        fellAsleepTime: null,
-        finalWakeTime: null,
-        sleepMethod: null,
-        environment: null,
-        wakeUpMood: null,
-        observations: null,
-        consultantComments: null,
-      });
-      
-      console.log("[API] Night sleep created with ID:", newNightSleep.id);
-      
-      // Update ref immediately so auto-save functions can use it
-      nightSleepIdRef.current = newNightSleep.id;
-      console.log("[API] Updated nightSleepIdRef after creation to:", newNightSleep.id);
-      
-      // Update local state immediately with the created night sleep
-      const nightSleepWithWakings: NightSleep = { ...newNightSleep, wakings: [] };
-      setRoutine(prev => ({ ...prev, nightSleep: nightSleepWithWakings }));
-      setNightSleepObservations(newNightSleep.observations || "");
-      setNightSleepConsultantComments(newNightSleep.consultantComments || "");
-      setExpandedNightSleep(true);
-    } catch (error: any) {
-      console.error("[API] Error creating night sleep:", error);
-      showErr(error.message || "Erro ao criar sono noturno");
-    }
-  };
-
+  /**
+   * REFACTORED: Always use PUT to update nightSleep.
+   * Backend now auto-creates nightSleep when routine is created,
+   * so nightSleep.id should always exist.
+   * If nightSleep is missing (legacy routines), reload the routine to get it.
+   */
   const handleUpdateNightSleep = async (field: string, value: string | null) => {
     try {
       console.log("[API] Updating night sleep field:", field, "value:", value);
@@ -1284,83 +1252,82 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       // Convert empty string to null
       const normalizedValue = (value === "" || value === undefined) ? null : value;
       
-      const currentNightSleep = normalizeNightSleep(routine.nightSleep);
-      let updatedNightSleep: NightSleep;
-
-      if (currentNightSleep && currentNightSleep.id) {
-        console.log("[API] Night sleep exists (id:", currentNightSleep.id, "), using PUT");
-        const putResult = await apiPut<NightSleep>(`/api/night-sleep/${currentNightSleep.id}`, {
-          [field]: normalizedValue
-        });
-        updatedNightSleep = {
-          ...currentNightSleep,
-          ...putResult,
-          [field]: normalizedValue,
-          wakings: currentNightSleep.wakings || [],
-        };
-      } else {
-        console.log("[API] Night sleep does not exist yet, creating via POST for routine:", routine.id);
-        const postResult = await apiPost<NightSleep>("/api/night-sleep", {
-          routineId: routine.id,
-          startTryTime: field === "startTryTime" ? normalizedValue : null,
-          fellAsleepTime: field === "fellAsleepTime" ? normalizedValue : null,
-          finalWakeTime: field === "finalWakeTime" ? normalizedValue : null,
-          sleepMethod: field === "sleepMethod" ? normalizedValue : null,
-          environment: field === "environment" ? normalizedValue : null,
-          wakeUpMood: field === "wakeUpMood" ? normalizedValue : null,
-          observations: field === "observations" ? normalizedValue : null,
-          consultantComments: field === "consultantComments" ? normalizedValue : null,
-        });
-        updatedNightSleep = { ...postResult, wakings: [] };
-        // Update the ref immediately so auto-save functions can use it
-        nightSleepIdRef.current = postResult.id;
-        console.log("[API] Updated nightSleepIdRef after POST to:", postResult.id);
+      let currentNightSleep = normalizeNightSleep(routine.nightSleep);
+      
+      if (!currentNightSleep || !currentNightSleep.id) {
+        console.warn("[Night Sleep] nightSleep missing, reloading routine to get auto-created nightSleep...");
+        // Try to reload the routine - backend should have auto-created nightSleep
+        try {
+          const freshRoutine = await apiGet<any>(`/api/routines/${routine.id}`);
+          const freshNightSleep = normalizeNightSleep(freshRoutine.nightSleep);
+          if (freshNightSleep?.id) {
+            console.log("[Night Sleep] Found nightSleep after reload:", freshNightSleep.id);
+            currentNightSleep = freshNightSleep;
+            nightSleepIdRef.current = freshNightSleep.id;
+            setRoutine(prev => ({ ...prev, nightSleep: freshNightSleep }));
+          } else {
+            console.error("[Night Sleep] ERROR: nightSleep still missing after reload!");
+            showErr("Erro: Sono noturno não encontrado. Tente recarregar a rotina.");
+            return;
+          }
+        } catch (reloadError: any) {
+          console.error("[Night Sleep] ERROR: Could not reload routine:", reloadError.message);
+          showErr("Erro: Sono noturno não encontrado. Tente recarregar a rotina.");
+          return;
+        }
       }
       
-      console.log("[API] Night sleep updated/created with ID:", updatedNightSleep.id);
+      console.log("[API] Night sleep exists (id:", currentNightSleep.id, "), using PUT");
+      const putResult = await apiPut<NightSleep>(`/api/night-sleep/${currentNightSleep.id}`, {
+        [field]: normalizedValue
+      });
+      
+      const updatedNightSleep: NightSleep = {
+        ...currentNightSleep,
+        ...putResult,
+        [field]: normalizedValue,
+        wakings: currentNightSleep.wakings || [],
+      };
+      
+      console.log("[API] Night sleep updated with ID:", updatedNightSleep.id);
       
       setRoutine(prev => ({
         ...prev,
         nightSleep: updatedNightSleep
       }));
     } catch (error: any) {
-      console.error("[API] Error processing night sleep:", error);
-      showErr(error.message || "Erro ao processar sono noturno");
+      console.error("[API] Error updating night sleep:", error);
+      showErr(error.message || "Erro ao atualizar sono noturno");
     }
   };
 
   const handleAddWaking = async () => {
     try {
-      let nightSleepId = nightSleepIdRef.current;
-      let currentNightSleep = routine.nightSleep;
+      let currentNightSleep = normalizeNightSleep(routine.nightSleep);
       
-      if (!nightSleepId) {
-        console.log("[API] Night sleep doesn't exist yet, creating it for routine:", routine.id);
-        const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
-          routineId: routine.id,
-          startTryTime: null,
-          fellAsleepTime: null,
-          finalWakeTime: null,
-          sleepMethod: null,
-          environment: null,
-          wakeUpMood: null,
-          observations: null,
-          consultantComments: null,
-        });
-        
-        console.log("[API] Night sleep created with ID:", newNightSleep.id);
-        nightSleepId = newNightSleep.id;
-        currentNightSleep = { ...newNightSleep, wakings: [] };
-        
-        // Update ref immediately
-        nightSleepIdRef.current = newNightSleep.id;
-        console.log("[API] Updated nightSleepIdRef after waking creation to:", newNightSleep.id);
-        
-        setRoutine(prev => ({
-          ...prev,
-          nightSleep: currentNightSleep
-        }));
+      if (!currentNightSleep || !currentNightSleep.id) {
+        console.warn("[Night Sleep] nightSleep missing for waking, reloading routine...");
+        try {
+          const freshRoutine = await apiGet<any>(`/api/routines/${routine.id}`);
+          const freshNightSleep = normalizeNightSleep(freshRoutine.nightSleep);
+          if (freshNightSleep?.id) {
+            console.log("[Night Sleep] Found nightSleep after reload:", freshNightSleep.id);
+            currentNightSleep = freshNightSleep;
+            nightSleepIdRef.current = freshNightSleep.id;
+            setRoutine(prev => ({ ...prev, nightSleep: freshNightSleep }));
+          } else {
+            console.error("[Night Sleep] ERROR: nightSleep still missing after reload!");
+            showErr("Erro: Sono noturno não encontrado. Tente recarregar a rotina.");
+            return;
+          }
+        } catch (reloadError: any) {
+          console.error("[Night Sleep] ERROR: Could not reload routine:", reloadError.message);
+          showErr("Erro: Sono noturno não encontrado. Tente recarregar a rotina.");
+          return;
+        }
       }
+      
+      const nightSleepId = currentNightSleep.id;
       
       console.log("[API] Adding night waking to night sleep:", nightSleepId);
       const newWaking = await apiPost<NightWaking>("/api/night-wakings", {
@@ -1376,9 +1343,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         nightSleep: prev.nightSleep ? {
           ...prev.nightSleep,
           wakings: [...(prev.nightSleep.wakings || []), newWaking]
-        } : currentNightSleep ? {
-          ...currentNightSleep,
-          wakings: [newWaking]
         } : null
       }));
     } catch (error: any) {
@@ -1760,18 +1724,12 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           );
         })}
 
-        {/* SONO NOTURNO */}
+        {/* SONO NOTURNO - Now always exists (auto-created by backend) */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>🌙 Sono Noturno</Text>
-          {!nightSleep && (
-            <TouchableOpacity style={styles.addSmallBtn} onPress={handleAddOrUpdateNightSleep}>
-              <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
-              <Text style={styles.addSmallBtnText}>Adicionar</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
-        {nightSleep && (
+        {nightSleep ? (
           <View style={styles.expandableCard}>
             <TouchableOpacity 
               style={styles.expandableHeader} 
@@ -1861,6 +1819,11 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                 )}
               </View>
             )}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateText}>Sono noturno não encontrado</Text>
+            <Text style={styles.emptyStateSubtext}>Tente recarregar a rotina</Text>
           </View>
         )}
 
