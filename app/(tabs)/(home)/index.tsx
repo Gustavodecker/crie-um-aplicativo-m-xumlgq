@@ -17,6 +17,7 @@ import { Stack, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { setStringAsync } from 'expo-clipboard';
@@ -46,6 +47,7 @@ interface Baby {
   consultantId: string;
   objectives: string | null;
   conclusion: string | null;
+  archived: boolean;
   createdAt: string;
   ageMonths: number;
   ageDays: number;
@@ -679,6 +681,10 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutineList, onOpe
   const [editObjectives, setEditObjectives] = useState(baby.objectives || "");
   const [editConclusion, setEditConclusion] = useState(baby.conclusion || "");
   const [editLoading, setEditLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [archiveLoading, setArchiveLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -739,6 +745,38 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutineList, onOpe
     });
   };
 
+  const handleDeleteBaby = async () => {
+    setDeleteLoading(true);
+    try {
+      console.log("[API] Deleting baby:", baby.id);
+      await apiDelete(`/api/babies/${baby.id}`);
+      console.log("[API] Baby deleted successfully");
+      setShowDeleteConfirm(false);
+      onBack();
+    } catch (error: any) {
+      console.error("[API] Error deleting baby:", error);
+      showErr(error.message || "Erro ao excluir bebê");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleArchiveBaby = async () => {
+    setArchiveLoading(true);
+    try {
+      console.log("[API] Archiving baby:", baby.id);
+      await apiPut(`/api/babies/${baby.id}/archive`, { archived: true });
+      console.log("[API] Baby archived successfully");
+      setShowArchiveConfirm(false);
+      onBack();
+    } catch (error: any) {
+      console.error("[API] Error archiving baby:", error);
+      showErr(error.message || "Erro ao arquivar bebê");
+    } finally {
+      setArchiveLoading(false);
+    }
+  };
+
   if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
 
   return (
@@ -793,6 +831,32 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutineList, onOpe
             <Text style={styles.quickActionText}>Acompanhamento</Text>
           </TouchableOpacity>
         </View>
+
+        {isConsultant && (
+          <View style={styles.dangerZone}>
+            <Text style={styles.dangerZoneTitle}>⚠️ Zona de Perigo</Text>
+            <TouchableOpacity 
+              style={styles.archiveButton} 
+              onPress={() => setShowArchiveConfirm(true)}
+            >
+              <IconSymbol ios_icon_name="archivebox.fill" android_material_icon_name="archive" size={20} color={colors.statusMedium} />
+              <Text style={styles.archiveButtonText}>Arquivar Bebê</Text>
+            </TouchableOpacity>
+            <Text style={styles.dangerZoneHint}>
+              Bebês arquivados não aparecem na lista principal, mas ficam salvos como histórico.
+            </Text>
+            <TouchableOpacity 
+              style={styles.deleteButton} 
+              onPress={() => setShowDeleteConfirm(true)}
+            >
+              <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={20} color="#FFF" />
+              <Text style={styles.deleteButtonText}>Excluir Bebê Permanentemente</Text>
+            </TouchableOpacity>
+            <Text style={styles.dangerZoneHint}>
+              ⚠️ Esta ação não pode ser desfeita. Todos os dados serão perdidos.
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
       {isConsultant && (
@@ -839,6 +903,40 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutineList, onOpe
           </Modal>
         </>
       )}
+
+      <ConfirmModal
+        visible={showArchiveConfirm}
+        title="Arquivar Bebê?"
+        message={`Tem certeza que deseja arquivar ${baby.name}? O bebê não aparecerá mais na lista principal, mas ficará salvo como histórico.`}
+        confirmText="Arquivar"
+        cancelText="Cancelar"
+        confirmColor={colors.statusMedium}
+        loading={archiveLoading}
+        onConfirm={handleArchiveBaby}
+        onCancel={() => setShowArchiveConfirm(false)}
+        icon={{
+          ios: "archivebox.fill",
+          android: "archive",
+          color: colors.statusMedium,
+        }}
+      />
+
+      <ConfirmModal
+        visible={showDeleteConfirm}
+        title="Excluir Bebê Permanentemente?"
+        message={`Tem certeza que deseja excluir ${baby.name}? Esta ação não pode ser desfeita e todos os dados (rotinas, orientações, relatórios) serão perdidos permanentemente.`}
+        confirmText="Excluir Permanentemente"
+        cancelText="Cancelar"
+        confirmColor={colors.error}
+        loading={deleteLoading}
+        onConfirm={handleDeleteBaby}
+        onCancel={() => setShowDeleteConfirm(false)}
+        icon={{
+          ios: "trash.fill",
+          android: "delete",
+          color: colors.error,
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1045,6 +1143,9 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const [currentNapId, setCurrentNapId] = useState<string | null>(null);
   const [currentWakingId, setCurrentWakingId] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState(new Date());
+  const [showDeleteNapConfirm, setShowDeleteNapConfirm] = useState(false);
+  const [napToDelete, setNapToDelete] = useState<string | null>(null);
+  const [deleteNapLoading, setDeleteNapLoading] = useState(false);
   
   // Local state for text inputs with auto-save
   const [routineObservations, setRoutineObservations] = useState(initialRoutine.motherObservations || "");
@@ -1342,24 +1443,39 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   };
 
   const handleDeleteNap = async (napId: string) => {
+    setNapToDelete(napId);
+    setShowDeleteNapConfirm(true);
+  };
+
+  const confirmDeleteNap = async () => {
+    if (!napToDelete) return;
+    setDeleteNapLoading(true);
     try {
-      console.log("[API] Deleting nap:", napId);
-      await apiDelete(`/api/naps/${napId}`);
+      console.log("[API] Deleting nap:", napToDelete);
+      await apiDelete(`/api/naps/${napToDelete}`);
+      console.log("[API] Nap deleted successfully:", napToDelete);
       
       setNapObservations(prev => {
         const newState = { ...prev };
-        delete newState[napId];
+        delete newState[napToDelete];
         return newState;
       });
       setNapConsultantComments(prev => {
         const newState = { ...prev };
-        delete newState[napId];
+        delete newState[napToDelete];
         return newState;
       });
       
+      setShowDeleteNapConfirm(false);
+      setNapToDelete(null);
       await loadRoutine(false, true);
     } catch (error: any) {
+      console.error("[API] Error deleting nap:", error);
       showErr(error.message || "Erro ao excluir soneca");
+      setShowDeleteNapConfirm(false);
+      setNapToDelete(null);
+    } finally {
+      setDeleteNapLoading(false);
     }
   };
 
@@ -1929,7 +2045,7 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   
                   <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteNap(nap.id)}>
                     <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={18} color="#FFF" />
-                    <Text style={styles.deleteBtnText}>Excluir Soneca</Text>
+                    <Text style={styles.deleteBtnText}>Excluir Soneca {nap.napNumber}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -2135,6 +2251,26 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
           )}
         </>
       )}
+
+      <ConfirmModal
+        visible={showDeleteNapConfirm}
+        title="Excluir Soneca?"
+        message="Tem certeza que deseja excluir esta soneca? Esta ação não pode ser desfeita."
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        confirmColor={colors.error}
+        loading={deleteNapLoading}
+        onConfirm={confirmDeleteNap}
+        onCancel={() => {
+          setShowDeleteNapConfirm(false);
+          setNapToDelete(null);
+        }}
+        icon={{
+          ios: "trash.fill",
+          android: "delete",
+          color: colors.error,
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -2532,6 +2668,62 @@ const styles = StyleSheet.create({
   dateRow: { flexDirection: "row", gap: 8 },
   timePickerOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: colors.card, padding: 16, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   timePickerContainer: { alignItems: "center" },
+  timePickerDoneButton: { backgroundColor: colors.primary, borderRadius: 10, padding: 12, alignItems: "center", marginTop: 8, width: "100%" },
+  timePickerDoneText: { fontSize: 15, fontWeight: "600", color: "#FFFFFF" },
+  dangerZone: { 
+    backgroundColor: colors.card, 
+    borderRadius: 16, 
+    padding: 16, 
+    marginTop: 24, 
+    borderWidth: 2, 
+    borderColor: colors.error + "40" 
+  },
+  dangerZoneTitle: { 
+    fontSize: 16, 
+    fontWeight: "bold", 
+    color: colors.error, 
+    marginBottom: 12 
+  },
+  dangerZoneHint: { 
+    fontSize: 12, 
+    color: colors.textSecondary, 
+    marginBottom: 12, 
+    fontStyle: "italic" 
+  },
+  archiveButton: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "center", 
+    backgroundColor: colors.background, 
+    borderRadius: 12, 
+    paddingVertical: 12, 
+    paddingHorizontal: 16, 
+    marginBottom: 8, 
+    gap: 8,
+    borderWidth: 2,
+    borderColor: colors.statusMedium,
+  },
+  archiveButtonText: { 
+    fontSize: 15, 
+    fontWeight: "600", 
+    color: colors.statusMedium 
+  },
+  deleteButton: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "center", 
+    backgroundColor: colors.error, 
+    borderRadius: 12, 
+    paddingVertical: 12, 
+    paddingHorizontal: 16, 
+    marginBottom: 8, 
+    gap: 8 
+  },
+  deleteButtonText: { 
+    fontSize: 15, 
+    fontWeight: "600", 
+    color: "#FFF" 
+  },
 });
 
 export default HomeScreen;

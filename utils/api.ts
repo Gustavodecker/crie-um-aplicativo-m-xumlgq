@@ -1,3 +1,4 @@
+
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
@@ -58,11 +59,20 @@ export const apiCall = async <T = any>(
   try {
     const fetchOptions: RequestInit = {
       ...options,
-      headers: {
+    };
+
+    // Only add Content-Type header if there's a body
+    // DELETE requests without body should NOT have Content-Type header
+    if (options?.body) {
+      fetchOptions.headers = {
         "Content-Type": "application/json",
         ...options?.headers,
-      },
-    };
+      };
+    } else {
+      fetchOptions.headers = {
+        ...options?.headers,
+      };
+    }
 
     console.log("[API] Fetch options:", fetchOptions);
 
@@ -151,6 +161,7 @@ export const apiPatch = async <T = any>(
 
 /**
  * DELETE request helper
+ * CRITICAL: Does not send Content-Type header (DELETE requests without body should not have it)
  */
 export const apiDelete = async <T = any>(endpoint: string): Promise<T> => {
   return apiCall<T>(endpoint, {
@@ -234,6 +245,7 @@ export const authenticatedPatch = async <T = any>(
 
 /**
  * Authenticated DELETE request
+ * CRITICAL: Does not send Content-Type header (DELETE requests without body should not have it)
  */
 export const authenticatedDelete = async <T = any>(endpoint: string): Promise<T> => {
   return authenticatedApiCall<T>(endpoint, {
