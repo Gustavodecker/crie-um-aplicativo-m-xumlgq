@@ -108,7 +108,7 @@ export function registerRoutinesRoutes(app: App) {
       createdAt: routine.createdAt,
       updatedAt: routine.updatedAt,
       naps: routine.naps,
-      nightSleep: routine.nightSleep || null,
+      nightSleep: (routine.nightSleep && routine.nightSleep.length > 0) ? routine.nightSleep[0] : null,
     }));
   });
 
@@ -188,7 +188,7 @@ export function registerRoutinesRoutes(app: App) {
       createdAt: routine.createdAt,
       updatedAt: routine.updatedAt,
       naps: routine.naps,
-      nightSleep: routine.nightSleep || null,
+      nightSleep: (routine.nightSleep && routine.nightSleep.length > 0) ? routine.nightSleep[0] : null,
     };
   });
 
