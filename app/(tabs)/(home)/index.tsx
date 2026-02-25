@@ -207,6 +207,62 @@ function useDebounce(callback: (...args: any[]) => void, delay: number) {
   }, [delay]);
 }
 
+/**
+ * Normalizes nightSleep from the API response.
+ * Handles various formats: null, undefined, {}, { id, ... }, [{ id, ... }], []
+ */
+function normalizeNightSleep(raw: any): NightSleep | null {
+  console.log("[normalizeNightSleep] Input:", JSON.stringify(raw));
+  
+  // Handle null or undefined
+  if (!raw) {
+    console.log("[normalizeNightSleep] Input is null/undefined, returning null");
+    return null;
+  }
+  
+  // Handle array form (legacy data or ORM quirk)
+  if (Array.isArray(raw)) {
+    console.log("[normalizeNightSleep] Input is array, length:", raw.length);
+    if (raw.length === 0) {
+      console.log("[normalizeNightSleep] Empty array, returning null");
+      return null;
+    }
+    // Sort by createdAt DESC to always get the most recent record
+    const sorted = [...raw].sort((a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    const mostRecent = sorted[0];
+    if (!mostRecent || !mostRecent.id) {
+      console.log("[normalizeNightSleep] Array item has no id, returning null");
+      return null;
+    }
+    console.log("[normalizeNightSleep] Returning most recent from array, id:", mostRecent.id);
+    return {
+      ...mostRecent,
+      wakings: Array.isArray(mostRecent.wakings) ? mostRecent.wakings : [],
+    } as NightSleep;
+  }
+  
+  // Handle object form
+  if (typeof raw === 'object') {
+    // Check if it's an empty object {} or an object without an id
+    const hasId = 'id' in raw && raw.id;
+    if (!hasId) {
+      console.log("[normalizeNightSleep] Object has no id (empty object), returning null");
+      return null;
+    }
+    console.log("[normalizeNightSleep] Valid object with id:", raw.id);
+    return {
+      ...raw,
+      wakings: Array.isArray(raw.wakings) ? raw.wakings : [],
+    } as NightSleep;
+  }
+  
+  // Anything else
+  console.log("[normalizeNightSleep] Unknown type, returning null");
+  return null;
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 function HomeScreen() {
@@ -1061,38 +1117,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
       console.error("[Auto-save] Error saving night sleep comments:", error);
     }
   }, 1000);
-
-  /**
-   * Normalizes nightSleep from the API response.
-   * The backend now guarantees nightSleep is always a single object (not array) or null.
-   * This function handles legacy data and ensures consistent structure.
-   */
-  const normalizeNightSleep = (raw: any): NightSleep | null => {
-    if (!raw) return null;
-    // Handle array form (legacy data or ORM quirk)
-    if (Array.isArray(raw)) {
-      if (raw.length === 0) return null;
-      // Sort by createdAt DESC to always get the most recent record
-      const sorted = [...raw].sort((a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      const mostRecent = sorted[0];
-      if (!mostRecent || !mostRecent.id) return null;
-      return {
-        ...mostRecent,
-        wakings: Array.isArray(mostRecent.wakings) ? mostRecent.wakings : [],
-      } as NightSleep;
-    }
-    // Handle object form
-    if (typeof raw === 'object' && raw.id) {
-      return {
-        ...raw,
-        wakings: Array.isArray(raw.wakings) ? raw.wakings : [],
-      } as NightSleep;
-    }
-    // Empty object {} or anything else without an id
-    return null;
-  };
 
   const loadRoutine = useCallback(async (skipTextUpdate = false, preserveNightSleep = false) => {
     try {
