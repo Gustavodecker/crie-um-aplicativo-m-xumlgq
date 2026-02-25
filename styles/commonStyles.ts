@@ -1,32 +1,27 @@
 import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
 
-// Professional Sleep Consultant Platform - Sophisticated, clinical, premium
+// Sleep Consultant App Theme - Soft, calming colors for infant sleep
 export const colors = {
-  // Professional palette: Blue-gray + Off-white + Sage green
-  primary: '#5B7C99',        // Sophisticated blue-gray
-  secondary: '#8FA998',      // Sage green
-  accent: '#7B9BAD',         // Light blue-gray
-  background: '#F8F9FA',     // Off-white background
-  card: '#FFFFFF',           // Pure white cards
-  cardSecondary: '#F5F7F9',  // Light gray card variant
-  text: '#2C3E50',           // Dark blue-gray text
-  textSecondary: '#6B7C8E',  // Medium gray text
-  textLight: '#95A5B8',      // Light gray text
-  border: '#E1E8ED',         // Soft border
-  error: '#C97064',          // Muted red for errors
-  success: '#8FA998',        // Sage green for success
-  warning: '#D4A574',        // Warm beige for warnings
-  backgroundAlt: '#F5F7F9',  // Alternative background
-  grey: '#95A5B8',           // Gray
-  highlight: '#8FA998',      // Highlight color
+  // Light theme
+  background: '#F8F9FE',
+  card: '#FFFFFF',
+  text: '#1A1A2E',
+  textSecondary: '#6B7280',
+  primary: '#6B4CE6',
+  secondary: '#9D7FEA',
+  accent: '#F59E0B',
+  highlight: '#10B981',
+  border: '#E5E7EB',
+  error: '#EF4444',
+  success: '#10B981',
+  warning: '#F59E0B',
+  backgroundAlt: '#EEF0FB',
+  grey: '#9CA3AF',
   
   // Status colors for sleep tracking
-  statusGood: '#8FA998',     // Sage green
-  statusMedium: '#D4A574',   // Warm beige
-  statusPoor: '#C97064',     // Muted red
-  
-  // Shadow
-  shadow: 'rgba(91, 124, 153, 0.08)',
+  statusGood: '#10B981',
+  statusMedium: '#F59E0B',
+  statusPoor: '#EF4444',
 };
 
 export const buttonStyles = StyleSheet.create({
