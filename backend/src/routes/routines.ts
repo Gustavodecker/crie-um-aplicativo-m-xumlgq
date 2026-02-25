@@ -328,6 +328,23 @@ export function registerRoutinesRoutes(app: App) {
     }).returning();
 
     app.logger.info({ routineId: routine.id, babyId: request.body.babyId }, 'Routine created successfully');
+
+    // Auto-create associated nightSleep record
+    app.logger.debug({ routineId: routine.id }, 'Auto-creating nightSleep record');
+    const [nightSleep] = await app.db.insert(schema.nightSleep).values({
+      routineId: routine.id,
+      startTryTime: null,
+      fellAsleepTime: null,
+      finalWakeTime: null,
+      sleepMethod: null,
+      environment: null,
+      wakeUpMood: null,
+      observations: null,
+      consultantComments: null,
+    }).returning();
+
+    app.logger.info({ routineId: routine.id, nightSleepId: nightSleep.id }, 'NightSleep auto-created for routine');
+
     return reply.status(201).send(routine);
   });
 

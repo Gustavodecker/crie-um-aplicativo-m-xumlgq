@@ -793,7 +793,8 @@ describe("API Integration Tests", () => {
         observations: "Good night sleep",
       }),
     });
-    await expectStatus(res, 201);
+    // Returns 200 because nightSleep is auto-created with routine, so POST updates it
+    await expectStatus(res, 200);
     const data = await res.json();
     nightSleepId = data.id;
     expect(data.routineId).toBe(routineId);

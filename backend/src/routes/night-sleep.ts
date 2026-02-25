@@ -27,6 +27,23 @@ export function registerNightSleepRoutes(app: App) {
         },
       },
       response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            routineId: { type: 'string', format: 'uuid' },
+            startTryTime: { type: ['string', 'null'] },
+            fellAsleepTime: { type: ['string', 'null'] },
+            finalWakeTime: { type: ['string', 'null'] },
+            sleepMethod: { type: ['string', 'null'] },
+            environment: { type: ['string', 'null'] },
+            wakeUpMood: { type: ['string', 'null'] },
+            observations: { type: ['string', 'null'] },
+            consultantComments: { type: ['string', 'null'] },
+            createdAt: { type: 'string', format: 'date-time' },
+            wakings: { type: 'array' },
+          },
+        },
         201: {
           type: 'object',
           properties: {
@@ -41,6 +58,7 @@ export function registerNightSleepRoutes(app: App) {
             observations: { type: ['string', 'null'] },
             consultantComments: { type: ['string', 'null'] },
             createdAt: { type: 'string', format: 'date-time' },
+            wakings: { type: 'array' },
           },
         },
         401: { type: 'object', properties: { error: { type: 'string' } } },
@@ -135,22 +153,24 @@ export function registerNightSleepRoutes(app: App) {
       }, '[POST /api/night-sleep] CREATED - Record persisted');
     }
 
-    // Verification query - manually check if record exists in database
-    const verifyRecord = await app.db.query.nightSleep.findFirst({
+    // Fetch complete record with wakings for response
+    const completeRecord = await app.db.query.nightSleep.findFirst({
       where: eq(schema.nightSleep.routineId, request.body.routineId),
+      with: { wakings: true },
     });
 
-    if (verifyRecord) {
+    if (completeRecord) {
       app.logger.info({
-        verifiedNightSleepId: verifyRecord.id,
-        routineId: verifyRecord.routineId,
-        createdAt: verifyRecord.createdAt
-      }, '[POST /api/night-sleep] VERIFICATION SUCCESS - Record confirmed in database');
+        verifiedNightSleepId: completeRecord.id,
+        routineId: completeRecord.routineId,
+        createdAt: completeRecord.createdAt,
+        wakingsCount: completeRecord.wakings?.length || 0
+      }, '[POST /api/night-sleep] VERIFICATION SUCCESS - Record confirmed in database with wakings');
     } else {
       app.logger.error({ routineId: request.body.routineId }, '[POST /api/night-sleep] VERIFICATION FAILED - Record not found after insert/update!');
     }
 
-    return reply.status(existingRecord ? 200 : 201).send(nightSleepRecord);
+    return reply.status(existingRecord ? 200 : 201).send(completeRecord || nightSleepRecord);
   });
 
   // PUT /api/night-sleep/:id - Updates night sleep
@@ -261,7 +281,13 @@ export function registerNightSleepRoutes(app: App) {
       finalWakeTime: updated.finalWakeTime
     }, '[PUT /api/night-sleep/:id] UPDATED - Record persisted successfully');
 
-    return updated;
+    // Fetch complete record with wakings for response
+    const completeRecord = await app.db.query.nightSleep.findFirst({
+      where: eq(schema.nightSleep.id, request.params.id),
+      with: { wakings: true },
+    });
+
+    return completeRecord || updated;
   });
 
   // POST /api/night-wakings - Adds night waking
