@@ -99,30 +99,34 @@ export function registerRoutinesRoutes(app: App) {
 
     // Transform each routine to match the expected response format
     return routines.map((routine) => {
-      // Sort nightSleep by createdAt DESC and get the most recent one
-      let nightSleepRecord = null;
+      // Extract nightSleep from array (relation returns array since schema defines it as many)
+      let nightSleepRecord: any = null;
 
       app.logger.debug({
         routineId: routine.id,
         nightSleepRawData: routine.nightSleep,
-        nightSleepLength: routine.nightSleep?.length || 0
+        nightSleepLength: Array.isArray(routine.nightSleep) ? routine.nightSleep.length : 0,
+        nightSleepType: typeof routine.nightSleep
       }, '[GET /api/routines/baby/:babyId] Raw nightSleep data from query');
 
-      if (routine.nightSleep && routine.nightSleep.length > 0) {
+      // nightSleep is queried as an array due to schema relation type
+      if (Array.isArray(routine.nightSleep) && routine.nightSleep.length > 0) {
         const sortedNightSleep = routine.nightSleep.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         nightSleepRecord = sortedNightSleep[0];
-      }
-
-      if (nightSleepRecord) {
         app.logger.info({
           routineId: routine.id,
           routineDate: routine.date,
           nightSleepId: nightSleepRecord.id,
           nightSleepStartTime: nightSleepRecord.startTryTime,
-          wakingsCount: nightSleepRecord.wakings?.length || 0
+          wakingsCount: Array.isArray(nightSleepRecord.wakings) ? nightSleepRecord.wakings.length : 0
         }, '[GET /api/routines/baby/:babyId] Night sleep FOUND for routine');
       } else {
-        app.logger.info({ routineId: routine.id, routineDate: routine.date }, '[GET /api/routines/baby/:babyId] Night sleep NOT FOUND for routine');
+        app.logger.info({
+          routineId: routine.id,
+          routineDate: routine.date,
+          reason: 'nightSleep array is empty or undefined'
+        }, '[GET /api/routines/baby/:babyId] Night sleep NOT FOUND for routine');
+        nightSleepRecord = null;
       }
 
       return {
@@ -135,7 +139,7 @@ export function registerRoutinesRoutes(app: App) {
         createdAt: routine.createdAt,
         updatedAt: routine.updatedAt,
         naps: routine.naps,
-        nightSleep: nightSleepRecord,
+        nightSleep: nightSleepRecord === null ? null : nightSleepRecord,
       };
     });
   });
@@ -206,33 +210,37 @@ export function registerRoutinesRoutes(app: App) {
       return reply.status(401).send({ error: 'Not authorized' });
     }
 
-    // Sort nightSleep by createdAt DESC and get the most recent one
-    let nightSleepRecord = null;
+    // Extract nightSleep from array (relation returns array since schema defines it as many)
+    let nightSleepRecord: any = null;
 
     app.logger.debug({
       routineId: routine.id,
       nightSleepRawData: routine.nightSleep,
-      nightSleepLength: routine.nightSleep?.length || 0
+      nightSleepLength: Array.isArray(routine.nightSleep) ? routine.nightSleep.length : 0,
+      nightSleepType: typeof routine.nightSleep
     }, '[GET /api/routines/:id] Raw nightSleep data from query');
 
-    if (routine.nightSleep && routine.nightSleep.length > 0) {
+    // nightSleep is queried as an array due to schema relation type
+    if (Array.isArray(routine.nightSleep) && routine.nightSleep.length > 0) {
       const sortedNightSleep = routine.nightSleep.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       nightSleepRecord = sortedNightSleep[0];
-    }
-
-    if (nightSleepRecord) {
       app.logger.info({
         routineId: routine.id,
         routineDate: routine.date,
         nightSleepId: nightSleepRecord.id,
         nightSleepStartTime: nightSleepRecord.startTryTime,
-        wakingsCount: nightSleepRecord.wakings?.length || 0
+        wakingsCount: Array.isArray(nightSleepRecord.wakings) ? nightSleepRecord.wakings.length : 0
       }, '[GET /api/routines/:id] Night sleep FOUND for routine');
     } else {
-      app.logger.info({ routineId: routine.id, routineDate: routine.date }, '[GET /api/routines/:id] Night sleep NOT FOUND for routine');
+      app.logger.info({
+        routineId: routine.id,
+        routineDate: routine.date,
+        reason: 'nightSleep array is empty or undefined'
+      }, '[GET /api/routines/:id] Night sleep NOT FOUND for routine');
+      nightSleepRecord = null;
     }
 
-    return {
+    const response = {
       id: routine.id,
       babyId: routine.babyId,
       date: routine.date,
@@ -242,8 +250,16 @@ export function registerRoutinesRoutes(app: App) {
       createdAt: routine.createdAt,
       updatedAt: routine.updatedAt,
       naps: routine.naps,
-      nightSleep: nightSleepRecord,
+      nightSleep: nightSleepRecord === null ? null : nightSleepRecord,
     };
+
+    app.logger.debug({
+      nightSleepInResponse: response.nightSleep,
+      nightSleepIsNull: response.nightSleep === null,
+      nightSleepKeys: response.nightSleep ? Object.keys(response.nightSleep) : []
+    }, '[GET /api/routines/:id] Response nightSleep details');
+
+    return response;
   });
 
   // POST /api/routines - Creates routine
