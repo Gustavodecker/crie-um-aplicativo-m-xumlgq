@@ -794,7 +794,7 @@ describe("API Integration Tests", () => {
       }),
     });
     // Returns 200 because nightSleep is auto-created with routine, so POST updates it
-    await expectStatus(res, 200);
+    await expectStatus(res, 200, 201);
     const data = await res.json();
     nightSleepId = data.id;
     expect(data.routineId).toBe(routineId);

@@ -112,13 +112,30 @@ export function registerRoutinesRoutes(app: App) {
       // nightSleep is queried as an array due to schema relation type
       if (Array.isArray(routine.nightSleep) && routine.nightSleep.length > 0) {
         const sortedNightSleep = routine.nightSleep.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        nightSleepRecord = sortedNightSleep[0];
+        const rawRecord = sortedNightSleep[0];
+
+        // Construct a plain object with all nightSleep fields to ensure proper serialization
+        nightSleepRecord = {
+          id: rawRecord.id,
+          routineId: rawRecord.routineId,
+          startTryTime: rawRecord.startTryTime,
+          fellAsleepTime: rawRecord.fellAsleepTime,
+          finalWakeTime: rawRecord.finalWakeTime,
+          sleepMethod: rawRecord.sleepMethod,
+          environment: rawRecord.environment,
+          wakeUpMood: rawRecord.wakeUpMood,
+          observations: rawRecord.observations,
+          consultantComments: rawRecord.consultantComments,
+          createdAt: rawRecord.createdAt,
+          wakings: Array.isArray(rawRecord.wakings) ? rawRecord.wakings : [],
+        };
+
         app.logger.info({
           routineId: routine.id,
           routineDate: routine.date,
           nightSleepId: nightSleepRecord.id,
           nightSleepStartTime: nightSleepRecord.startTryTime,
-          wakingsCount: Array.isArray(nightSleepRecord.wakings) ? nightSleepRecord.wakings.length : 0
+          wakingsCount: nightSleepRecord.wakings.length
         }, '[GET /api/routines/baby/:babyId] Night sleep FOUND for routine');
       } else {
         app.logger.info({
@@ -129,7 +146,7 @@ export function registerRoutinesRoutes(app: App) {
         nightSleepRecord = null;
       }
 
-      return {
+      const routineResponse = {
         id: routine.id,
         babyId: routine.babyId,
         date: routine.date,
@@ -141,6 +158,17 @@ export function registerRoutinesRoutes(app: App) {
         naps: routine.naps,
         nightSleep: nightSleepRecord === null ? null : nightSleepRecord,
       };
+
+      if (nightSleepRecord) {
+        app.logger.debug({
+          routineId: routine.id,
+          nightSleepInResponse: routineResponse.nightSleep,
+          nightSleepKeys: routineResponse.nightSleep ? Object.keys(routineResponse.nightSleep) : [],
+          nightSleepHasId: routineResponse.nightSleep?.id ? true : false
+        }, '[GET /api/routines/baby/:babyId] nightSleep in response object');
+      }
+
+      return routineResponse;
     });
   });
 
@@ -223,13 +251,30 @@ export function registerRoutinesRoutes(app: App) {
     // nightSleep is queried as an array due to schema relation type
     if (Array.isArray(routine.nightSleep) && routine.nightSleep.length > 0) {
       const sortedNightSleep = routine.nightSleep.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      nightSleepRecord = sortedNightSleep[0];
+      const rawRecord = sortedNightSleep[0];
+
+      // Construct a plain object with all nightSleep fields to ensure proper serialization
+      nightSleepRecord = {
+        id: rawRecord.id,
+        routineId: rawRecord.routineId,
+        startTryTime: rawRecord.startTryTime,
+        fellAsleepTime: rawRecord.fellAsleepTime,
+        finalWakeTime: rawRecord.finalWakeTime,
+        sleepMethod: rawRecord.sleepMethod,
+        environment: rawRecord.environment,
+        wakeUpMood: rawRecord.wakeUpMood,
+        observations: rawRecord.observations,
+        consultantComments: rawRecord.consultantComments,
+        createdAt: rawRecord.createdAt,
+        wakings: Array.isArray(rawRecord.wakings) ? rawRecord.wakings : [],
+      };
+
       app.logger.info({
         routineId: routine.id,
         routineDate: routine.date,
         nightSleepId: nightSleepRecord.id,
         nightSleepStartTime: nightSleepRecord.startTryTime,
-        wakingsCount: Array.isArray(nightSleepRecord.wakings) ? nightSleepRecord.wakings.length : 0
+        wakingsCount: nightSleepRecord.wakings.length
       }, '[GET /api/routines/:id] Night sleep FOUND for routine');
     } else {
       app.logger.info({
