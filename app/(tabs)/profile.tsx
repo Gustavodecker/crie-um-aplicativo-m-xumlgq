@@ -269,6 +269,18 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => {
+              console.log("Tapped edit professional profile");
+              router.push("/edit-consultant-profile");
+            }}
+          >
+            <IconSymbol ios_icon_name="person.crop.circle.badge.checkmark" android_material_icon_name="verified-user" size={24} color={colors.text} />
+            <Text style={styles.menuItemText}>Perfil Profissional</Text>
+            <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => {
               console.log("Tapped edit profile");
               setEditName(profile?.name || user?.name || "");
               setShowEditProfile(true);

@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { ConsultantProfileCard } from "@/components/ConsultantProfileCard";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { setStringAsync } from 'expo-clipboard';
@@ -359,6 +360,7 @@ function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultan
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdBabyToken, setCreatedBabyToken] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [consultantProfile, setConsultantProfile] = useState<{ name: string; photo: string | null; professionalTitle: string | null; description: string | null } | null>(null);
   
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -367,6 +369,14 @@ function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultan
     console.log("[API] Loading babies, showArchived:", showArchived);
     try {
       if (isConsultant) {
+        // Load consultant profile
+        try {
+          const profile = await apiGet<{ name: string; photo: string | null; professionalTitle: string | null; description: string | null }>("/api/consultant/profile");
+          setConsultantProfile(profile);
+        } catch (profileError) {
+          console.log("[API] Could not load consultant profile");
+        }
+
         const endpoint = showArchived 
           ? "/api/consultant/babies?includeArchived=true" 
           : "/api/consultant/babies";
@@ -478,6 +488,17 @@ function BabiesListScreen({ isConsultant, onSelectBaby, showErr }: { isConsultan
         contentContainerStyle={styles.scrollContent} 
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadBabies(); }} />}
       >
+        {/* Consultant Profile Card */}
+        {isConsultant && consultantProfile && (
+          <ConsultantProfileCard
+            name={consultantProfile.name}
+            professionalTitle={consultantProfile.professionalTitle || undefined}
+            description={consultantProfile.description || undefined}
+            photoUrl={consultantProfile.photo || undefined}
+            isConsultant={true}
+          />
+        )}
+
         <View style={styles.header}>
           <Text style={styles.greeting}>Olá, {isConsultant ? "Consultora" : "Mamãe"}! 👋</Text>
           <Text style={styles.subtitle}>

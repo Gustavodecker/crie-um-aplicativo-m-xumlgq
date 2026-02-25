@@ -1,6 +1,7 @@
 
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
+import { useRouter } from "expo-router";
 import { IconSymbol } from "@/components/IconSymbol";
 import { colors, typography, spacing, shadows } from "@/styles/commonStyles";
 
@@ -28,8 +29,17 @@ export function ConsultantProfileCard({
   onEdit,
   isConsultant = false,
 }: ConsultantProfileCardProps) {
+  const router = useRouter();
   const displayTitle = professionalTitle || "Consultora de Sono Infantil";
   const displayDescription = description || "Especialista em rotinas de sono e desenvolvimento infantil saudável.";
+
+  const handleEdit = () => {
+    if (onEdit) {
+      onEdit();
+    } else {
+      router.push("/edit-consultant-profile");
+    }
+  };
 
   return (
     <View style={styles.card}>
@@ -37,8 +47,8 @@ export function ConsultantProfileCard({
         <View style={styles.headerLeft}>
           <Text style={styles.badge}>CONSULTORA</Text>
         </View>
-        {isConsultant && onEdit && (
-          <TouchableOpacity style={styles.editButton} onPress={onEdit}>
+        {isConsultant && (
+          <TouchableOpacity style={styles.editButton} onPress={handleEdit}>
             <IconSymbol
               ios_icon_name="pencil"
               android_material_icon_name="edit"
