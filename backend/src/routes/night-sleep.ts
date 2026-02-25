@@ -213,6 +213,19 @@ export function registerNightSleepRoutes(app: App) {
             observations: { type: ['string', 'null'] },
             consultantComments: { type: ['string', 'null'] },
             createdAt: { type: 'string', format: 'date-time' },
+            wakings: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string', format: 'uuid' },
+                  nightSleepId: { type: 'string', format: 'uuid' },
+                  startTime: { type: 'string' },
+                  endTime: { type: 'string' },
+                  createdAt: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
           },
         },
         401: { type: 'object', properties: { error: { type: 'string' } } },
