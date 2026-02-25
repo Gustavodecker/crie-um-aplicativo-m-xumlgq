@@ -1200,37 +1200,346 @@ function BabyDetailScreen({ isConsultant, baby, onBack, onOpenRoutineList, onOpe
   );
 }
 
-// ─── Placeholder Screens (to fix linting errors) ──────────────────────────────
+// ─── Routine List Screen ──────────────────────────────────────────────────────
 
 function RoutineListScreen({ isConsultant, baby, onBack, onOpenRoutine, showErr }: {
   isConsultant: boolean; baby: Baby; onBack: () => void; onOpenRoutine: (r: Routine, dayNum: number) => void; showErr: (m: string) => void;
 }) {
+  const [routines, setRoutines] = useState<Routine[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadRoutines = useCallback(async () => {
+    console.log("[API] Loading routines for baby:", baby.id);
+    try {
+      const data = await apiGet<Routine[]>(`/api/routines/baby/${baby.id}`);
+      console.log("[API] Routines loaded:", data.length);
+      // Sort by date DESC (most recent first)
+      const sorted = [...data].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setRoutines(sorted);
+    } catch (error: any) {
+      console.error("Error loading routines:", error);
+      showErr(error.message || "Erro ao carregar rotinas");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [baby.id, showErr]);
+
+  useEffect(() => { loadRoutines(); }, [loadRoutines]);
+
+  if (loading) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>;
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Stack.Screen options={{ headerShown: true, title: "Rotinas", headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerLeft: () => (
-        <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}><IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} /></TouchableOpacity>
-      )}} />
-      <View style={styles.loadingContainer}>
-        <Text style={styles.infoCardText}>Rotinas em desenvolvimento...</Text>
-      </View>
+      <Stack.Screen options={{ 
+        headerShown: true, 
+        title: "Rotinas", 
+        headerStyle: { backgroundColor: colors.background }, 
+        headerTintColor: colors.text, 
+        headerLeft: () => (
+          <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}>
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        )
+      }} />
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadRoutines(); }} />}
+      >
+        {routines.length === 0 ? (
+          <View style={styles.emptyState}>
+            <IconSymbol ios_icon_name="moon.zzz.fill" android_material_icon_name="bedtime" size={64} color={colors.textSecondary} />
+            <Text style={styles.emptyStateText}>Nenhuma rotina cadastrada</Text>
+            <Text style={styles.emptyStateSubtext}>As rotinas aparecerão aqui quando forem criadas</Text>
+          </View>
+        ) : (
+          <View style={styles.babiesList}>
+            {routines.map((routine, index) => {
+              const dayNumber = routines.length - index;
+              const dateDisplay = formatDateToBR(routine.date);
+              const napCount = routine.naps?.length || 0;
+              const hasNightSleep = routine.nightSleep && routine.nightSleep.fellAsleepTime;
+              
+              return (
+                <TouchableOpacity 
+                  key={routine.id} 
+                  style={styles.babyCard} 
+                  onPress={() => {
+                    console.log("Opening routine:", routine.id, "Day:", dayNumber);
+                    onOpenRoutine(routine, dayNumber);
+                  }}
+                >
+                  <View style={styles.babyCardHeader}>
+                    <View style={styles.babyIcon}>
+                      <Text style={{ fontSize: 20, fontWeight: "bold", color: colors.primary }}>
+                        {dayNumber}
+                      </Text>
+                    </View>
+                    <View style={styles.babyInfo}>
+                      <Text style={styles.babyName}>Dia {dayNumber}</Text>
+                      <Text style={styles.motherName}>{dateDisplay}</Text>
+                    </View>
+                    <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={20} color={colors.textSecondary} />
+                  </View>
+                  <View style={styles.babyCardFooter}>
+                    <View style={styles.ageContainer}>
+                      <IconSymbol ios_icon_name="moon.fill" android_material_icon_name="bedtime" size={16} color={colors.textSecondary} />
+                      <Text style={styles.ageText}>{napCount} soneca{napCount !== 1 ? "s" : ""}</Text>
+                    </View>
+                    {hasNightSleep && (
+                      <View style={styles.ageContainer}>
+                        <IconSymbol ios_icon_name="moon.stars.fill" android_material_icon_name="nights-stay" size={16} color={colors.textSecondary} />
+                        <Text style={styles.ageText}>Sono noturno</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
+// ─── Routine Detail Screen ────────────────────────────────────────────────────
+
 function RoutineDetailScreen({ isConsultant, baby, routine, dayNumber, onBack, showErr }: {
   isConsultant: boolean; baby: Baby; routine: Routine; dayNumber: number; onBack: () => void; showErr: (m: string) => void;
 }) {
+  const [currentRoutine, setCurrentRoutine] = useState<Routine>(routine);
+  const [loading, setLoading] = useState(false);
+  const [wakeUpTime, setWakeUpTime] = useState(routine.wakeUpTime || "");
+  const [motherObs, setMotherObs] = useState(routine.motherObservations || "");
+  const [consultantComments, setConsultantComments] = useState(routine.consultantComments || "");
+  const [showDeleteNapConfirm, setShowDeleteNapConfirm] = useState(false);
+  const [napToDelete, setNapToDelete] = useState<string | null>(null);
+  const [deleteNapLoading, setDeleteNapLoading] = useState(false);
+
+  const nightSleepIdRef = useRef<string | null>(null);
+  const nightSleepStorageKey = `nightSleepId_${routine.id}`;
+
+  const debouncedSaveWakeUpTime = useDebounce(async (value: string) => {
+    if (!value) return;
+    try {
+      console.log("[API] Saving wakeUpTime:", value);
+      await apiPut(`/api/routines/${routine.id}`, { wakeUpTime: value });
+    } catch (error: any) {
+      console.error("Error saving wakeUpTime:", error);
+      showErr(error.message || "Erro ao salvar horário");
+    }
+  }, 1000);
+
+  const debouncedSaveMotherObs = useDebounce(async (value: string) => {
+    try {
+      console.log("[API] Saving motherObservations");
+      await apiPut(`/api/routines/${routine.id}`, { motherObservations: value || null });
+    } catch (error: any) {
+      console.error("Error saving motherObservations:", error);
+      showErr(error.message || "Erro ao salvar observações");
+    }
+  }, 1000);
+
+  const debouncedSaveConsultantComments = useDebounce(async (value: string) => {
+    try {
+      console.log("[API] Saving consultantComments");
+      await apiPut(`/api/routines/${routine.id}`, { consultantComments: value || null });
+    } catch (error: any) {
+      console.error("Error saving consultantComments:", error);
+      showErr(error.message || "Erro ao salvar comentários");
+    }
+  }, 1000);
+
+  const handleAddNap = async () => {
+    try {
+      console.log("[API] Adding nap to routine:", routine.id);
+      const existingNaps = currentRoutine.naps || [];
+      const napNumber = existingNaps.length + 1;
+      const newNap = await apiPost<Nap>("/api/naps", {
+        routineId: routine.id,
+        napNumber,
+        startTryTime: "12:00",
+        fellAsleepTime: null,
+        wakeUpTime: null,
+      });
+      console.log("[API] Nap created:", newNap.id);
+      setCurrentRoutine({
+        ...currentRoutine,
+        naps: [...existingNaps, newNap],
+      });
+    } catch (error: any) {
+      console.error("Error adding nap:", error);
+      showErr(error.message || "Erro ao adicionar soneca");
+    }
+  };
+
+  const handleDeleteNap = async () => {
+    if (!napToDelete) return;
+    setDeleteNapLoading(true);
+    try {
+      console.log("[API] Deleting nap:", napToDelete);
+      await apiDelete(`/api/naps/${napToDelete}`);
+      console.log("[API] Nap deleted successfully");
+      setCurrentRoutine({
+        ...currentRoutine,
+        naps: (currentRoutine.naps || []).filter(n => n.id !== napToDelete),
+      });
+      setShowDeleteNapConfirm(false);
+      setNapToDelete(null);
+    } catch (error: any) {
+      console.error("Error deleting nap:", error);
+      showErr(error.message || "Erro ao excluir soneca");
+    } finally {
+      setDeleteNapLoading(false);
+    }
+  };
+
+  const naps = currentRoutine.naps || [];
+  const nightSleep = normalizeNightSleep(currentRoutine.nightSleep);
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Stack.Screen options={{ headerShown: true, title: `Dia ${dayNumber}`, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.text, headerLeft: () => (
-        <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}><IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} /></TouchableOpacity>
-      )}} />
-      <View style={styles.loadingContainer}>
-        <Text style={styles.infoCardText}>Detalhes da rotina em desenvolvimento...</Text>
-      </View>
+      <Stack.Screen options={{ 
+        headerShown: true, 
+        title: `Dia ${dayNumber}`, 
+        headerStyle: { backgroundColor: colors.background }, 
+        headerTintColor: colors.text, 
+        headerLeft: () => (
+          <TouchableOpacity onPress={onBack} style={{ marginLeft: 8 }}>
+            <IconSymbol ios_icon_name="chevron.left" android_material_icon_name="arrow-back" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        )
+      }} />
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.infoCard}>
+          <Text style={styles.formSectionTitle}>Horário que Acordou</Text>
+          <TextInput
+            style={styles.formInput}
+            placeholder="HH:MM"
+            value={wakeUpTime}
+            onChangeText={(text) => {
+              setWakeUpTime(text);
+              debouncedSaveWakeUpTime(text);
+            }}
+            keyboardType="numeric"
+            placeholderTextColor={colors.textSecondary}
+          />
+        </View>
+
+        <View style={styles.infoCard}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <Text style={styles.infoCardTitle}>Sonecas ({naps.length})</Text>
+            <TouchableOpacity style={styles.editBtn} onPress={handleAddNap}>
+              <IconSymbol ios_icon_name="plus.circle.fill" android_material_icon_name="add-circle" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+          {naps.length === 0 ? (
+            <Text style={styles.infoCardText}>Nenhuma soneca cadastrada. Toque em + para adicionar.</Text>
+          ) : (
+            <View style={{ gap: 8 }}>
+              {naps.map((nap, index) => (
+                <View key={nap.id} style={[styles.babyCard, { padding: 12 }]}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text style={styles.babyName}>Soneca {index + 1}</Text>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        setNapToDelete(nap.id);
+                        setShowDeleteNapConfirm(true);
+                      }}
+                    >
+                      <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={18} color={colors.error} />
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.motherName}>
+                    Início: {nap.startTryTime || "—"} • Dormiu: {nap.fellAsleepTime || "—"} • Acordou: {nap.wakeUpTime || "—"}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View style={styles.infoCard}>
+          <Text style={styles.infoCardTitle}>Sono Noturno</Text>
+          {nightSleep ? (
+            <View>
+              <Text style={styles.motherName}>
+                Início: {nightSleep.startTryTime || "—"} • Dormiu: {nightSleep.fellAsleepTime || "—"} • Acordou: {nightSleep.finalWakeTime || "—"}
+              </Text>
+              {nightSleep.wakings && nightSleep.wakings.length > 0 && (
+                <Text style={styles.infoCardText}>
+                  {nightSleep.wakings.length} despertar{nightSleep.wakings.length !== 1 ? "es" : ""} noturno{nightSleep.wakings.length !== 1 ? "s" : ""}
+                </Text>
+              )}
+            </View>
+          ) : (
+            <Text style={styles.infoCardText}>Sono noturno não registrado</Text>
+          )}
+        </View>
+
+        <View style={styles.infoCard}>
+          <Text style={styles.formSectionTitle}>Observações da Mãe</Text>
+          <TextInput
+            style={[styles.formInput, styles.textArea]}
+            placeholder="Observações sobre o dia..."
+            value={motherObs}
+            onChangeText={(text) => {
+              setMotherObs(text);
+              debouncedSaveMotherObs(text);
+            }}
+            multiline
+            numberOfLines={4}
+            placeholderTextColor={colors.textSecondary}
+            editable={!isConsultant}
+          />
+        </View>
+
+        {isConsultant && (
+          <View style={styles.infoCard}>
+            <Text style={styles.formSectionTitle}>Comentários da Consultora</Text>
+            <TextInput
+              style={[styles.formInput, styles.textArea]}
+              placeholder="Comentários e orientações..."
+              value={consultantComments}
+              onChangeText={(text) => {
+                setConsultantComments(text);
+                debouncedSaveConsultantComments(text);
+              }}
+              multiline
+              numberOfLines={4}
+              placeholderTextColor={colors.textSecondary}
+            />
+          </View>
+        )}
+      </ScrollView>
+
+      <ConfirmModal
+        visible={showDeleteNapConfirm}
+        title="Excluir Soneca?"
+        message="Tem certeza que deseja excluir esta soneca? Esta ação não pode ser desfeita."
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        confirmColor={colors.error}
+        loading={deleteNapLoading}
+        onConfirm={handleDeleteNap}
+        onCancel={() => {
+          setShowDeleteNapConfirm(false);
+          setNapToDelete(null);
+        }}
+        icon={{
+          ios: "trash.fill",
+          android: "delete",
+          color: colors.error,
+        }}
+      />
     </SafeAreaView>
   );
 }
+
+// ─── Placeholder Screens (to fix linting errors) ──────────────────────────────
 
 function OrientationsScreen({ isConsultant, baby, onBack, showErr }: { isConsultant: boolean; baby: Baby; onBack: () => void; showErr: (m: string) => void }) {
   return (
@@ -1319,7 +1628,7 @@ const styles = StyleSheet.create({
   addButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.primary, borderRadius: 16, padding: 16, marginTop: 16, gap: 8 },
   addButtonText: { fontSize: 16, fontWeight: "600", color: "#FFFFFF" },
   emptyState: { alignItems: "center", paddingVertical: 40 },
-  emptyStateText: { fontSize: 18, fontWeight: "600", color: colors.text, marginBottom: 8 },
+  emptyStateText: { fontSize: 18, fontWeight: "600", color: colors.text, marginBottom: 8, marginTop: 16 },
   emptyStateSubtext: { fontSize: 14, color: colors.textSecondary },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
   slideModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
