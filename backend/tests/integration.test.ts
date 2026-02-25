@@ -1522,6 +1522,48 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Upload profile photo", async () => {
+    const form = new FormData();
+    const file = createTestFile("profile.jpg", "image content");
+    form.append("file", file);
+    const res = await authenticatedApi(
+      "/api/upload/profile-photo",
+      authToken,
+      {
+        method: "POST",
+        body: form,
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(typeof data.url).toBe("string");
+    expect(typeof data.filename).toBe("string");
+  });
+
+  test("Upload profile photo without auth returns 401", async () => {
+    const form = new FormData();
+    const file = createTestFile("profile.jpg", "image content");
+    form.append("file", file);
+    const res = await api("/api/upload/profile-photo", {
+      method: "POST",
+      body: form,
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Upload profile photo without file returns 400", async () => {
+    const form = new FormData();
+    const res = await authenticatedApi(
+      "/api/upload/profile-photo",
+      authToken,
+      {
+        method: "POST",
+        body: form,
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
   // ===== Authentication & Authorization =====
 
   test("Request without auth token returns 401", async () => {
