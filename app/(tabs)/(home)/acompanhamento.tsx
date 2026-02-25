@@ -13,7 +13,7 @@ import {
 import { IconSymbol } from "@/components/IconSymbol";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/styles/commonStyles";
-import { apiGet } from "@/utils/api";
+import { apiGet, apiPost } from "@/utils/api";
 
 interface Nap {
   id: string;
@@ -448,6 +448,29 @@ export default function AcompanhamentoScreen() {
     return null;
   };
 
+  /**
+   * Fetches the full nightSleep record for a routine via POST /api/night-sleep (upsert).
+   * Used as a workaround when GET /api/routines/baby/:babyId returns nightSleep as {}
+   * due to Fastify response schema serialization stripping unknown fields.
+   */
+  const fetchNightSleepForRoutine = async (routineId: string): Promise<NightSleep | null> => {
+    try {
+      console.log(`[Night Sleep] Fetching via POST /api/night-sleep for routineId: ${routineId}`);
+      const result = await apiPost<NightSleep>("/api/night-sleep", { routineId });
+      if (result && result.id) {
+        console.log(`[Night Sleep] Fetched id: ${result.id}`);
+        return {
+          ...result,
+          wakings: Array.isArray(result.wakings) ? result.wakings : [],
+        };
+      }
+      return null;
+    } catch (error: any) {
+      console.error(`[Night Sleep] Error fetching via POST for routine ${routineId}:`, error);
+      return null;
+    }
+  };
+
   const loadData = useCallback(async () => {
     console.log("Acompanhamento: Loading data for babyId:", babyId);
     setLoading(true);
@@ -459,8 +482,18 @@ export default function AcompanhamentoScreen() {
       console.log("Acompanhamento: Loaded routines with full data:", routinesData?.length);
       
       // Normalize each routine's nightSleep field
-      const normalized: Routine[] = (routinesData || []).map((r, i) => {
-        const nightSleep = normalizeNightSleep(r.nightSleep);
+      // If nightSleep comes back as {} (empty object without id) due to Fastify schema bug,
+      // fetch the full nightSleep data via POST /api/night-sleep (upsert endpoint)
+      const normalized: Routine[] = await Promise.all((routinesData || []).map(async (r, i) => {
+        let nightSleep = normalizeNightSleep(r.nightSleep);
+        
+        // If nightSleep is {} (not null, but also not a valid object with id),
+        // fetch the full data via the upsert endpoint
+        if (!nightSleep && r.nightSleep !== null && r.nightSleep !== undefined) {
+          console.log(`[DEBUG] Routine ${i + 1} (${r.date}): nightSleep is {} - fetching full data`);
+          nightSleep = await fetchNightSleepForRoutine(r.id);
+        }
+        
         console.log(`[DEBUG] Routine ${i + 1} (${r.date}):`, {
           id: r.id,
           rawNightSleep: r.nightSleep,
@@ -474,7 +507,7 @@ export default function AcompanhamentoScreen() {
           console.log(`[Night Sleep] No night sleep found for routine ${r.id}`);
         }
         return { ...r, nightSleep };
-      });
+      }));
       
       setRoutines(normalized);
     } catch (err: any) {

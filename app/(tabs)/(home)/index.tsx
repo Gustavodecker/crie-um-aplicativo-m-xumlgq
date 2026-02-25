@@ -893,7 +893,24 @@ function RoutineListScreen({ isConsultant, baby, onBack, onOpenRoutine, showErr 
       
       // Fetch the full routine with nightSleep (auto-created by backend)
       try {
-        const fullRoutine = await apiGet<Routine>(`/api/routines/${newRoutine.id}`);
+        const fullRoutineRaw = await apiGet<any>(`/api/routines/${newRoutine.id}`);
+        
+        // Handle case where nightSleep comes back as {} due to Fastify schema serialization bug
+        let nightSleep = normalizeNightSleep(fullRoutineRaw.nightSleep);
+        if (!nightSleep && fullRoutineRaw.nightSleep !== null && fullRoutineRaw.nightSleep !== undefined) {
+          console.log("[API] nightSleep is {} in full routine, fetching via POST /api/night-sleep");
+          try {
+            const nsResult = await apiPost<NightSleep>("/api/night-sleep", { routineId: newRoutine.id });
+            if (nsResult && nsResult.id) {
+              nightSleep = { ...nsResult, wakings: Array.isArray(nsResult.wakings) ? nsResult.wakings : [] };
+              console.log("[API] Fetched nightSleep via POST, id:", nightSleep.id);
+            }
+          } catch (nsError: any) {
+            console.warn("[API] Could not fetch nightSleep via POST:", nsError.message);
+          }
+        }
+        
+        const fullRoutine: Routine = { ...fullRoutineRaw, nightSleep };
         console.log("[API] Full routine loaded with nightSleep:", fullRoutine.nightSleep ? `id=${(fullRoutine.nightSleep as any).id}` : "null");
         onOpenRoutine(fullRoutine, dayNumber);
       } catch (fetchError: any) {
@@ -1036,11 +1053,15 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
   const nightSleepIdRef = useRef<string | null>(null);
   
   // Initialize nightSleepIdRef from initialRoutine
+  // Note: initialRoutine.nightSleep may be {} (empty) due to backend serialization bug,
+  // in which case normalizeNightSleep returns null and we rely on loadRoutine to fetch it.
   useEffect(() => {
     const initialNightSleep = normalizeNightSleep(initialRoutine.nightSleep);
     if (initialNightSleep?.id) {
       nightSleepIdRef.current = initialNightSleep.id;
       console.log("[Night Sleep Ref] Initialized nightSleepIdRef from initialRoutine to:", initialNightSleep.id);
+    } else {
+      console.log("[Night Sleep Ref] initialRoutine.nightSleep has no id (raw:", JSON.stringify(initialRoutine.nightSleep), "), will fetch via loadRoutine");
     }
   }, []);
   
@@ -1118,15 +1139,47 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
     }
   }, 1000);
 
+  /**
+   * Fetches the full nightSleep record for a routine by calling POST /api/night-sleep
+   * with the routineId. The backend treats this as an upsert - if nightSleep already
+   * exists it returns 200 with the full object, if not it creates and returns 201.
+   * This is used as a workaround when the GET /api/routines/:id returns nightSleep as {}
+   * due to Fastify response schema serialization stripping unknown fields.
+   */
+  const fetchNightSleepForRoutine = async (routineId: string): Promise<NightSleep | null> => {
+    try {
+      console.log("[Night Sleep] Fetching nightSleep via POST /api/night-sleep for routineId:", routineId);
+      const result = await apiPost<NightSleep>("/api/night-sleep", { routineId });
+      if (result && result.id) {
+        console.log("[Night Sleep] Successfully fetched nightSleep id:", result.id);
+        return {
+          ...result,
+          wakings: Array.isArray(result.wakings) ? result.wakings : [],
+        };
+      }
+      return null;
+    } catch (error: any) {
+      console.error("[Night Sleep] Error fetching nightSleep via POST:", error);
+      return null;
+    }
+  };
+
   const loadRoutine = useCallback(async (skipTextUpdate = false, preserveNightSleep = false) => {
     try {
       console.log("[API] Loading routine:", initialRoutine.id);
       const data = await apiGet<any>(`/api/routines/${initialRoutine.id}`);
       
-      // Normalize nightSleep: backend now returns single object or null
-      const apiNightSleep: NightSleep | null = normalizeNightSleep(data.nightSleep);
+      // Normalize nightSleep: backend may return single object, null, or {} (empty due to schema serialization bug)
+      let apiNightSleep: NightSleep | null = normalizeNightSleep(data.nightSleep);
       
-      console.log("[API] Routine loaded successfully:", data.id, "nightSleep:", apiNightSleep ? `id=${apiNightSleep.id}` : "null");
+      console.log("[API] Routine loaded successfully:", data.id, "nightSleep:", apiNightSleep ? `id=${apiNightSleep.id}` : "null (raw was: " + JSON.stringify(data.nightSleep) + ")");
+      
+      // If nightSleep came back as {} (empty object without id), the backend Fastify schema
+      // is stripping the fields. Use POST /api/night-sleep as upsert to get the full object.
+      if (!apiNightSleep && data.nightSleep !== null && data.nightSleep !== undefined) {
+        console.log("[Night Sleep] nightSleep is empty object {}, fetching full data via POST /api/night-sleep");
+        apiNightSleep = await fetchNightSleepForRoutine(initialRoutine.id);
+      }
       
       // Update the nightSleepIdRef with the latest id from API
       if (apiNightSleep?.id && !preserveNightSleep) {
