@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -75,7 +75,6 @@ function resolveImageSource(source: string | number | undefined): { uri: string 
 
 export default function MotherDashboardScreen() {
   const router = useRouter();
-  const isMountedRef = useRef(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [baby, setBaby] = useState<Baby | null>(null);
@@ -84,35 +83,11 @@ export default function MotherDashboardScreen() {
   const [consultant, setConsultant] = useState<ConsultantProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Set mounted flag
-    isMountedRef.current = true;
-    
-    // Load data on mount
-    loadDashboard();
-
-    // Cleanup function
-    return () => {
-      console.log("[Mother Dashboard] Component unmounting, canceling pending updates");
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     console.log("[Mother Dashboard] Loading dashboard data");
-    
-    // Only update state if component is still mounted
-    if (!isMountedRef.current) {
-      console.log("[Mother Dashboard] Component unmounted, skipping state updates");
-      return;
-    }
-    
     try {
       // Load baby data
       const babyData = await apiGet<Baby>("/api/mother/baby");
-      
-      if (!isMountedRef.current) return;
-      
       console.log("[Mother Dashboard] Baby loaded:", babyData.name);
       setBaby(babyData);
 
@@ -120,9 +95,6 @@ export default function MotherDashboardScreen() {
       const today = new Date().toISOString().split("T")[0];
       try {
         const routines = await apiGet<any[]>(`/api/routines/baby/${babyData.id}`);
-        
-        if (!isMountedRef.current) return;
-        
         const todayRoutineData = routines.find(r => r.date === today);
         
         if (todayRoutineData) {
@@ -159,8 +131,6 @@ export default function MotherDashboardScreen() {
             }
           }
 
-          if (!isMountedRef.current) return;
-          
           setTodayRoutine({
             id: todayRoutineData.id,
             date: todayRoutineData.date,
@@ -177,9 +147,6 @@ export default function MotherDashboardScreen() {
       // Load last orientation
       try {
         const orientations = await apiGet<LastOrientation[]>(`/api/orientations/baby/${babyData.id}`);
-        
-        if (!isMountedRef.current) return;
-        
         if (orientations.length > 0) {
           const sorted = orientations.sort((a, b) => 
             new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -193,9 +160,6 @@ export default function MotherDashboardScreen() {
       // Load consultant profile
       try {
         const consultantData = await apiGet<ConsultantProfile>("/api/consultant/profile");
-        
-        if (!isMountedRef.current) return;
-        
         setConsultant(consultantData);
       } catch (err) {
         console.log("[Mother Dashboard] Could not load consultant profile");
@@ -203,22 +167,16 @@ export default function MotherDashboardScreen() {
 
     } catch (error: any) {
       console.error("[Mother Dashboard] Error loading dashboard:", error);
-      
-      if (!isMountedRef.current) return;
-      
       setError(error.message || "Erro ao carregar dados");
     } finally {
-      if (isMountedRef.current) {
-        setLoading(false);
-        setRefreshing(false);
-      }
+      setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  const handleRefresh = () => {
-    setRefreshing(true);
+  useEffect(() => {
     loadDashboard();
-  };
+  }, [loadDashboard]);
 
   if (loading) {
     return (
@@ -274,7 +232,10 @@ export default function MotherDashboardScreen() {
         refreshControl={
           <RefreshControl 
             refreshing={refreshing} 
-            onRefresh={handleRefresh} 
+            onRefresh={() => { 
+              setRefreshing(true); 
+              loadDashboard(); 
+            }} 
           />
         }
       >
@@ -579,7 +540,10 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
     marginBottom: spacing.lg,
-    boxShadow: "0px 2px 8px rgba(0, 0, 0, 0.1)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     elevation: 3,
   },
   babyCardHeader: {
@@ -618,7 +582,10 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
     marginBottom: spacing.lg,
-    boxShadow: "0px 2px 8px rgba(0, 0, 0, 0.1)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     elevation: 3,
   },
   sectionHeader: {
@@ -709,7 +676,10 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
     marginBottom: spacing.md,
-    boxShadow: "0px 4px 8px rgba(0, 0, 0, 0.2)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
     elevation: 5,
   },
   actionButtonIcon: {
@@ -738,7 +708,10 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     alignItems: "center",
     gap: spacing.sm,
-    boxShadow: "0px 2px 4px rgba(0, 0, 0, 0.1)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 3,
   },
   secondaryActionText: {
