@@ -99,7 +99,12 @@ export function registerRoutinesRoutes(app: App) {
 
     // Transform each routine to match the expected response format
     return routines.map((routine) => {
-      const nightSleepRecord = (routine.nightSleep && routine.nightSleep.length > 0) ? routine.nightSleep[0] : null;
+      // Sort nightSleep by createdAt DESC and get the most recent one
+      let nightSleepRecord = null;
+      if (routine.nightSleep && routine.nightSleep.length > 0) {
+        const sortedNightSleep = routine.nightSleep.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        nightSleepRecord = sortedNightSleep[0];
+      }
 
       if (nightSleepRecord) {
         app.logger.info({ routineId: routine.id, nightSleepId: nightSleepRecord.id, wakingsCount: nightSleepRecord.wakings?.length || 0 }, 'Night sleep found for routine');
@@ -188,7 +193,12 @@ export function registerRoutinesRoutes(app: App) {
       return reply.status(401).send({ error: 'Not authorized' });
     }
 
-    const nightSleepRecord = (routine.nightSleep && routine.nightSleep.length > 0) ? routine.nightSleep[0] : null;
+    // Sort nightSleep by createdAt DESC and get the most recent one
+    let nightSleepRecord = null;
+    if (routine.nightSleep && routine.nightSleep.length > 0) {
+      const sortedNightSleep = routine.nightSleep.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      nightSleepRecord = sortedNightSleep[0];
+    }
 
     if (nightSleepRecord) {
       app.logger.info({ routineId: routine.id, nightSleepId: nightSleepRecord.id, wakingsCount: nightSleepRecord.wakings?.length || 0 }, 'Night sleep found for routine');
