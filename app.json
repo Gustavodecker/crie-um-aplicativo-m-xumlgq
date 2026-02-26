@@ -24,9 +24,9 @@
         "foregroundImage": "./assets/images/app-icon-afq.png",
         "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true,
       "package": "com.todanoite.baby",
-      "versionCode": 2
+      "versionCode": 2,
+      "edgeToEdgeEnabled": false
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
