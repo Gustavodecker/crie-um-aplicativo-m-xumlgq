@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "crie-um-aplicativo-m",
@@ -25,7 +26,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.todanoite.baby",
+      "package": "com.anonymous.Natively",
       "versionCode": 2
     },
     "web": {
