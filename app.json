@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "crie-um-aplicativo-m",
-    "slug": "crie-um-aplicativo-m-xumlgq",
+    "slug": "crie-um-aplicativo-m",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-afq.png",
@@ -26,7 +26,8 @@
       },
       "package": "com.todanoite.baby",
       "versionCode": 2,
-      "edgeToEdgeEnabled": false
+      "edgeToEdgeEnabled": false,
+      "userInterfaceStyle": "automatic"
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
