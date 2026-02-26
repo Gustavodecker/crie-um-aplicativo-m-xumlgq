@@ -45,12 +45,12 @@ export default function TabLayout() {
         setUserRole("consultant");
       } catch (error: any) {
         // 404 means user is not a consultant, so they must be a mother
-        // This is EXPECTED and NOT an error
+        // This is EXPECTED and NOT an error - DO NOT LOG IT
         if (
           error.message?.includes("404") ||
           error.message?.includes("Consultant profile not found")
         ) {
-          console.log("[Tab Layout] User is a MOTHER");
+          // Silent - this is expected for mothers
           setUserRole("mother");
         } else if (error.message?.includes("Authentication token not found")) {
           // Token not ready yet, retry once
@@ -60,11 +60,12 @@ export default function TabLayout() {
             await new Promise(resolve => setTimeout(resolve, 500));
             return checkRole(); // Retry
           } else {
-            console.error("[Tab Layout] Token still not available after retries, assuming mother");
+            // After retries, assume mother (don't log as error)
+            console.log("[Tab Layout] Token not available after retries, assuming mother");
             setUserRole("mother");
           }
         } else {
-          // Only log unexpected errors
+          // Only log truly unexpected errors
           console.error("[Tab Layout] Unexpected error checking role:", error);
           // On other errors, assume mother to be safe
           setUserRole("mother");
