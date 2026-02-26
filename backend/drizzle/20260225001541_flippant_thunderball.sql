@@ -1,0 +1,1 @@
+ALTER TABLE "night_sleep" ALTER COLUMN "start_try_time" DROP NOT NULL;

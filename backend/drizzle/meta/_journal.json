@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1771800802018,
+      "tag": "20260222225321_long_lord_tyger",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771807788824,
+      "tag": "20260223004948_small_umar",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771851613659,
+      "tag": "20260223130013_striped_junta",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771870758878,
+      "tag": "20260223181918_silent_santa_claus",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771978541029,
+      "tag": "20260225001541_flippant_thunderball",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1771980000000,
+      "tag": "20260225002000_add_unique_routine_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1772028076746,
+      "tag": "20260225140116_strong_susan_delgado",
+      "breakpoints": true
+    }
+  ]
+}
