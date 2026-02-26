@@ -181,12 +181,12 @@ export default function ReportsLandscapeScreen() {
     } finally {
       setLoading(false);
     }
-  }, [babyId, startDate, endDate]);
+  }, [babyId, babyName, startDate, endDate]);
 
   useEffect(() => { 
     console.log("[Navigation] Reports Landscape Screen loaded for baby:", babyId, babyName);
     loadData(); 
-  }, [loadData]);
+  }, [loadData, babyId, babyName]);
 
   if (loading) {
     return (
