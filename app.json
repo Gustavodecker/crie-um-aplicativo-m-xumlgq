@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "crie-um-aplicativo-m",
@@ -24,7 +25,6 @@
         "foregroundImage": "./assets/images/app-icon-afq.png",
         "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true,
       "package": "com.todanoite.baby",
       "versionCode": 2
     },
