@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "crie-um-aplicativo-m",
@@ -42,7 +43,7 @@
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://vwxyq6hjdpdawgy8rf2b7dvhm9hewm77.app.specular.dev"
+      "backendUrl": "https://yyujsfk4fvpafkyyrfhw5jucdrx9gvtc.app.specular.dev"
     }
   }
 }
