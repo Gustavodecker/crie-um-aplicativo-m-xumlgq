@@ -157,12 +157,14 @@ export default function MotherDashboardScreen() {
         console.log("[Mother Dashboard] No orientations found");
       }
 
-      // Load consultant profile
+      // Load consultant profile using the NEW endpoint for mothers
       try {
-        const consultantData = await apiGet<ConsultantProfile>("/api/consultant/profile");
+        console.log("[Mother Dashboard] Fetching consultant profile via /api/mother/consultant");
+        const consultantData = await apiGet<ConsultantProfile>("/api/mother/consultant");
+        console.log("[Mother Dashboard] Consultant profile loaded:", consultantData.name);
         setConsultant(consultantData);
       } catch (err) {
-        console.log("[Mother Dashboard] Could not load consultant profile");
+        console.log("[Mother Dashboard] Could not load consultant profile:", err);
       }
 
     } catch (error: any) {
