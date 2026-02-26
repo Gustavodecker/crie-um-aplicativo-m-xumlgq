@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "crie-um-aplicativo-m",
-    "slug": "crie-um-aplicativo-m-xumlgq",
-    "version": "1.0.1",
+    "slug": "crie-um-aplicativo-m",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-afq.png",
     "userInterfaceStyle": "automatic",
@@ -24,9 +24,8 @@
         "foregroundImage": "./assets/images/app-icon-afq.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.todanoite.baby",
-      "versionCode": 2,
-      "edgeToEdgeEnabled": false
+      "edgeToEdgeEnabled": true,
+      "package": "com.anonymous.Natively"
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -43,7 +42,7 @@
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://yyujsfk4fvpafkyyrfhw5jucdrx9gvtc.app.specular.dev"
+      "backendUrl": "https://vwxyq6hjdpdawgy8rf2b7dvhm9hewm77.app.specular.dev"
     }
   }
 }
