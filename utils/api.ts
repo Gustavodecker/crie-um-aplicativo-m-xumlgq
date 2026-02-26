@@ -37,10 +37,6 @@ export const getBearerToken = async (): Promise<string | null> => {
   }
 };
 
-interface ApiCallOptions extends RequestInit {
-  suppressErrorLog?: boolean; // Don't log errors (for expected 404s)
-}
-
 /**
  * Generic API call helper with error handling
  *
@@ -51,27 +47,19 @@ interface ApiCallOptions extends RequestInit {
  */
 export const apiCall = async <T = any>(
   endpoint: string,
-  options?: ApiCallOptions
+  options?: RequestInit
 ): Promise<T> => {
   if (!isBackendConfigured()) {
     throw new Error("Backend URL not configured. Please rebuild the app.");
   }
 
   const url = `${BACKEND_URL}${endpoint}`;
-  const suppressErrorLog = options?.suppressErrorLog || false;
-  
-  // Don't log the call if we're suppressing errors (reduces noise for role checks)
-  if (!suppressErrorLog) {
-    console.log("[API] Calling:", url, options?.method || "GET");
-  }
+  console.log("[API] Calling:", url, options?.method || "GET");
 
   try {
     const fetchOptions: RequestInit = {
       ...options,
     };
-
-    // Remove our custom property before sending
-    delete (fetchOptions as any).suppressErrorLog;
 
     // Only add Content-Type header if there's a body
     // DELETE requests without body should NOT have Content-Type header
@@ -86,9 +74,7 @@ export const apiCall = async <T = any>(
       };
     }
 
-    if (!suppressErrorLog) {
-      console.log("[API] Fetch options:", fetchOptions);
-    }
+    console.log("[API] Fetch options:", fetchOptions);
 
     // Always send the token if we have it (needed for cross-domain/iframe support)
     const token = await getBearerToken();
@@ -103,12 +89,7 @@ export const apiCall = async <T = any>(
 
     if (!response.ok) {
       const text = await response.text();
-      
-      // Only log errors if not suppressed
-      if (!suppressErrorLog) {
-        console.error("[API] Error response:", response.status, text);
-      }
-      
+      console.error("[API] Error response:", response.status, text);
       let errorMsg = `API error: ${response.status}`;
       try {
         const errJson = JSON.parse(text);
@@ -119,22 +100,15 @@ export const apiCall = async <T = any>(
 
     // Handle 204 No Content
     if (response.status === 204) {
-      if (!suppressErrorLog) {
-        console.log("[API] Success: 204 No Content");
-      }
+      console.log("[API] Success: 204 No Content");
       return {} as T;
     }
 
     const data = await response.json();
-    if (!suppressErrorLog) {
-      console.log("[API] Success:", data);
-    }
+    console.log("[API] Success:", data);
     return data;
   } catch (error) {
-    // Only log errors if not suppressed
-    if (!suppressErrorLog) {
-      console.error("[API] Request failed:", error);
-    }
+    console.error("[API] Request failed:", error);
     throw error;
   }
 };
@@ -142,11 +116,8 @@ export const apiCall = async <T = any>(
 /**
  * GET request helper
  */
-export const apiGet = async <T = any>(
-  endpoint: string,
-  options?: { suppressErrorLog?: boolean }
-): Promise<T> => {
-  return apiCall<T>(endpoint, { method: "GET", ...options });
+export const apiGet = async <T = any>(endpoint: string): Promise<T> => {
+  return apiCall<T>(endpoint, { method: "GET" });
 };
 
 /**
