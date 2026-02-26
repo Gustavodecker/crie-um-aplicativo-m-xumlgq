@@ -27,9 +27,13 @@ export const isBackendConfigured = (): boolean => {
 export const getBearerToken = async (): Promise<string | null> => {
   try {
     if (Platform.OS === "web") {
-      return localStorage.getItem(BEARER_TOKEN_KEY);
+      const token = localStorage.getItem(BEARER_TOKEN_KEY);
+      console.log("[API] Retrieved token from localStorage:", token ? "✓ Token found" : "✗ No token");
+      return token;
     } else {
-      return await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
+      const token = await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
+      console.log("[API] Retrieved token from SecureStore:", token ? "✓ Token found" : "✗ No token");
+      return token;
     }
   } catch (error) {
     console.error("[API] Error retrieving bearer token:", error);
@@ -86,10 +90,6 @@ export const apiCall = async <T = any>(
       };
     }
 
-    if (!suppressErrorLog) {
-      console.log("[API] Fetch options:", fetchOptions);
-    }
-
     // Always send the token if we have it (needed for cross-domain/iframe support)
     const token = await getBearerToken();
     if (token) {
@@ -97,6 +97,21 @@ export const apiCall = async <T = any>(
         ...fetchOptions.headers,
         Authorization: `Bearer ${token}`,
       };
+      if (!suppressErrorLog) {
+        console.log("[API] ✓ Authorization header added");
+      }
+    } else {
+      if (!suppressErrorLog) {
+        console.log("[API] ✗ No token available, request will be unauthenticated");
+      }
+    }
+
+    if (!suppressErrorLog) {
+      console.log("[API] Fetch options:", {
+        method: fetchOptions.method,
+        headers: fetchOptions.headers,
+        hasBody: !!fetchOptions.body
+      });
     }
 
     const response = await fetch(url, fetchOptions);
@@ -114,7 +129,10 @@ export const apiCall = async <T = any>(
         const errJson = JSON.parse(text);
         if (errJson.error) errorMsg = errJson.error;
       } catch {}
-      throw new Error(errorMsg);
+      
+      const error = new Error(errorMsg);
+      (error as any).status = response.status;
+      throw error;
     }
 
     // Handle 204 No Content

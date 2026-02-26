@@ -37,7 +37,7 @@ export default function AuthScreen() {
   const [errorMessage, setErrorMessage] = useState("");
   const [showError, setShowError] = useState(false);
   const router = useRouter();
-  const { signInWithEmail, signUpWithEmail } = useAuth();
+  const { signInWithEmail, signUpWithEmail, fetchUser } = useAuth();
 
   const showErrorModal = (msg: string) => {
     console.log("Showing error modal:", msg);
@@ -68,19 +68,24 @@ export default function AuthScreen() {
         console.log("Attempting sign in with email:", email);
         // Wait for sign in to complete (this saves the token)
         await signInWithEmail(email, password);
-        console.log("Sign in successful, checking user role...");
+        console.log("Sign in successful, fetching user session...");
+        
+        // 🔥 CRITICAL FIX: Wait for fetchUser to complete to ensure token is synced
+        await fetchUser();
+        console.log("User session fetched, token synced to SecureStore");
         
         // Add a small delay to ensure token is fully saved to SecureStore
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 300));
         
         // Check user role after login
         let userRole: UserRole = "mother"; // Default to mother
         try {
+          console.log("[Auth] Checking if user is consultant...");
           await apiGet("/api/consultant/profile");
           userRole = "consultant";
           console.log("USER ROLE: consultant");
-        } catch (error) {
-          console.log("USER ROLE: mother");
+        } catch (error: any) {
+          console.log("USER ROLE: mother (consultant profile not found)");
           userRole = "mother";
         }
         
@@ -100,10 +105,14 @@ export default function AuthScreen() {
         console.log("Attempting sign up with email:", email, "role:", role);
         // Wait for sign up to complete (this saves the token)
         await signUpWithEmail(email, password, name);
-        console.log("Sign up successful, token saved.");
+        console.log("Sign up successful, fetching user session...");
+        
+        // 🔥 CRITICAL FIX: Wait for fetchUser to complete to ensure token is synced
+        await fetchUser();
+        console.log("User session fetched, token synced to SecureStore");
         
         // Add a small delay to ensure token is fully saved to SecureStore
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 300));
         
         if (role === "consultant") {
           console.log("[API] Initializing consultant profile");
