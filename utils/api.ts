@@ -27,15 +27,23 @@ export const isBackendConfigured = (): boolean => {
 export const getBearerToken = async (): Promise<string | null> => {
   try {
     if (Platform.OS === "web") {
-      return localStorage.getItem(BEARER_TOKEN_KEY);
+      const token = localStorage.getItem(BEARER_TOKEN_KEY);
+      console.log("[API] Token from localStorage:", token ? "exists" : "null");
+      return token;
     } else {
-      return await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
+      const token = await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
+      console.log("[API] Token from SecureStore:", token ? "exists" : "null");
+      return token;
     }
   } catch (error) {
     console.error("[API] Error retrieving bearer token:", error);
     return null;
   }
 };
+
+interface ApiCallOptions extends RequestInit {
+  suppressErrorLog?: boolean; // Don't log errors (for expected 404s)
+}
 
 /**
  * Generic API call helper with error handling
@@ -47,20 +55,31 @@ export const getBearerToken = async (): Promise<string | null> => {
  */
 export const apiCall = async <T = any>(
   endpoint: string,
-  options?: RequestInit
+  options?: ApiCallOptions
 ): Promise<T> => {
   if (!isBackendConfigured()) {
     throw new Error("Backend URL not configured. Please rebuild the app.");
   }
 
   const url = `${BACKEND_URL}${endpoint}`;
-  console.log("[API] Calling:", url, options?.method || "GET");
+  const suppressErrorLog = options?.suppressErrorLog || false;
+  
+  // Don't log the call if we're suppressing errors (reduces noise for role checks)
+  if (!suppressErrorLog) {
+    console.log("[API] Calling:", url, options?.method || "GET");
+  }
 
   try {
     const fetchOptions: RequestInit = {
       ...options,
     };
 
+    // Remove our custom property before sending
+    delete (fetchOptions as any).suppressErrorLog;
+
+    // 🔥 CRITICAL: Always get the token and add to headers
+    const token = await getBearerToken();
+    
     // Only add Content-Type header if there's a body
     // DELETE requests without body should NOT have Content-Type header
     if (options?.body) {
@@ -74,22 +93,34 @@ export const apiCall = async <T = any>(
       };
     }
 
-    console.log("[API] Fetch options:", fetchOptions);
-
-    // Always send the token if we have it (needed for cross-domain/iframe support)
-    const token = await getBearerToken();
+    // Add Authorization header if we have a token
     if (token) {
+      console.log("[API] Adding Authorization header with token");
       fetchOptions.headers = {
         ...fetchOptions.headers,
         Authorization: `Bearer ${token}`,
       };
+    } else {
+      console.warn("[API] No token available for authenticated request");
+    }
+
+    if (!suppressErrorLog) {
+      console.log("[API] Fetch options:", {
+        method: fetchOptions.method || "GET",
+        headers: fetchOptions.headers,
+      });
     }
 
     const response = await fetch(url, fetchOptions);
 
     if (!response.ok) {
       const text = await response.text();
-      console.error("[API] Error response:", response.status, text);
+      
+      // Only log errors if not suppressed
+      if (!suppressErrorLog) {
+        console.error("[API] Error response:", response.status, text);
+      }
+      
       let errorMsg = `API error: ${response.status}`;
       try {
         const errJson = JSON.parse(text);
@@ -100,15 +131,22 @@ export const apiCall = async <T = any>(
 
     // Handle 204 No Content
     if (response.status === 204) {
-      console.log("[API] Success: 204 No Content");
+      if (!suppressErrorLog) {
+        console.log("[API] Success: 204 No Content");
+      }
       return {} as T;
     }
 
     const data = await response.json();
-    console.log("[API] Success:", data);
+    if (!suppressErrorLog) {
+      console.log("[API] Success:", data);
+    }
     return data;
   } catch (error) {
-    console.error("[API] Request failed:", error);
+    // Only log errors if not suppressed
+    if (!suppressErrorLog) {
+      console.error("[API] Request failed:", error);
+    }
     throw error;
   }
 };
@@ -116,8 +154,11 @@ export const apiCall = async <T = any>(
 /**
  * GET request helper
  */
-export const apiGet = async <T = any>(endpoint: string): Promise<T> => {
-  return apiCall<T>(endpoint, { method: "GET" });
+export const apiGet = async <T = any>(
+  endpoint: string,
+  options?: { suppressErrorLog?: boolean }
+): Promise<T> => {
+  return apiCall<T>(endpoint, { method: "GET", ...options });
 };
 
 /**
