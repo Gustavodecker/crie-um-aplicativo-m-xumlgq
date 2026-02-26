@@ -66,29 +66,23 @@ export default function AuthScreen() {
     try {
       if (isLogin) {
         console.log("Attempting sign in with email:", email);
-        
-        // 🔥 CRITICAL: Wait for sign in to complete AND token to sync
+        // Wait for sign in to complete (this saves the token)
         await signInWithEmail(email, password);
-        console.log("Sign in successful, token synced. Checking user role...");
+        console.log("Sign in successful, checking user role...");
         
-        // Add a delay to ensure token is fully written to storage
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Add a small delay to ensure token is fully saved to SecureStore
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // Check user role after login
         let userRole: UserRole = "mother"; // Default to mother
         try {
-          console.log("[Auth] Checking if user is consultant...");
           await apiGet("/api/consultant/profile");
           userRole = "consultant";
-          console.log("[Auth] USER ROLE: consultant");
+          console.log("USER ROLE: consultant");
         } catch (error) {
-          console.log("[Auth] USER ROLE: mother (consultant profile not found)");
+          console.log("USER ROLE: mother");
           userRole = "mother";
         }
-        
-        // 🔥 CRITICAL: Store user role in AsyncStorage to avoid future API calls
-        await AsyncStorage.setItem("userRole", userRole);
-        console.log("[Auth] User role stored in AsyncStorage:", userRole);
         
         // Redirect based on role
         if (userRole === "mother") {
@@ -100,27 +94,21 @@ export default function AuthScreen() {
         }
       } else {
         console.log("Attempting sign up with email:", email, "role:", role);
-        
-        // 🔥 CRITICAL: Wait for sign up to complete AND token to sync
+        // Wait for sign up to complete (this saves the token)
         await signUpWithEmail(email, password, name);
-        console.log("Sign up successful, token synced.");
+        console.log("Sign up successful, token saved.");
         
-        // Add a delay to ensure token is fully written to storage
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Add a small delay to ensure token is fully saved to SecureStore
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         if (role === "consultant") {
           console.log("[API] Initializing consultant profile");
           try {
             await apiPost("/api/init/consultant", { name });
-            console.log("[Auth] USER ROLE: consultant");
+            console.log("USER ROLE: consultant");
           } catch (initErr) {
             console.warn("[API] Consultant init error (may already exist):", initErr);
           }
-          
-          // 🔥 CRITICAL: Store user role in AsyncStorage
-          await AsyncStorage.setItem("userRole", "consultant");
-          console.log("[Auth] User role stored in AsyncStorage: consultant");
-          
           console.log("Redirecting to consultant dashboard (home)");
           router.replace("/(tabs)/(home)");
         } else if (role === "mother" && babyToken) {
@@ -129,18 +117,13 @@ export default function AuthScreen() {
             const response = await apiPost<{ id: string }>("/api/init/mother", { token: babyToken.toUpperCase() });
             console.log("[API] Mother linked successfully, baby ID:", response.id);
             await AsyncStorage.setItem("motherBabyId", response.id);
-            console.log("[Auth] USER ROLE: mother");
+            console.log("USER ROLE: mother");
           } catch (initErr: any) {
             console.error("[API] Mother init error:", initErr);
             showErrorModal(initErr.message || "Erro ao vincular bebê. Verifique o código.");
             setLoading(false);
             return;
           }
-          
-          // 🔥 CRITICAL: Store user role in AsyncStorage
-          await AsyncStorage.setItem("userRole", "mother");
-          console.log("[Auth] User role stored in AsyncStorage: mother");
-          
           console.log("Redirecting to mother dashboard");
           router.replace("/(tabs)/(home)/mother-dashboard");
         }
