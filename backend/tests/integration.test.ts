@@ -1650,4 +1650,26 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi("/api/mother/baby", newMotherToken);
     await expectStatus(res, 404);
   });
+
+  // ===== Get Mother's Consultant =====
+
+  test("Get consultant profile for mother's linked baby", async () => {
+    const res = await authenticatedApi("/api/mother/consultant", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBe(consultantId);
+    expect(data.name).toBe("Dr. Updated Consultant");
+    expect(data.userId).toBeDefined();
+  });
+
+  test("Get mother consultant without auth returns 401", async () => {
+    const res = await api("/api/mother/consultant");
+    await expectStatus(res, 401);
+  });
+
+  test("Get mother consultant when not registered returns 404", async () => {
+    const { token: newMotherToken } = await signUpTestUser();
+    const res = await authenticatedApi("/api/mother/consultant", newMotherToken);
+    await expectStatus(res, 404);
+  });
 });
