@@ -2,7 +2,10 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
-import { BEARER_TOKEN_KEY } from "@/lib/auth";
+import { BEARER_TOKEN_KEY, setBearerToken as libSetBearerToken } from "@/lib/auth";
+
+// Re-export for convenience
+export { BEARER_TOKEN_KEY };
 
 /**
  * Backend URL is configured in app.json under expo.extra.backendUrl
@@ -18,6 +21,17 @@ export const isBackendConfigured = (): boolean => {
 };
 
 /**
+ * Set bearer token to platform-specific storage
+ * Web: localStorage
+ * Native: SecureStore
+ *
+ * @param token - JWT token to store
+ */
+export const setBearerToken = async (token: string | null): Promise<void> => {
+  return libSetBearerToken(token || "");
+};
+
+/**
  * Get bearer token from platform-specific storage
  * Web: localStorage
  * Native: SecureStore
@@ -28,15 +42,15 @@ export const getBearerToken = async (): Promise<string | null> => {
   try {
     if (Platform.OS === "web") {
       const token = localStorage.getItem(BEARER_TOKEN_KEY);
-      console.log("[API] Token from localStorage:", token ? "exists" : "null");
+      console.log("[API] 🔑 Token from localStorage:", token ? `EXISTS (length: ${token.length}, preview: ${token.substring(0, 20)}...)` : "❌ NULL");
       return token;
     } else {
       const token = await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
-      console.log("[API] Token from SecureStore:", token ? "exists" : "null");
+      console.log("[API] 🔑 Token from SecureStore:", token ? `EXISTS (length: ${token.length}, preview: ${token.substring(0, 20)}...)` : "❌ NULL");
       return token;
     }
   } catch (error) {
-    console.error("[API] Error retrieving bearer token:", error);
+    console.error("[API] ❌ Error retrieving bearer token:", error);
     return null;
   }
 };
@@ -95,13 +109,13 @@ export const apiCall = async <T = any>(
 
     // Add Authorization header if we have a token
     if (token) {
-      console.log("[API] Adding Authorization header with token");
+      console.log("[API] ✅ Adding Authorization header with token (preview:", token.substring(0, 20) + "...)");
       fetchOptions.headers = {
         ...fetchOptions.headers,
         Authorization: `Bearer ${token}`,
       };
     } else {
-      console.warn("[API] No token available for authenticated request");
+      console.warn("[API] ⚠️ No token available - request will be unauthenticated");
     }
 
     if (!suppressErrorLog) {
