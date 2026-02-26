@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -76,6 +76,7 @@ function resolveImageSource(source: string | number | undefined): { uri: string 
 
 export default function MotherDashboardScreen() {
   const router = useRouter();
+  const isMountedRef = useRef(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [baby, setBaby] = useState<Baby | null>(null);
@@ -89,6 +90,9 @@ export default function MotherDashboardScreen() {
     try {
       // Load baby data
       const babyData = await apiGet<Baby>("/api/mother/baby");
+      
+      if (!isMountedRef.current) return;
+      
       console.log("[Mother Dashboard] Baby loaded:", babyData.name);
       setBaby(babyData);
 
@@ -97,6 +101,9 @@ export default function MotherDashboardScreen() {
         const today = new Date().toISOString().split("T")[0];
         try {
           const routines = await apiGet<any[]>(`/api/routines/baby/${babyData.id}`);
+          
+          if (!isMountedRef.current) return;
+          
           const todayRoutineData = routines.find(r => r.date === today);
           
           if (todayRoutineData) {
@@ -150,6 +157,9 @@ export default function MotherDashboardScreen() {
       // Load last orientation
       try {
         const orientations = await apiGet<LastOrientation[]>(`/api/orientations/baby/${babyData.id}`);
+        
+        if (!isMountedRef.current) return;
+        
         if (orientations.length > 0) {
           const sorted = orientations.sort((a, b) => 
             new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -164,6 +174,9 @@ export default function MotherDashboardScreen() {
       try {
         console.log("[Mother Dashboard] Fetching consultant profile via /api/mother/consultant");
         const consultantData = await apiGet<ConsultantProfile>("/api/mother/consultant");
+        
+        if (!isMountedRef.current) return;
+        
         console.log("[Mother Dashboard] Consultant profile loaded:", consultantData.name);
         setConsultant(consultantData);
       } catch (err) {
@@ -172,21 +185,50 @@ export default function MotherDashboardScreen() {
 
     } catch (error: any) {
       console.error("[Mother Dashboard] Error loading dashboard:", error);
-      setError(error.message || "Erro ao carregar dados");
+      
+      if (!isMountedRef.current) return;
+      
+      // Provide user-friendly error messages
+      let errorMessage = "Erro ao carregar dados";
+      
+      if (error.message?.includes("Authentication token not found")) {
+        errorMessage = "Sessão expirada. Por favor, faça login novamente.";
+      } else if (error.message?.includes("401")) {
+        errorMessage = "Não autorizado. Por favor, faça login novamente.";
+      } else if (error.message?.includes("404")) {
+        errorMessage = "Dados não encontrados. Entre em contato com sua consultora.";
+      } else if (error.message?.includes("Network")) {
+        errorMessage = "Erro de conexão. Verifique sua internet.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isMountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    loadDashboard();
+    // Add a small delay to ensure token is saved after login
+    const timer = setTimeout(() => {
+      loadDashboard();
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      isMountedRef.current = false;
+    };
   }, [loadDashboard]);
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Carregando...</Text>
       </View>
     );
   }
@@ -214,6 +256,15 @@ export default function MotherDashboardScreen() {
           <TouchableOpacity style={styles.retryButton} onPress={loadDashboard}>
             <Text style={styles.retryButtonText}>Tentar Novamente</Text>
           </TouchableOpacity>
+          
+          {error?.includes("Sessão expirada") || error?.includes("Não autorizado") ? (
+            <TouchableOpacity 
+              style={[styles.retryButton, { backgroundColor: colors.secondary, marginTop: spacing.md }]} 
+              onPress={() => router.replace("/auth")}
+            >
+              <Text style={styles.retryButtonText}>Fazer Login</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </SafeAreaView>
     );
@@ -541,6 +592,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: colors.background,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
   },
   errorContainer: {
     flex: 1,
