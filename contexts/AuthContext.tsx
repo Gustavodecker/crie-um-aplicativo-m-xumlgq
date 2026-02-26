@@ -97,27 +97,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchUser = async () => {
     try {
       setLoading(true);
+      console.log("[Auth] 🔄 Fetching user session...");
       const session = await authClient.getSession();
-      console.log("[Auth] Session fetched:", session ? "exists" : "null");
+      console.log("[Auth] 📦 Session response:", JSON.stringify(session, null, 2));
       
       if (session?.data?.user) {
+        console.log("[Auth] ✅ User found in session:", session.data.user.email);
         setUser(session.data.user as User);
         
         // 🔥 CRITICAL: Sync token to SecureStore for utils/api.ts
         if (session.data.session?.token) {
-          console.log("[Auth] Syncing token to SecureStore...");
+          const tokenPreview = session.data.session.token.substring(0, 30);
+          console.log("[Auth] 🔑 Token found in session (preview):", tokenPreview + "...");
+          console.log("[Auth] 💾 Syncing token to SecureStore...");
           await setBearerToken(session.data.session.token);
-          console.log("[Auth] Token synced successfully");
+          console.log("[Auth] ✅ Token synced successfully to SecureStore");
         } else {
-          console.warn("[Auth] No token found in session data");
+          console.warn("[Auth] ⚠️ No token found in session.data.session");
+          console.log("[Auth] 🔍 Full session.data structure:", JSON.stringify(session.data, null, 2));
         }
       } else {
-        console.log("[Auth] No user in session, clearing tokens");
+        console.log("[Auth] ❌ No user in session, clearing tokens");
         setUser(null);
         await clearAuthTokens();
       }
     } catch (error) {
-      console.error("[Auth] Failed to fetch user:", error);
+      console.error("[Auth] ❌ Failed to fetch user:", error);
       setUser(null);
     } finally {
       setLoading(false);
@@ -126,15 +131,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
-      console.log("[Auth] Signing in with email:", email);
-      await authClient.signIn.email({ email, password });
-      console.log("[Auth] Sign in successful, fetching user and syncing token...");
+      console.log("[Auth] 🔐 Signing in with email:", email);
+      const signInResponse = await authClient.signIn.email({ email, password });
+      console.log("[Auth] 📬 Sign in response:", JSON.stringify(signInResponse, null, 2));
+      console.log("[Auth] ✅ Sign in successful, fetching user and syncing token...");
       
       // 🔥 CRITICAL: Fetch user immediately to sync token
       await fetchUser();
-      console.log("[Auth] User fetched and token synced");
+      console.log("[Auth] ✅ User fetched and token synced");
     } catch (error) {
-      console.error("[Auth] Email sign in failed:", error);
+      console.error("[Auth] ❌ Email sign in failed:", error);
       throw error;
     }
   };

@@ -30,10 +30,31 @@ export const authClient = createAuthClient({
 });
 
 export async function setBearerToken(token: string) {
+  const tokenPreview = token.substring(0, 30);
+  console.log("[Auth/setBearerToken] 💾 Saving token (preview):", tokenPreview + "...");
+  
   if (Platform.OS === "web") {
     localStorage.setItem(BEARER_TOKEN_KEY, token);
+    console.log("[Auth/setBearerToken] ✅ Token saved to localStorage");
+    
+    // Verify it was saved
+    const saved = localStorage.getItem(BEARER_TOKEN_KEY);
+    if (saved === token) {
+      console.log("[Auth/setBearerToken] ✅ Verification: Token correctly saved");
+    } else {
+      console.error("[Auth/setBearerToken] ❌ Verification FAILED: Token mismatch!");
+    }
   } else {
     await SecureStore.setItemAsync(BEARER_TOKEN_KEY, token);
+    console.log("[Auth/setBearerToken] ✅ Token saved to SecureStore");
+    
+    // Verify it was saved
+    const saved = await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
+    if (saved === token) {
+      console.log("[Auth/setBearerToken] ✅ Verification: Token correctly saved");
+    } else {
+      console.error("[Auth/setBearerToken] ❌ Verification FAILED: Token mismatch!");
+    }
   }
 }
 

@@ -65,37 +65,40 @@ export default function AuthScreen() {
     setLoading(true);
     try {
       if (isLogin) {
-        console.log("Attempting sign in with email:", email);
+        console.log("🔐 [Login] Attempting sign in with email:", email);
         
         // 🔥 CRITICAL: Wait for sign in to complete AND token to sync
         await signInWithEmail(email, password);
-        console.log("Sign in successful, token synced. Checking user role...");
+        console.log("✅ [Login] Sign in successful, token synced. Checking user role...");
         
         // Add a delay to ensure token is fully written to storage
+        console.log("⏳ [Login] Waiting 300ms for token to persist...");
         await new Promise(resolve => setTimeout(resolve, 300));
+        console.log("✅ [Login] Wait complete, proceeding to role check");
         
         // Check user role after login
         let userRole: UserRole = "mother"; // Default to mother
         try {
-          console.log("[Auth] Checking if user is consultant...");
+          console.log("🔍 [Login] Checking if user is consultant by calling /api/consultant/profile...");
           await apiGet("/api/consultant/profile");
           userRole = "consultant";
-          console.log("[Auth] USER ROLE: consultant");
-        } catch (error) {
-          console.log("[Auth] USER ROLE: mother (consultant profile not found)");
+          console.log("✅ [Login] USER ROLE: consultant");
+        } catch (error: any) {
+          console.log("❌ [Login] Consultant profile check failed:", error.message);
+          console.log("✅ [Login] USER ROLE: mother (consultant profile not found)");
           userRole = "mother";
         }
         
         // 🔥 CRITICAL: Store user role in AsyncStorage to avoid future API calls
         await AsyncStorage.setItem("userRole", userRole);
-        console.log("[Auth] User role stored in AsyncStorage:", userRole);
+        console.log("💾 [Login] User role stored in AsyncStorage:", userRole);
         
         // Redirect based on role
         if (userRole === "mother") {
-          console.log("Redirecting to mother dashboard");
+          console.log("🚀 [Login] Redirecting to mother dashboard");
           router.replace("/(tabs)/(home)/mother-dashboard");
         } else {
-          console.log("Redirecting to consultant dashboard (home)");
+          console.log("🚀 [Login] Redirecting to consultant dashboard (home)");
           router.replace("/(tabs)/(home)");
         }
       } else {
