@@ -231,6 +231,31 @@ const styles = StyleSheet.create({
     ...typography.button,
     color: "#FFF",
   },
+  wakingsSection: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  wakingCard: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  wakingHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  wakingTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.text,
+  },
 });
 
 function formatDateToBR(dateStr: string): string {
@@ -389,6 +414,94 @@ export default function MotherRoutineScreen() {
     }
   };
 
+  const handleUpdateNightSleep = async (field: string, value: string | null) => {
+    if (!routine) return;
+    
+    try {
+      // If night sleep doesn't exist, create it first
+      if (!routine.nightSleep) {
+        const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
+          routineId: routine.id,
+          startTryTime: field === "startTryTime" ? value : null,
+          fellAsleepTime: field === "fellAsleepTime" ? value : null,
+          finalWakeTime: field === "finalWakeTime" ? value : null,
+          observations: field === "observations" ? value : null,
+        });
+        setRoutine({ ...routine, nightSleep: newNightSleep });
+      } else {
+        // Update existing night sleep
+        await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, { [field]: value });
+        setRoutine({
+          ...routine,
+          nightSleep: { ...routine.nightSleep, [field]: value },
+        });
+      }
+    } catch (err: any) {
+      console.error("[Mother Routine] Error updating night sleep:", err);
+    }
+  };
+
+  const handleAddWaking = async () => {
+    if (!routine?.nightSleep) {
+      console.log("[Mother Routine] Cannot add waking without night sleep");
+      return;
+    }
+    
+    try {
+      const newWaking = await apiPost<NightWaking>("/api/night-sleep/wakings", {
+        nightSleepId: routine.nightSleep.id,
+        startTime: "02:00",
+        endTime: "02:30",
+      });
+      
+      setRoutine({
+        ...routine,
+        nightSleep: {
+          ...routine.nightSleep,
+          wakings: [...(routine.nightSleep.wakings || []), newWaking],
+        },
+      });
+    } catch (err: any) {
+      console.error("[Mother Routine] Error adding waking:", err);
+    }
+  };
+
+  const handleDeleteWaking = async (wakingId: string) => {
+    if (!routine?.nightSleep) return;
+    
+    try {
+      await apiDelete(`/api/night-sleep/wakings/${wakingId}`);
+      setRoutine({
+        ...routine,
+        nightSleep: {
+          ...routine.nightSleep,
+          wakings: routine.nightSleep.wakings?.filter((w) => w.id !== wakingId),
+        },
+      });
+    } catch (err: any) {
+      console.error("[Mother Routine] Error deleting waking:", err);
+    }
+  };
+
+  const handleUpdateWaking = async (wakingId: string, field: string, value: string) => {
+    if (!routine?.nightSleep) return;
+    
+    try {
+      await apiPut(`/api/night-sleep/wakings/${wakingId}`, { [field]: value });
+      setRoutine({
+        ...routine,
+        nightSleep: {
+          ...routine.nightSleep,
+          wakings: routine.nightSleep.wakings?.map((w) =>
+            w.id === wakingId ? { ...w, [field]: value } : w
+          ),
+        },
+      });
+    } catch (err: any) {
+      console.error("[Mother Routine] Error updating waking:", err);
+    }
+  };
+
   const openTimePicker = (field: string, napId?: string) => {
     setCurrentTimeField(field);
     setCurrentNapId(napId || null);
@@ -407,6 +520,25 @@ export default function MotherRoutineScreen() {
       if (timeValue && typeof timeValue === "string") {
         const [h, m] = timeValue.split(":").map(Number);
         initialTime.setHours(h, m);
+      }
+    } else if (field.startsWith("night_") && routine?.nightSleep) {
+      const nightField = field.split("_")[1];
+      const timeValue = routine.nightSleep[nightField as keyof NightSleep];
+      if (timeValue && typeof timeValue === "string") {
+        const [h, m] = timeValue.split(":").map(Number);
+        initialTime.setHours(h, m);
+      }
+    } else if (field.startsWith("waking_") && routine?.nightSleep) {
+      const parts = field.split("_");
+      const wakingId = parts[1];
+      const wakingField = parts[2];
+      const waking = routine.nightSleep.wakings?.find((w) => w.id === wakingId);
+      if (waking) {
+        const timeValue = waking[wakingField as keyof NightWaking];
+        if (timeValue && typeof timeValue === "string") {
+          const [h, m] = timeValue.split(":").map(Number);
+          initialTime.setHours(h, m);
+        }
       }
     }
     
@@ -429,6 +561,14 @@ export default function MotherRoutineScreen() {
       } else if (currentTimeField.startsWith("nap_") && currentNapId) {
         const field = currentTimeField.split("_")[1];
         await handleUpdateNap(currentNapId, field, timeString);
+      } else if (currentTimeField.startsWith("night_")) {
+        const field = currentTimeField.split("_")[1];
+        await handleUpdateNightSleep(field, timeString);
+      } else if (currentTimeField.startsWith("waking_")) {
+        const parts = currentTimeField.split("_");
+        const wakingId = parts[1];
+        const field = parts[2];
+        await handleUpdateWaking(wakingId, field, timeString);
       }
     }
   };
@@ -666,6 +806,141 @@ export default function MotherRoutineScreen() {
               <Text style={styles.addButtonText}>Adicionar Soneca</Text>
             </TouchableOpacity>
           )}
+        </View>
+
+        {/* Night Sleep */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>🌙 Sono Noturno</Text>
+          
+          <Text style={styles.fieldLabel}>Começou a tentar dormir às</Text>
+          <TouchableOpacity
+            style={styles.timePickerButton}
+            onPress={() => openTimePicker("night_startTryTime")}
+          >
+            <Text style={styles.timePickerText}>
+              {routine.nightSleep?.startTryTime || "—"}
+            </Text>
+            <IconSymbol
+              ios_icon_name="clock"
+              android_material_icon_name="access-time"
+              size={20}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+
+          <Text style={styles.fieldLabel}>Dormiu às</Text>
+          <TouchableOpacity
+            style={styles.timePickerButton}
+            onPress={() => openTimePicker("night_fellAsleepTime")}
+          >
+            <Text style={styles.timePickerText}>
+              {routine.nightSleep?.fellAsleepTime || "—"}
+            </Text>
+            <IconSymbol
+              ios_icon_name="clock"
+              android_material_icon_name="access-time"
+              size={20}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+
+          <Text style={styles.fieldLabel}>Acordou às (final)</Text>
+          <TouchableOpacity
+            style={styles.timePickerButton}
+            onPress={() => openTimePicker("night_finalWakeTime")}
+          >
+            <Text style={styles.timePickerText}>
+              {routine.nightSleep?.finalWakeTime || "—"}
+            </Text>
+            <IconSymbol
+              ios_icon_name="clock"
+              android_material_icon_name="access-time"
+              size={20}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+
+          {routine.nightSleep?.fellAsleepTime && routine.nightSleep?.finalWakeTime && (
+            <Text style={styles.calcText}>
+              💤 Duração Total: {minutesToHM(calcTimeDiff(routine.nightSleep.fellAsleepTime, routine.nightSleep.finalWakeTime))}
+            </Text>
+          )}
+
+          <Text style={styles.fieldLabel}>Observações</Text>
+          <TextInput
+            style={[styles.formInput, styles.textArea]}
+            placeholder="Suas observações sobre o sono noturno..."
+            value={routine.nightSleep?.observations || ""}
+            onChangeText={(text) => handleUpdateNightSleep("observations", text)}
+            multiline
+            numberOfLines={3}
+            placeholderTextColor={colors.textSecondary}
+          />
+
+          {/* Awakenings */}
+          <View style={styles.wakingsSection}>
+            <Text style={styles.sectionTitle}>🌟 Despertares Noturnos</Text>
+            {(routine.nightSleep?.wakings || []).map((waking, index) => {
+              const wakingDuration = calcTimeDiff(waking.startTime, waking.endTime);
+              return (
+                <View key={waking.id} style={styles.wakingCard}>
+                  <View style={styles.wakingHeader}>
+                    <Text style={styles.wakingTitle}>Despertar {index + 1}</Text>
+                    <TouchableOpacity onPress={() => handleDeleteWaking(waking.id)}>
+                      <IconSymbol
+                        ios_icon_name="trash.fill"
+                        android_material_icon_name="delete"
+                        size={18}
+                        color={colors.error}
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.fieldLabel}>Início do despertar</Text>
+                  <TouchableOpacity
+                    style={styles.timePickerButton}
+                    onPress={() => openTimePicker(`waking_${waking.id}_startTime`)}
+                  >
+                    <Text style={styles.timePickerText}>{waking.startTime}</Text>
+                    <IconSymbol
+                      ios_icon_name="clock"
+                      android_material_icon_name="access-time"
+                      size={20}
+                      color={colors.primary}
+                    />
+                  </TouchableOpacity>
+
+                  <Text style={styles.fieldLabel}>Voltou a dormir às</Text>
+                  <TouchableOpacity
+                    style={styles.timePickerButton}
+                    onPress={() => openTimePicker(`waking_${waking.id}_endTime`)}
+                  >
+                    <Text style={styles.timePickerText}>{waking.endTime}</Text>
+                    <IconSymbol
+                      ios_icon_name="clock"
+                      android_material_icon_name="access-time"
+                      size={20}
+                      color={colors.primary}
+                    />
+                  </TouchableOpacity>
+
+                  <Text style={styles.calcText}>
+                    ⏱️ Duração: {minutesToHM(wakingDuration)}
+                  </Text>
+                </View>
+              );
+            })}
+
+            <TouchableOpacity style={styles.addButton} onPress={handleAddWaking}>
+              <IconSymbol
+                ios_icon_name="plus"
+                android_material_icon_name="add"
+                size={20}
+                color="#FFF"
+              />
+              <Text style={styles.addButtonText}>Adicionar Despertar</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
 
