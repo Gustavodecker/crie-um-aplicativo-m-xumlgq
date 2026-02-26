@@ -84,6 +84,10 @@ export default function AuthScreen() {
           userRole = "mother";
         }
         
+        // 🔥 CRITICAL: Store user role in AsyncStorage to avoid future API calls
+        await AsyncStorage.setItem("userRole", userRole);
+        console.log("[Auth] User role stored in AsyncStorage:", userRole);
+        
         // Redirect based on role
         if (userRole === "mother") {
           console.log("Redirecting to mother dashboard");
@@ -109,6 +113,11 @@ export default function AuthScreen() {
           } catch (initErr) {
             console.warn("[API] Consultant init error (may already exist):", initErr);
           }
+          
+          // 🔥 CRITICAL: Store user role in AsyncStorage
+          await AsyncStorage.setItem("userRole", "consultant");
+          console.log("[Auth] User role stored in AsyncStorage: consultant");
+          
           console.log("Redirecting to consultant dashboard (home)");
           router.replace("/(tabs)/(home)");
         } else if (role === "mother" && babyToken) {
@@ -124,6 +133,11 @@ export default function AuthScreen() {
             setLoading(false);
             return;
           }
+          
+          // 🔥 CRITICAL: Store user role in AsyncStorage
+          await AsyncStorage.setItem("userRole", "mother");
+          console.log("[Auth] User role stored in AsyncStorage: mother");
+          
           console.log("Redirecting to mother dashboard");
           router.replace("/(tabs)/(home)/mother-dashboard");
         }
