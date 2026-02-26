@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "crie-um-aplicativo-m",
@@ -14,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.todanoite.baby",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -24,8 +25,9 @@
         "foregroundImage": "./assets/images/app-icon-afq.png",
         "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively"
+      "package": "com.todanoite.baby",
+      "versionCode": 1,
+      "edgeToEdgeEnabled": false
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -42,7 +44,7 @@
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://wge47dvbdvqm7g2vmsdnz45beh8s73xx.app.specular.dev"
+      "backendUrl": "https://prod-proj-5k9qncchwvt3rgmn6rvjs-liwg5h36mq-ey.a.run.app"
     }
   }
 }
