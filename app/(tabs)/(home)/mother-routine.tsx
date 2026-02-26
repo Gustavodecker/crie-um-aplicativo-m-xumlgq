@@ -21,6 +21,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 interface Baby {
   id: string;
   name: string;
+  activeContract: any | null;
 }
 
 interface Nap {
@@ -190,6 +191,46 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     fontWeight: "600",
   },
+  noContractContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xxl,
+  },
+  noContractIcon: {
+    marginBottom: spacing.lg,
+  },
+  noContractTitle: {
+    ...typography.h2,
+    textAlign: "center",
+    marginBottom: spacing.md,
+  },
+  noContractText: {
+    ...typography.body,
+    textAlign: "center",
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+    lineHeight: 24,
+  },
+  noContractHint: {
+    ...typography.caption,
+    textAlign: "center",
+    color: colors.textSecondary,
+    fontStyle: "italic",
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  backButton: {
+    marginTop: spacing.xl,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+  },
+  backButtonText: {
+    ...typography.button,
+    color: "#FFF",
+  },
 });
 
 function formatDateToBR(dateStr: string): string {
@@ -216,6 +257,7 @@ export default function MotherRoutineScreen() {
   const [routine, setRoutine] = useState<Routine | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [noContract, setNoContract] = useState(false);
   const [expandedNaps, setExpandedNaps] = useState<{ [key: number]: boolean }>({});
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [currentTimeField, setCurrentTimeField] = useState<string>("");
@@ -231,12 +273,20 @@ export default function MotherRoutineScreen() {
       const babyData = await apiGet<Baby>("/api/mother/baby");
       setBaby(babyData);
 
+      // Check if baby has an active contract
+      if (!babyData.activeContract) {
+        console.log("[Mother Routine] No active contract found");
+        setNoContract(true);
+        setLoading(false);
+        return;
+      }
+
       // Get today's date
       const today = new Date().toISOString().split("T")[0];
       
       // Try to get today's routine
       try {
-        const routineData = await apiGet<Routine>(`/api/routines/baby/${babyData.id}`);
+        const routineData = await apiGet<Routine[]>(`/api/routines/baby/${babyData.id}`);
         const todayRoutine = routineData.find((r: Routine) => r.date === today);
         
         if (todayRoutine) {
@@ -252,9 +302,13 @@ export default function MotherRoutineScreen() {
           });
           setRoutine(newRoutine);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("[Mother Routine] Error loading routine:", err);
-        setError("Erro ao carregar rotina");
+        if (err.message && err.message.includes("No active contract")) {
+          setNoContract(true);
+        } else {
+          setError("Erro ao carregar rotina");
+        }
       }
     } catch (err: any) {
       console.error("[Mother Routine] Error loading data:", err);
@@ -384,6 +438,48 @@ export default function MotherRoutineScreen() {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
+    );
+  }
+
+  // Show "No Contract" screen
+  if (noContract) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <Stack.Screen
+          options={{
+            headerShown: true,
+            title: "Rotina",
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
+          }}
+        />
+        <View style={styles.noContractContainer}>
+          <View style={styles.noContractIcon}>
+            <IconSymbol
+              ios_icon_name="doc.text.fill"
+              android_material_icon_name="description"
+              size={80}
+              color={colors.primary}
+            />
+          </View>
+          <Text style={styles.noContractTitle}>Contrato Necessário</Text>
+          <Text style={styles.noContractText}>
+            Para registrar a rotina de sono, é necessário ter um contrato ativo com sua consultora.
+          </Text>
+          <Text style={styles.noContractText}>
+            Entre em contato com sua consultora para ativar o contrato e começar o acompanhamento.
+          </Text>
+          <Text style={styles.noContractHint}>
+            💡 Sua consultora poderá criar e ativar o contrato pelo painel dela.
+          </Text>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backButtonText}>Voltar</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
     );
   }
 

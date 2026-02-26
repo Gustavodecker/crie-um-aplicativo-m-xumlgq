@@ -27,6 +27,7 @@ interface Baby {
   ageMonths: number;
   ageDays: number;
   photo?: string | null;
+  activeContract: any | null;
 }
 
 interface TodayRoutine {
@@ -91,57 +92,59 @@ export default function MotherDashboardScreen() {
       console.log("[Mother Dashboard] Baby loaded:", babyData.name);
       setBaby(babyData);
 
-      // Load today's routine summary
-      const today = new Date().toISOString().split("T")[0];
-      try {
-        const routines = await apiGet<any[]>(`/api/routines/baby/${babyData.id}`);
-        const todayRoutineData = routines.find(r => r.date === today);
-        
-        if (todayRoutineData) {
-          // Calculate summary
-          const napsCount = todayRoutineData.naps?.length || 0;
-          const daytimeSleepMinutes = (todayRoutineData.naps || []).reduce((sum: number, nap: any) => {
-            if (nap.fellAsleepTime && nap.wakeUpTime) {
-              const [sh, sm] = nap.fellAsleepTime.split(":").map(Number);
-              const [eh, em] = nap.wakeUpTime.split(":").map(Number);
+      // Load today's routine summary (only if there's an active contract)
+      if (babyData.activeContract) {
+        const today = new Date().toISOString().split("T")[0];
+        try {
+          const routines = await apiGet<any[]>(`/api/routines/baby/${babyData.id}`);
+          const todayRoutineData = routines.find(r => r.date === today);
+          
+          if (todayRoutineData) {
+            // Calculate summary
+            const napsCount = todayRoutineData.naps?.length || 0;
+            const daytimeSleepMinutes = (todayRoutineData.naps || []).reduce((sum: number, nap: any) => {
+              if (nap.fellAsleepTime && nap.wakeUpTime) {
+                const [sh, sm] = nap.fellAsleepTime.split(":").map(Number);
+                const [eh, em] = nap.wakeUpTime.split(":").map(Number);
+                let diff = (eh * 60 + em) - (sh * 60 + sm);
+                if (diff < 0) diff += 24 * 60;
+                return sum + diff;
+              }
+              return sum;
+            }, 0);
+
+            let nightSleepMinutes = 0;
+            if (todayRoutineData.nightSleep?.fellAsleepTime && todayRoutineData.nightSleep?.finalWakeTime) {
+              const [sh, sm] = todayRoutineData.nightSleep.fellAsleepTime.split(":").map(Number);
+              const [eh, em] = todayRoutineData.nightSleep.finalWakeTime.split(":").map(Number);
               let diff = (eh * 60 + em) - (sh * 60 + sm);
               if (diff < 0) diff += 24 * 60;
-              return sum + diff;
-            }
-            return sum;
-          }, 0);
+              nightSleepMinutes = diff;
 
-          let nightSleepMinutes = 0;
-          if (todayRoutineData.nightSleep?.fellAsleepTime && todayRoutineData.nightSleep?.finalWakeTime) {
-            const [sh, sm] = todayRoutineData.nightSleep.fellAsleepTime.split(":").map(Number);
-            const [eh, em] = todayRoutineData.nightSleep.finalWakeTime.split(":").map(Number);
-            let diff = (eh * 60 + em) - (sh * 60 + sm);
-            if (diff < 0) diff += 24 * 60;
-            nightSleepMinutes = diff;
-
-            // Subtract wakings
-            if (todayRoutineData.nightSleep.wakings) {
-              todayRoutineData.nightSleep.wakings.forEach((w: any) => {
-                const [wsh, wsm] = w.startTime.split(":").map(Number);
-                const [weh, wem] = w.endTime.split(":").map(Number);
-                let wdiff = (weh * 60 + wem) - (wsh * 60 + wsm);
-                if (wdiff < 0) wdiff += 24 * 60;
-                nightSleepMinutes -= wdiff;
-              });
+              // Subtract wakings
+              if (todayRoutineData.nightSleep.wakings) {
+                todayRoutineData.nightSleep.wakings.forEach((w: any) => {
+                  const [wsh, wsm] = w.startTime.split(":").map(Number);
+                  const [weh, wem] = w.endTime.split(":").map(Number);
+                  let wdiff = (weh * 60 + wem) - (wsh * 60 + wsm);
+                  if (wdiff < 0) wdiff += 24 * 60;
+                  nightSleepMinutes -= wdiff;
+                });
+              }
             }
+
+            setTodayRoutine({
+              id: todayRoutineData.id,
+              date: todayRoutineData.date,
+              wakeUpTime: todayRoutineData.wakeUpTime,
+              napsCount,
+              daytimeSleepMinutes,
+              nightSleepMinutes,
+            });
           }
-
-          setTodayRoutine({
-            id: todayRoutineData.id,
-            date: todayRoutineData.date,
-            wakeUpTime: todayRoutineData.wakeUpTime,
-            napsCount,
-            daytimeSleepMinutes,
-            nightSleepMinutes,
-          });
+        } catch (err) {
+          console.log("[Mother Dashboard] No routine data for today");
         }
-      } catch (err) {
-        console.log("[Mother Dashboard] No routine data for today");
       }
 
       // Load last orientation
@@ -218,6 +221,7 @@ export default function MotherDashboardScreen() {
 
   const ageText = `${baby.ageMonths} ${baby.ageMonths === 1 ? "mês" : "meses"}`;
   const ageDaysText = baby.ageDays > 0 ? ` e ${baby.ageDays} ${baby.ageDays === 1 ? "dia" : "dias"}` : "";
+  const hasActiveContract = baby.activeContract !== null;
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -285,83 +289,105 @@ export default function MotherDashboardScreen() {
           </View>
         </View>
 
-        {/* Today's Summary */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <IconSymbol 
-              ios_icon_name="calendar" 
-              android_material_icon_name="calendar-today" 
-              size={20} 
-              color={colors.primary} 
-            />
-            <Text style={styles.sectionTitle}>Resumo de Hoje</Text>
+        {/* No Contract Warning */}
+        {!hasActiveContract && (
+          <View style={styles.warningCard}>
+            <View style={styles.warningIcon}>
+              <IconSymbol 
+                ios_icon_name="exclamationmark.triangle.fill" 
+                android_material_icon_name="warning" 
+                size={24} 
+                color={colors.warning} 
+              />
+            </View>
+            <View style={styles.warningContent}>
+              <Text style={styles.warningTitle}>⚠️ Contrato Necessário</Text>
+              <Text style={styles.warningText}>
+                Para registrar a rotina de sono, é necessário ter um contrato ativo. Entre em contato com sua consultora para ativar o contrato.
+              </Text>
+            </View>
           </View>
+        )}
 
-          {todayRoutine ? (
-            <View style={styles.summaryGrid}>
-              <View style={styles.summaryItem}>
-                <IconSymbol 
-                  ios_icon_name="sunrise.fill" 
-                  android_material_icon_name="wb-sunny" 
-                  size={24} 
-                  color={colors.secondary} 
-                />
-                <Text style={styles.summaryLabel}>Acordou às</Text>
-                <Text style={styles.summaryValue}>
-                  {todayRoutine.wakeUpTime || "--:--"}
-                </Text>
-              </View>
-
-              <View style={styles.summaryItem}>
-                <IconSymbol 
-                  ios_icon_name="moon.zzz.fill" 
-                  android_material_icon_name="bedtime" 
-                  size={24} 
-                  color={colors.primary} 
-                />
-                <Text style={styles.summaryLabel}>Sonecas</Text>
-                <Text style={styles.summaryValue}>
-                  {todayRoutine.napsCount}
-                </Text>
-              </View>
-
-              <View style={styles.summaryItem}>
-                <IconSymbol 
-                  ios_icon_name="sun.max.fill" 
-                  android_material_icon_name="wb-sunny" 
-                  size={24} 
-                  color={colors.success} 
-                />
-                <Text style={styles.summaryLabel}>Sono Diurno</Text>
-                <Text style={styles.summaryValue}>
-                  {minutesToHM(todayRoutine.daytimeSleepMinutes)}
-                </Text>
-              </View>
-
-              <View style={styles.summaryItem}>
-                <IconSymbol 
-                  ios_icon_name="moon.stars.fill" 
-                  android_material_icon_name="nights-stay" 
-                  size={24} 
-                  color={colors.primary} 
-                />
-                <Text style={styles.summaryLabel}>Sono Noturno</Text>
-                <Text style={styles.summaryValue}>
-                  {minutesToHM(todayRoutine.nightSleepMinutes)}
-                </Text>
-              </View>
+        {/* Today's Summary */}
+        {hasActiveContract && (
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <IconSymbol 
+                ios_icon_name="calendar" 
+                android_material_icon_name="calendar-today" 
+                size={20} 
+                color={colors.primary} 
+              />
+              <Text style={styles.sectionTitle}>Resumo de Hoje</Text>
             </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>
-                Nenhuma rotina registrada hoje
-              </Text>
-              <Text style={styles.emptyStateHint}>
-                Toque em "Registrar Rotina" para começar
-              </Text>
-            </View>
-          )}
-        </View>
+
+            {todayRoutine ? (
+              <View style={styles.summaryGrid}>
+                <View style={styles.summaryItem}>
+                  <IconSymbol 
+                    ios_icon_name="sunrise.fill" 
+                    android_material_icon_name="wb-sunny" 
+                    size={24} 
+                    color={colors.secondary} 
+                  />
+                  <Text style={styles.summaryLabel}>Acordou às</Text>
+                  <Text style={styles.summaryValue}>
+                    {todayRoutine.wakeUpTime || "--:--"}
+                  </Text>
+                </View>
+
+                <View style={styles.summaryItem}>
+                  <IconSymbol 
+                    ios_icon_name="moon.zzz.fill" 
+                    android_material_icon_name="bedtime" 
+                    size={24} 
+                    color={colors.primary} 
+                  />
+                  <Text style={styles.summaryLabel}>Sonecas</Text>
+                  <Text style={styles.summaryValue}>
+                    {todayRoutine.napsCount}
+                  </Text>
+                </View>
+
+                <View style={styles.summaryItem}>
+                  <IconSymbol 
+                    ios_icon_name="sun.max.fill" 
+                    android_material_icon_name="wb-sunny" 
+                    size={24} 
+                    color={colors.success} 
+                  />
+                  <Text style={styles.summaryLabel}>Sono Diurno</Text>
+                  <Text style={styles.summaryValue}>
+                    {minutesToHM(todayRoutine.daytimeSleepMinutes)}
+                  </Text>
+                </View>
+
+                <View style={styles.summaryItem}>
+                  <IconSymbol 
+                    ios_icon_name="moon.stars.fill" 
+                    android_material_icon_name="nights-stay" 
+                    size={24} 
+                    color={colors.primary} 
+                  />
+                  <Text style={styles.summaryLabel}>Sono Noturno</Text>
+                  <Text style={styles.summaryValue}>
+                    {minutesToHM(todayRoutine.nightSleepMinutes)}
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>
+                  Nenhuma rotina registrada hoje
+                </Text>
+                <Text style={styles.emptyStateHint}>
+                  Toque em "Registrar Rotina" para começar
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Last Orientation */}
         {lastOrientation && (
@@ -403,28 +429,43 @@ export default function MotherDashboardScreen() {
           <Text style={styles.actionsTitle}>O que você quer fazer?</Text>
           
           <TouchableOpacity 
-            style={styles.primaryActionButton}
-            onPress={() => router.push("/(tabs)/(home)/mother-routine")}
+            style={[
+              styles.primaryActionButton,
+              !hasActiveContract && styles.disabledButton
+            ]}
+            onPress={() => hasActiveContract && router.push("/(tabs)/(home)/mother-routine")}
+            disabled={!hasActiveContract}
           >
             <View style={styles.actionButtonIcon}>
               <IconSymbol 
                 ios_icon_name="plus.circle.fill" 
                 android_material_icon_name="add-circle" 
                 size={28} 
-                color="#FFF" 
+                color={hasActiveContract ? "#FFF" : colors.textSecondary} 
               />
             </View>
             <View style={styles.actionButtonContent}>
-              <Text style={styles.primaryActionTitle}>Registrar Rotina</Text>
-              <Text style={styles.primaryActionSubtitle}>
-                Adicione sonecas e sono noturno
+              <Text style={[
+                styles.primaryActionTitle,
+                !hasActiveContract && styles.disabledText
+              ]}>
+                Registrar Rotina
+              </Text>
+              <Text style={[
+                styles.primaryActionSubtitle,
+                !hasActiveContract && styles.disabledText
+              ]}>
+                {hasActiveContract 
+                  ? "Adicione sonecas e sono noturno"
+                  : "Contrato necessário"
+                }
               </Text>
             </View>
             <IconSymbol 
               ios_icon_name="chevron.right" 
               android_material_icon_name="chevron-right" 
               size={24} 
-              color="#FFF" 
+              color={hasActiveContract ? "#FFF" : colors.textSecondary} 
             />
           </TouchableOpacity>
 
@@ -443,16 +484,25 @@ export default function MotherDashboardScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity 
-              style={styles.secondaryActionButton}
-              onPress={() => router.push("/(tabs)/(home)/mother-evolution")}
+              style={[
+                styles.secondaryActionButton,
+                !hasActiveContract && styles.disabledButton
+              ]}
+              onPress={() => hasActiveContract && router.push("/(tabs)/(home)/mother-evolution")}
+              disabled={!hasActiveContract}
             >
               <IconSymbol 
                 ios_icon_name="chart.line.uptrend.xyaxis" 
                 android_material_icon_name="trending-up" 
                 size={24} 
-                color={colors.success} 
+                color={hasActiveContract ? colors.success : colors.textSecondary} 
               />
-              <Text style={styles.secondaryActionText}>Evolução</Text>
+              <Text style={[
+                styles.secondaryActionText,
+                !hasActiveContract && styles.disabledText
+              ]}>
+                Evolução
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -579,6 +629,31 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
   },
+  warningCard: {
+    flexDirection: "row",
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.warning,
+  },
+  warningIcon: {
+    marginRight: spacing.md,
+  },
+  warningContent: {
+    flex: 1,
+  },
+  warningTitle: {
+    ...typography.h4,
+    marginBottom: spacing.xs,
+    color: colors.warning,
+  },
+  warningText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
   sectionCard: {
     backgroundColor: colors.card,
     borderRadius: borderRadius.xl,
@@ -684,6 +759,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
+  disabledButton: {
+    backgroundColor: colors.backgroundAlt,
+    opacity: 0.6,
+  },
   actionButtonIcon: {
     marginRight: spacing.md,
   },
@@ -698,6 +777,9 @@ const styles = StyleSheet.create({
   primaryActionSubtitle: {
     ...typography.caption,
     color: "rgba(255, 255, 255, 0.8)",
+  },
+  disabledText: {
+    color: colors.textSecondary,
   },
   secondaryActions: {
     flexDirection: "row",
