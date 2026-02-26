@@ -180,6 +180,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
        // Always clear local state
        setUser(null);
        await clearAuthTokens();
+       
+       // 🔥 CRITICAL: Clear stored user role on logout
+       try {
+         const AsyncStorage = await import("@react-native-async-storage/async-storage");
+         await AsyncStorage.default.removeItem("userRole");
+         await AsyncStorage.default.removeItem("motherBabyId");
+         console.log("[Auth] Cleared stored user role and baby ID");
+       } catch (storageError) {
+         console.error("[Auth] Error clearing AsyncStorage:", storageError);
+       }
     }
   };
 

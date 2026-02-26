@@ -6,6 +6,7 @@ import { View, ActivityIndicator } from "react-native";
 import FloatingTabBar, { TabBarItem } from "@/components/FloatingTabBar";
 import { colors } from "@/styles/commonStyles";
 import { apiGet } from "@/utils/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function TabLayout() {
   const { user, loading } = useAuth();
@@ -29,34 +30,49 @@ export default function TabLayout() {
 
       console.log("[Tab Layout] Checking user role");
 
-      // Try to fetch consultant profile - if it succeeds, user is a consultant
-      // If it fails with 404, user is a mother (this is expected behavior)
+      // 🔥 CRITICAL FIX: Use stored role from AsyncStorage instead of API call
+      // This prevents calling /api/consultant/profile for mothers
       try {
-        // Suppress error logging for this call since 404 is expected for mothers
-        await apiGet("/api/consultant/profile", { suppressErrorLog: true });
-        console.log("[Tab Layout] User is a CONSULTANT");
-        setUserRole("consultant");
-      } catch (error: any) {
-        // 404 means user is not a consultant, so they must be a mother
-        // This is EXPECTED and NOT an error - DO NOT LOG IT
-        if (
-          error.message?.includes("404") ||
-          error.message?.includes("Consultant profile not found")
-        ) {
-          // Silent - this is expected for mothers
-          setUserRole("mother");
-        } else if (
-          error.message?.includes("Authentication token not found")
-        ) {
-          // Token not ready yet - also expected during initial load
-          console.log("[Tab Layout] Token not ready, assuming mother");
-          setUserRole("mother");
-        } else {
-          // Only log truly unexpected errors
-          console.error("[Tab Layout] Unexpected error checking role:", error);
-          // On other errors, assume mother to be safe
-          setUserRole("mother");
+        const storedRole = await AsyncStorage.getItem("userRole");
+        
+        if (storedRole === "consultant" || storedRole === "mother") {
+          console.log("[Tab Layout] User role from AsyncStorage:", storedRole);
+          setUserRole(storedRole);
+          setCheckingRole(false);
+          return;
         }
+        
+        // Fallback: If no stored role, check via API (only for legacy users)
+        console.log("[Tab Layout] No stored role, checking via API (fallback)");
+        try {
+          await apiGet("/api/consultant/profile", { suppressErrorLog: true });
+          console.log("[Tab Layout] User is a CONSULTANT");
+          setUserRole("consultant");
+          // Store for future use
+          await AsyncStorage.setItem("userRole", "consultant");
+        } catch (error: any) {
+          // 404 means user is not a consultant, so they must be a mother
+          if (
+            error.message?.includes("404") ||
+            error.message?.includes("Consultant profile not found")
+          ) {
+            console.log("[Tab Layout] User is a MOTHER");
+            setUserRole("mother");
+            // Store for future use
+            await AsyncStorage.setItem("userRole", "mother");
+          } else if (
+            error.message?.includes("Authentication token not found")
+          ) {
+            console.log("[Tab Layout] Token not ready, assuming mother");
+            setUserRole("mother");
+          } else {
+            console.error("[Tab Layout] Unexpected error checking role:", error);
+            setUserRole("mother");
+          }
+        }
+      } catch (storageError) {
+        console.error("[Tab Layout] Error reading AsyncStorage:", storageError);
+        setUserRole("mother");
       } finally {
         setCheckingRole(false);
       }
