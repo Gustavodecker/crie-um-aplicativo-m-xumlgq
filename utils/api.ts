@@ -27,9 +27,13 @@ export const isBackendConfigured = (): boolean => {
 export const getBearerToken = async (): Promise<string | null> => {
   try {
     if (Platform.OS === "web") {
-      return localStorage.getItem(BEARER_TOKEN_KEY);
+      const token = localStorage.getItem(BEARER_TOKEN_KEY);
+      console.log("[API] Token from localStorage:", token ? "exists" : "null");
+      return token;
     } else {
-      return await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
+      const token = await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
+      console.log("[API] Token from SecureStore:", token ? "exists" : "null");
+      return token;
     }
   } catch (error) {
     console.error("[API] Error retrieving bearer token:", error);
@@ -73,6 +77,9 @@ export const apiCall = async <T = any>(
     // Remove our custom property before sending
     delete (fetchOptions as any).suppressErrorLog;
 
+    // 🔥 CRITICAL: Always get the token and add to headers
+    const token = await getBearerToken();
+    
     // Only add Content-Type header if there's a body
     // DELETE requests without body should NOT have Content-Type header
     if (options?.body) {
@@ -86,17 +93,22 @@ export const apiCall = async <T = any>(
       };
     }
 
-    if (!suppressErrorLog) {
-      console.log("[API] Fetch options:", fetchOptions);
-    }
-
-    // Always send the token if we have it (needed for cross-domain/iframe support)
-    const token = await getBearerToken();
+    // Add Authorization header if we have a token
     if (token) {
+      console.log("[API] Adding Authorization header with token");
       fetchOptions.headers = {
         ...fetchOptions.headers,
         Authorization: `Bearer ${token}`,
       };
+    } else {
+      console.warn("[API] No token available for authenticated request");
+    }
+
+    if (!suppressErrorLog) {
+      console.log("[API] Fetch options:", {
+        method: fetchOptions.method || "GET",
+        headers: fetchOptions.headers,
+      });
     }
 
     const response = await fetch(url, fetchOptions);

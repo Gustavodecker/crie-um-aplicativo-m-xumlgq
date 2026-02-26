@@ -66,21 +66,23 @@ export default function AuthScreen() {
     try {
       if (isLogin) {
         console.log("Attempting sign in with email:", email);
-        // Wait for sign in to complete (this saves the token)
-        await signInWithEmail(email, password);
-        console.log("Sign in successful, checking user role...");
         
-        // Add a small delay to ensure token is fully saved to SecureStore
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // 🔥 CRITICAL: Wait for sign in to complete AND token to sync
+        await signInWithEmail(email, password);
+        console.log("Sign in successful, token synced. Checking user role...");
+        
+        // Add a delay to ensure token is fully written to storage
+        await new Promise(resolve => setTimeout(resolve, 300));
         
         // Check user role after login
         let userRole: UserRole = "mother"; // Default to mother
         try {
+          console.log("[Auth] Checking if user is consultant...");
           await apiGet("/api/consultant/profile");
           userRole = "consultant";
-          console.log("USER ROLE: consultant");
+          console.log("[Auth] USER ROLE: consultant");
         } catch (error) {
-          console.log("USER ROLE: mother");
+          console.log("[Auth] USER ROLE: mother (consultant profile not found)");
           userRole = "mother";
         }
         
@@ -98,18 +100,19 @@ export default function AuthScreen() {
         }
       } else {
         console.log("Attempting sign up with email:", email, "role:", role);
-        // Wait for sign up to complete (this saves the token)
-        await signUpWithEmail(email, password, name);
-        console.log("Sign up successful, token saved.");
         
-        // Add a small delay to ensure token is fully saved to SecureStore
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // 🔥 CRITICAL: Wait for sign up to complete AND token to sync
+        await signUpWithEmail(email, password, name);
+        console.log("Sign up successful, token synced.");
+        
+        // Add a delay to ensure token is fully written to storage
+        await new Promise(resolve => setTimeout(resolve, 300));
         
         if (role === "consultant") {
           console.log("[API] Initializing consultant profile");
           try {
             await apiPost("/api/init/consultant", { name });
-            console.log("USER ROLE: consultant");
+            console.log("[Auth] USER ROLE: consultant");
           } catch (initErr) {
             console.warn("[API] Consultant init error (may already exist):", initErr);
           }
@@ -126,7 +129,7 @@ export default function AuthScreen() {
             const response = await apiPost<{ id: string }>("/api/init/mother", { token: babyToken.toUpperCase() });
             console.log("[API] Mother linked successfully, baby ID:", response.id);
             await AsyncStorage.setItem("motherBabyId", response.id);
-            console.log("USER ROLE: mother");
+            console.log("[Auth] USER ROLE: mother");
           } catch (initErr: any) {
             console.error("[API] Mother init error:", initErr);
             showErrorModal(initErr.message || "Erro ao vincular bebê. Verifique o código.");
