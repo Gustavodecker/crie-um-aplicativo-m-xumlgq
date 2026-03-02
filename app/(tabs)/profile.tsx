@@ -152,7 +152,7 @@ export default function ProfileScreen() {
             headerTintColor: colors.text,
           }}
         />
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContentMother}>
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
               <IconSymbol
@@ -189,16 +189,18 @@ export default function ProfileScreen() {
             </Text>
           </View>
 
-          <TouchableOpacity
-            style={styles.signOutButton}
-            onPress={() => {
-              console.log("Mother tapped sign out button");
-              setShowSignOutModal(true);
-            }}
-          >
-            <IconSymbol ios_icon_name="arrow.right.square.fill" android_material_icon_name="logout" size={24} color={colors.error} />
-            <Text style={styles.signOutText}>Encerrar Sessão</Text>
-          </TouchableOpacity>
+          <View style={styles.logoutSection}>
+            <TouchableOpacity
+              style={styles.signOutButton}
+              onPress={() => {
+                console.log("Mother tapped sign out button");
+                setShowSignOutModal(true);
+              }}
+            >
+              <IconSymbol ios_icon_name="arrow.right.square.fill" android_material_icon_name="logout" size={24} color={colors.error} />
+              <Text style={styles.signOutText}>Encerrar Sessão</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
 
         <ConfirmModal
@@ -307,16 +309,18 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={styles.signOutButton}
-          onPress={() => {
-            console.log("Consultant tapped sign out button");
-            setShowSignOutModal(true);
-          }}
-        >
-          <IconSymbol ios_icon_name="arrow.right.square.fill" android_material_icon_name="logout" size={24} color={colors.error} />
-          <Text style={styles.signOutText}>Encerrar Sessão</Text>
-        </TouchableOpacity>
+        <View style={styles.logoutSection}>
+          <TouchableOpacity
+            style={styles.signOutButton}
+            onPress={() => {
+              console.log("Consultant tapped sign out button");
+              setShowSignOutModal(true);
+            }}
+          >
+            <IconSymbol ios_icon_name="arrow.right.square.fill" android_material_icon_name="logout" size={24} color={colors.error} />
+            <Text style={styles.signOutText}>Encerrar Sessão</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       <ConfirmModal
@@ -394,7 +398,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   scrollView: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 140 },
+  scrollContent: { padding: 16, paddingBottom: 200 },
+  scrollContentMother: { padding: 16, paddingBottom: 200 },
   profileHeader: { alignItems: "center", paddingVertical: 32 },
   avatarContainer: { marginBottom: 16 },
   userName: { fontSize: 24, fontWeight: "bold", color: colors.text, marginBottom: 4 },
@@ -418,7 +423,8 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: "bold", color: colors.text, marginBottom: 12 },
   menuItem: { flexDirection: "row", alignItems: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, marginBottom: 8, gap: 12 },
   menuItemText: { flex: 1, fontSize: 16, color: colors.text },
-  signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, gap: 8, borderWidth: 1, borderColor: colors.error, marginTop: 16, marginBottom: 24 },
+  logoutSection: { marginTop: 32, marginBottom: 40 },
+  signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, gap: 8, borderWidth: 1, borderColor: colors.error },
   signOutText: { fontSize: 16, fontWeight: "600", color: colors.error },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
