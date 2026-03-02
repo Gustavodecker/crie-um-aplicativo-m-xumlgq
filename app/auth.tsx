@@ -178,9 +178,9 @@ export default function AuthScreen() {
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.headerSection}>
-                  <Text style={styles.appName}>NanaLeve</Text>
+                  <Text style={styles.appName}>TodaNoite</Text>
                   <Text style={styles.tagline}>
-                    Leveza e ciência para noites mais tranquilas
+                    Transformando o sono infantil com método e acolhimento
                   </Text>
                 </View>
 

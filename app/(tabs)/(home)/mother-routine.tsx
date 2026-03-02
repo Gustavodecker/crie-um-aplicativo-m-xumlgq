@@ -112,8 +112,9 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   textArea: {
-    height: 80,
+    minHeight: 80,
     textAlignVertical: "top",
+    paddingTop: spacing.md,
   },
   readOnlyBox: {
     backgroundColor: colors.backgroundAlt,
