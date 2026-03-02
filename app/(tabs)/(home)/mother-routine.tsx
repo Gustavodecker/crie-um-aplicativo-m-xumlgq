@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   textArea: {
-    minHeight: 80,
+    minHeight: 100,
     textAlignVertical: "top",
     paddingTop: spacing.md,
   },
@@ -665,7 +665,7 @@ export default function MotherRoutineScreen() {
           <Text style={styles.fieldLabel}>Observações</Text>
           <TextInput
             style={[styles.formInput, styles.textArea]}
-            placeholder="Suas observações..."
+            placeholder="Suas observações sobre como o bebê acordou..."
             value={routine.motherObservations || ""}
             onChangeText={(text) => {
               setRoutine({ ...routine, motherObservations: text });
@@ -679,7 +679,8 @@ export default function MotherRoutineScreen() {
               }, 1000);
             }}
             multiline
-            numberOfLines={3}
+            textAlignVertical="top"
+            numberOfLines={4}
             placeholderTextColor={colors.textSecondary}
           />
 
@@ -770,11 +771,12 @@ export default function MotherRoutineScreen() {
                     <Text style={styles.fieldLabel}>Observações</Text>
                     <TextInput
                       style={[styles.formInput, styles.textArea]}
-                      placeholder="Suas observações..."
+                      placeholder="Suas observações sobre esta soneca..."
                       value={nap.observations || ""}
                       onChangeText={(text) => handleUpdateNap(nap.id, "observations", text)}
                       multiline
-                      numberOfLines={2}
+                      textAlignVertical="top"
+                      numberOfLines={4}
                       placeholderTextColor={colors.textSecondary}
                     />
 
@@ -874,7 +876,8 @@ export default function MotherRoutineScreen() {
             value={routine.nightSleep?.observations || ""}
             onChangeText={(text) => handleUpdateNightSleep("observations", text)}
             multiline
-            numberOfLines={3}
+            textAlignVertical="top"
+            numberOfLines={4}
             placeholderTextColor={colors.textSecondary}
           />
 

@@ -16,6 +16,7 @@ import { colors } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { useAuth } from "@/contexts/AuthContext";
 import { apiGet, apiPut, apiPost } from "@/utils/api";
+import { ConfirmModal } from "@/components/ConfirmModal";
 
 interface ConsultantProfile {
   id: string;
@@ -74,12 +75,12 @@ export default function ProfileScreen() {
     try {
       await signOut();
       console.log("Sign out successful, navigating to auth");
-      setShowSignOutModal(false);
       router.replace("/auth");
     } catch (error) {
       console.error("Sign out error:", error);
     } finally {
       setSigningOut(false);
+      setShowSignOutModal(false);
     }
   };
 
@@ -196,26 +197,26 @@ export default function ProfileScreen() {
             }}
           >
             <IconSymbol ios_icon_name="arrow.right.square.fill" android_material_icon_name="logout" size={24} color={colors.error} />
-            <Text style={styles.signOutText}>Sair</Text>
+            <Text style={styles.signOutText}>Encerrar Sessão</Text>
           </TouchableOpacity>
         </ScrollView>
 
-        <Modal visible={showSignOutModal} transparent animationType="fade" onRequestClose={() => setShowSignOutModal(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Sair da Conta</Text>
-              <Text style={styles.modalMessage}>Tem certeza que deseja sair?</Text>
-              <View style={styles.modalButtons}>
-                <TouchableOpacity style={[styles.modalButton, styles.modalButtonCancel]} onPress={() => setShowSignOutModal(false)} disabled={signingOut}>
-                  <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalButton, styles.modalButtonConfirm]} onPress={handleSignOut} disabled={signingOut}>
-                  <Text style={styles.modalButtonTextConfirm}>{signingOut ? "Saindo..." : "Sair"}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
+        <ConfirmModal
+          visible={showSignOutModal}
+          title="Sair da Conta"
+          message="Tem certeza que deseja sair?"
+          confirmText="Sair"
+          cancelText="Cancelar"
+          confirmColor={colors.error}
+          loading={signingOut}
+          onConfirm={handleSignOut}
+          onCancel={() => setShowSignOutModal(false)}
+          icon={{
+            ios: "arrow.right.square.fill",
+            android: "logout",
+            color: colors.error,
+          }}
+        />
       </SafeAreaView>
     );
   }
@@ -309,31 +310,31 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={styles.signOutButton}
           onPress={() => {
-            console.log("User tapped sign out button");
+            console.log("Consultant tapped sign out button");
             setShowSignOutModal(true);
           }}
         >
           <IconSymbol ios_icon_name="arrow.right.square.fill" android_material_icon_name="logout" size={24} color={colors.error} />
-          <Text style={styles.signOutText}>Sair</Text>
+          <Text style={styles.signOutText}>Encerrar Sessão</Text>
         </TouchableOpacity>
       </ScrollView>
 
-      <Modal visible={showSignOutModal} transparent animationType="fade" onRequestClose={() => setShowSignOutModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Sair da Conta</Text>
-            <Text style={styles.modalMessage}>Tem certeza que deseja sair?</Text>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity style={[styles.modalButton, styles.modalButtonCancel]} onPress={() => setShowSignOutModal(false)} disabled={signingOut}>
-                <Text style={styles.modalButtonTextCancel}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalButton, styles.modalButtonConfirm]} onPress={handleSignOut} disabled={signingOut}>
-                <Text style={styles.modalButtonTextConfirm}>{signingOut ? "Saindo..." : "Sair"}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <ConfirmModal
+        visible={showSignOutModal}
+        title="Sair da Conta"
+        message="Tem certeza que deseja sair?"
+        confirmText="Sair"
+        cancelText="Cancelar"
+        confirmColor={colors.error}
+        loading={signingOut}
+        onConfirm={handleSignOut}
+        onCancel={() => setShowSignOutModal(false)}
+        icon={{
+          ios: "arrow.right.square.fill",
+          android: "logout",
+          color: colors.error,
+        }}
+      />
 
       <Modal visible={showEditProfile} transparent animationType="slide" onRequestClose={() => setShowEditProfile(false)}>
         <View style={styles.slideModalOverlay}>
@@ -393,7 +394,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   scrollView: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 120 },
+  scrollContent: { padding: 16, paddingBottom: 140 },
   profileHeader: { alignItems: "center", paddingVertical: 32 },
   avatarContainer: { marginBottom: 16 },
   userName: { fontSize: 24, fontWeight: "bold", color: colors.text, marginBottom: 4 },
@@ -417,7 +418,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: "bold", color: colors.text, marginBottom: 12 },
   menuItem: { flexDirection: "row", alignItems: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, marginBottom: 8, gap: 12 },
   menuItemText: { flex: 1, fontSize: 16, color: colors.text },
-  signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, gap: 8, borderWidth: 1, borderColor: colors.error },
+  signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, gap: 8, borderWidth: 1, borderColor: colors.error, marginTop: 16, marginBottom: 24 },
   signOutText: { fontSize: 16, fontWeight: "600", color: colors.error },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
   slideModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
