@@ -590,7 +590,7 @@ export default function MotherRoutineScreen() {
       
       // Now add the waking
       console.log("[Mother Routine] Adding waking to night sleep ID:", nightSleepId);
-      const newWaking = await apiPost<NightWaking>("/api/night-sleep/wakings", {
+      const newWaking = await apiPost<NightWaking>("/api/night-wakings", {
         nightSleepId: nightSleepId,
         startTime: "02:00",
         endTime: "02:30",
@@ -624,7 +624,7 @@ export default function MotherRoutineScreen() {
     if (!routine?.nightSleep) return;
     
     try {
-      await apiDelete(`/api/night-sleep/wakings/${wakingId}`);
+      await apiDelete(`/api/night-wakings/${wakingId}`);
       setRoutine({
         ...routine,
         nightSleep: {
@@ -641,7 +641,7 @@ export default function MotherRoutineScreen() {
     if (!routine?.nightSleep) return;
     
     try {
-      await apiPut(`/api/night-sleep/wakings/${wakingId}`, { [field]: value });
+      await apiPut(`/api/night-wakings/${wakingId}`, { [field]: value });
       setRoutine({
         ...routine,
         nightSleep: {
