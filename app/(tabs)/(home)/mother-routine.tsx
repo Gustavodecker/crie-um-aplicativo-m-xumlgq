@@ -293,6 +293,11 @@ export default function MotherRoutineScreen() {
   const [napToDelete, setNapToDelete] = useState<string | null>(null);
   const router = useRouter();
 
+  // 🔥 LOCAL STATE FOR OBSERVATIONS - Prevents character loss
+  const [localMotherObservations, setLocalMotherObservations] = useState<string>("");
+  const [localNapObservations, setLocalNapObservations] = useState<{ [napId: string]: string }>({});
+  const [localNightObservations, setLocalNightObservations] = useState<string>("");
+
   const loadData = useCallback(async () => {
     try {
       console.log("[Mother Routine] Loading baby and routine data");
@@ -317,6 +322,16 @@ export default function MotherRoutineScreen() {
         
         if (todayRoutine) {
           setRoutine(todayRoutine);
+          // Initialize local state from routine data
+          setLocalMotherObservations(todayRoutine.motherObservations || "");
+          setLocalNightObservations(todayRoutine.nightSleep?.observations || "");
+          
+          // Initialize nap observations
+          const napObs: { [napId: string]: string } = {};
+          (todayRoutine.naps || []).forEach((nap) => {
+            napObs[nap.id] = nap.observations || "";
+          });
+          setLocalNapObservations(napObs);
         } else {
           // Create today's routine
           const newRoutine = await apiPost<Routine>("/api/routines", {
@@ -327,6 +342,9 @@ export default function MotherRoutineScreen() {
             consultantComments: null,
           });
           setRoutine(newRoutine);
+          setLocalMotherObservations("");
+          setLocalNightObservations("");
+          setLocalNapObservations({});
         }
       } catch (err: any) {
         console.error("[Mother Routine] Error loading routine:", err);
@@ -348,6 +366,20 @@ export default function MotherRoutineScreen() {
     loadData();
   }, [loadData]);
 
+  // 🔥 Sync local state when routine changes (but only when routine ID changes, not on every update)
+  useEffect(() => {
+    if (routine) {
+      setLocalMotherObservations(routine.motherObservations || "");
+      setLocalNightObservations(routine.nightSleep?.observations || "");
+      
+      const napObs: { [napId: string]: string } = {};
+      (routine.naps || []).forEach((nap) => {
+        napObs[nap.id] = nap.observations || "";
+      });
+      setLocalNapObservations(napObs);
+    }
+  }, [routine?.id]); // Only sync when routine ID changes, not on every routine update
+
   const handleUpdateWakeUpTime = async (time: string) => {
     if (!routine) return;
     try {
@@ -355,6 +387,20 @@ export default function MotherRoutineScreen() {
       setRoutine({ ...routine, wakeUpTime: time });
     } catch (err: any) {
       console.error("[Mother Routine] Error updating wake up time:", err);
+    }
+  };
+
+  // 🔥 Save mother observations on blur
+  const handleSaveMotherObservations = async () => {
+    if (!routine) return;
+    if (localMotherObservations === routine.motherObservations) return; // No change
+    
+    try {
+      console.log("[Mother Routine] Saving mother observations");
+      await apiPut(`/api/routines/${routine.id}`, { motherObservations: localMotherObservations });
+      setRoutine({ ...routine, motherObservations: localMotherObservations });
+    } catch (err: any) {
+      console.error("[Mother Routine] Error saving mother observations:", err);
     }
   };
 
@@ -374,6 +420,7 @@ export default function MotherRoutineScreen() {
         ...routine,
         naps: [...(routine.naps || []), newNap],
       });
+      setLocalNapObservations({ ...localNapObservations, [newNap.id]: "" });
       setExpandedNaps({ ...expandedNaps, [napNumber]: true });
     } catch (err: any) {
       console.error("[Mother Routine] Error adding nap:", err);
@@ -395,6 +442,29 @@ export default function MotherRoutineScreen() {
     }
   };
 
+  // 🔥 Save nap observations on blur
+  const handleSaveNapObservations = async (napId: string) => {
+    if (!routine) return;
+    const nap = routine.naps?.find((n) => n.id === napId);
+    if (!nap) return;
+    
+    const localValue = localNapObservations[napId] || "";
+    if (localValue === (nap.observations || "")) return; // No change
+    
+    try {
+      console.log(`[Mother Routine] Saving nap ${napId} observations`);
+      await apiPut(`/api/naps/${napId}`, { observations: localValue });
+      setRoutine({
+        ...routine,
+        naps: routine.naps?.map((n) =>
+          n.id === napId ? { ...n, observations: localValue } : n
+        ),
+      });
+    } catch (err: any) {
+      console.error("[Mother Routine] Error saving nap observations:", err);
+    }
+  };
+
   const handleDeleteNap = (napId: string, napNumber: number) => {
     setNapToDelete(napId);
     setShowDeleteConfirm(true);
@@ -408,6 +478,11 @@ export default function MotherRoutineScreen() {
         ...routine,
         naps: routine.naps?.filter((nap) => nap.id !== napToDelete),
       });
+      // Clean up local state
+      const newLocalNapObs = { ...localNapObservations };
+      delete newLocalNapObs[napToDelete];
+      setLocalNapObservations(newLocalNapObs);
+      
       setShowDeleteConfirm(false);
       setNapToDelete(null);
     } catch (err: any) {
@@ -439,6 +514,42 @@ export default function MotherRoutineScreen() {
       }
     } catch (err: any) {
       console.error("[Mother Routine] Error updating night sleep:", err);
+    }
+  };
+
+  // 🔥 Save night sleep observations on blur
+  const handleSaveNightObservations = async () => {
+    if (!routine?.nightSleep) {
+      // If night sleep doesn't exist yet, create it with observations
+      if (localNightObservations.trim()) {
+        try {
+          console.log("[Mother Routine] Creating night sleep with observations");
+          const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
+            routineId: routine!.id,
+            startTryTime: null,
+            fellAsleepTime: null,
+            finalWakeTime: null,
+            observations: localNightObservations,
+          });
+          setRoutine({ ...routine!, nightSleep: newNightSleep });
+        } catch (err: any) {
+          console.error("[Mother Routine] Error creating night sleep:", err);
+        }
+      }
+      return;
+    }
+    
+    if (localNightObservations === (routine.nightSleep.observations || "")) return; // No change
+    
+    try {
+      console.log("[Mother Routine] Saving night sleep observations");
+      await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, { observations: localNightObservations });
+      setRoutine({
+        ...routine,
+        nightSleep: { ...routine.nightSleep, observations: localNightObservations },
+      });
+    } catch (err: any) {
+      console.error("[Mother Routine] Error saving night sleep observations:", err);
     }
   };
 
@@ -666,18 +777,9 @@ export default function MotherRoutineScreen() {
           <TextInput
             style={[styles.formInput, styles.textArea]}
             placeholder="Suas observações sobre como o bebê acordou..."
-            value={routine.motherObservations || ""}
-            onChangeText={(text) => {
-              setRoutine({ ...routine, motherObservations: text });
-              // Auto-save after 1 second
-              setTimeout(async () => {
-                try {
-                  await apiPut(`/api/routines/${routine.id}`, { motherObservations: text });
-                } catch (err) {
-                  console.error("Error saving observations:", err);
-                }
-              }, 1000);
-            }}
+            value={localMotherObservations}
+            onChangeText={setLocalMotherObservations}
+            onBlur={handleSaveMotherObservations}
             multiline
             textAlignVertical="top"
             numberOfLines={4}
@@ -772,8 +874,11 @@ export default function MotherRoutineScreen() {
                     <TextInput
                       style={[styles.formInput, styles.textArea]}
                       placeholder="Suas observações sobre esta soneca..."
-                      value={nap.observations || ""}
-                      onChangeText={(text) => handleUpdateNap(nap.id, "observations", text)}
+                      value={localNapObservations[nap.id] || ""}
+                      onChangeText={(text) => {
+                        setLocalNapObservations({ ...localNapObservations, [nap.id]: text });
+                      }}
+                      onBlur={() => handleSaveNapObservations(nap.id)}
                       multiline
                       textAlignVertical="top"
                       numberOfLines={4}
@@ -873,8 +978,9 @@ export default function MotherRoutineScreen() {
           <TextInput
             style={[styles.formInput, styles.textArea]}
             placeholder="Suas observações sobre o sono noturno..."
-            value={routine.nightSleep?.observations || ""}
-            onChangeText={(text) => handleUpdateNightSleep("observations", text)}
+            value={localNightObservations}
+            onChangeText={setLocalNightObservations}
+            onBlur={handleSaveNightObservations}
             multiline
             textAlignVertical="top"
             numberOfLines={4}
