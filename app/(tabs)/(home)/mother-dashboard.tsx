@@ -10,7 +10,7 @@ import {
   RefreshControl,
   Image,
 } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
@@ -236,12 +236,6 @@ export default function MotherDashboardScreen() {
   if (error || !baby) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
-        <Stack.Screen options={{ 
-          headerShown: true, 
-          title: "Início", 
-          headerStyle: { backgroundColor: colors.background }, 
-          headerTintColor: colors.text 
-        }} />
         <View style={styles.errorContainer}>
           <IconSymbol 
             ios_icon_name="exclamationmark.triangle.fill" 
@@ -276,13 +270,6 @@ export default function MotherDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Stack.Screen options={{ 
-        headerShown: true, 
-        title: "Início", 
-        headerStyle: { backgroundColor: colors.background }, 
-        headerTintColor: colors.text 
-      }} />
-      
       <ScrollView 
         style={styles.scrollView} 
         contentContainerStyle={styles.scrollContent}
