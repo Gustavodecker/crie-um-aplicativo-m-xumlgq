@@ -1,8 +1,21 @@
 
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import { TouchableOpacity } from 'react-native';
 import { colors } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function HomeLayout() {
+  const router = useRouter();
+  const { signOut } = useAuth();
+
+  const handleLogout = async () => {
+    console.log("[Logout] User tapped logout button");
+    await signOut();
+    console.log("[Logout] Sign out complete, redirecting to auth");
+    router.replace("/auth");
+  };
+
   return (
     <Stack
       screenOptions={{
@@ -15,7 +28,17 @@ export default function HomeLayout() {
         name="index"
         options={{
           headerShown: true,
-          title: 'Meus Bebês',
+          title: 'Início',
+          headerRight: () => (
+            <TouchableOpacity onPress={handleLogout} style={{ marginRight: 16 }}>
+              <IconSymbol
+                ios_icon_name="rectangle.portrait.and.arrow.right"
+                android_material_icon_name="logout"
+                size={22}
+                color={colors.text}
+              />
+            </TouchableOpacity>
+          ),
         }}
       />
       <Stack.Screen
