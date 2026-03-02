@@ -115,6 +115,7 @@ const styles = StyleSheet.create({
     minHeight: 100,
     textAlignVertical: "top",
     paddingTop: spacing.md,
+    lineHeight: 22,
   },
   readOnlyBox: {
     backgroundColor: colors.backgroundAlt,
@@ -291,6 +292,7 @@ export default function MotherRoutineScreen() {
   const [selectedTime, setSelectedTime] = useState(new Date());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [napToDelete, setNapToDelete] = useState<string | null>(null);
+  const [addingWaking, setAddingWaking] = useState(false);
   const router = useRouter();
 
   // 🔥 LOCAL STATE FOR OBSERVATIONS - Prevents character loss
@@ -553,28 +555,68 @@ export default function MotherRoutineScreen() {
     }
   };
 
+  // 🔥 FIXED: Ensure night sleep exists before adding waking
   const handleAddWaking = async () => {
-    if (!routine?.nightSleep) {
-      console.log("[Mother Routine] Cannot add waking without night sleep");
+    if (!routine) {
+      console.error("[Mother Routine] Cannot add waking: no routine");
       return;
     }
     
+    setAddingWaking(true);
+    
     try {
+      // 🔥 CRITICAL: If night sleep doesn't exist, create it first
+      let nightSleepId = routine.nightSleep?.id;
+      
+      if (!nightSleepId) {
+        console.log("[Mother Routine] Night sleep doesn't exist, creating it first...");
+        const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
+          routineId: routine.id,
+          startTryTime: null,
+          fellAsleepTime: null,
+          finalWakeTime: null,
+          observations: null,
+        });
+        
+        // Update routine with new night sleep
+        setRoutine({
+          ...routine,
+          nightSleep: newNightSleep,
+        });
+        
+        nightSleepId = newNightSleep.id;
+        console.log("[Mother Routine] Night sleep created with ID:", nightSleepId);
+      }
+      
+      // Now add the waking
+      console.log("[Mother Routine] Adding waking to night sleep ID:", nightSleepId);
       const newWaking = await apiPost<NightWaking>("/api/night-sleep/wakings", {
-        nightSleepId: routine.nightSleep.id,
+        nightSleepId: nightSleepId,
         startTime: "02:00",
         endTime: "02:30",
       });
       
-      setRoutine({
-        ...routine,
-        nightSleep: {
-          ...routine.nightSleep,
-          wakings: [...(routine.nightSleep.wakings || []), newWaking],
-        },
+      console.log("[Mother Routine] Waking added successfully:", newWaking);
+      
+      // Update routine with new waking
+      setRoutine((prevRoutine) => {
+        if (!prevRoutine?.nightSleep) return prevRoutine;
+        
+        return {
+          ...prevRoutine,
+          nightSleep: {
+            ...prevRoutine.nightSleep,
+            wakings: [...(prevRoutine.nightSleep.wakings || []), newWaking],
+          },
+        };
       });
+      
+      console.log("[Mother Routine] Waking added to local state successfully");
     } catch (err: any) {
       console.error("[Mother Routine] Error adding waking:", err);
+      alert("Erro ao adicionar despertar. Tente novamente.");
+    } finally {
+      setAddingWaking(false);
     }
   };
 
@@ -1041,14 +1083,24 @@ export default function MotherRoutineScreen() {
               );
             })}
 
-            <TouchableOpacity style={styles.addButton} onPress={handleAddWaking}>
-              <IconSymbol
-                ios_icon_name="plus"
-                android_material_icon_name="add"
-                size={20}
-                color="#FFF"
-              />
-              <Text style={styles.addButtonText}>Adicionar Despertar</Text>
+            <TouchableOpacity 
+              style={[styles.addButton, addingWaking && { opacity: 0.6 }]} 
+              onPress={handleAddWaking}
+              disabled={addingWaking}
+            >
+              {addingWaking ? (
+                <ActivityIndicator color="#FFF" size="small" />
+              ) : (
+                <>
+                  <IconSymbol
+                    ios_icon_name="plus"
+                    android_material_icon_name="add"
+                    size={20}
+                    color="#FFF"
+                  />
+                  <Text style={styles.addButtonText}>Adicionar Despertar</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         </View>
