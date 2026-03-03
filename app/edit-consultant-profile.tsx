@@ -147,24 +147,45 @@ export default function EditConsultantProfileScreen() {
             platform: Platform.OS,
           });
 
-          // CRITICAL FIX: Use XMLHttpRequest for better multipart/form-data support in React Native
-          // React Native's fetch() has issues with FormData file uploads
+          // CRITICAL FIX: Web vs Native handling
+          // On Web: blob: URIs need to be fetched and converted to File objects
+          // On Native: file:// URIs can be passed directly to FormData
           
-          // IMPORTANT: Keep the full URI with file:// prefix - React Native FormData needs it
-          const fileUri = asset.uri;
-          
-          // @ts-expect-error - React Native FormData typing
-          formData.append("file", {
-            uri: fileUri,
-            name: fileName,
-            type: mimeType,
-          } as any);
-
-          console.log("[Edit Profile] FormData prepared with file:", {
-            uri: fileUri,
-            name: fileName,
-            type: mimeType,
-          });
+          if (Platform.OS === 'web') {
+            // WEB: Fetch the blob and create a File object
+            console.log("[Edit Profile] Web platform: Fetching blob from URI");
+            
+            try {
+              const response = await fetch(asset.uri);
+              const blob = await response.blob();
+              
+              console.log("[Edit Profile] Blob fetched:", {
+                size: blob.size,
+                type: blob.type,
+              });
+              
+              // Create a proper File object for web
+              const file = new File([blob], fileName, { type: mimeType });
+              formData.append("file", file);
+              
+              console.log("[Edit Profile] File object created and appended to FormData");
+            } catch (fetchError) {
+              console.error("[Edit Profile] Failed to fetch blob:", fetchError);
+              throw new Error("Erro ao processar imagem. Tente novamente.");
+            }
+          } else {
+            // NATIVE: Use the URI directly with metadata
+            console.log("[Edit Profile] Native platform: Using URI with metadata");
+            
+            // @ts-expect-error - React Native FormData typing
+            formData.append("file", {
+              uri: asset.uri,
+              name: fileName,
+              type: mimeType,
+            } as any);
+            
+            console.log("[Edit Profile] FormData prepared with file metadata");
+          }
           console.log("[Edit Profile] Uploading to:", `${BACKEND_URL}/api/upload/profile-photo`);
 
           // Use XMLHttpRequest for better multipart support
