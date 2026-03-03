@@ -31,6 +31,9 @@ interface Nap {
   startTryTime: string;
   fellAsleepTime: string | null;
   wakeUpTime: string | null;
+  sleepMethod: string | null;
+  environment: string | null;
+  wakeUpMood: string | null;
   observations: string | null;
 }
 
@@ -47,6 +50,9 @@ interface NightSleep {
   startTryTime: string | null;
   fellAsleepTime: string | null;
   finalWakeTime: string | null;
+  sleepMethod: string | null;
+  environment: string | null;
+  wakeUpMood: string | null;
   observations: string | null;
   wakings?: NightWaking[];
 }
@@ -258,6 +264,32 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.text,
   },
+  choiceButtons: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 6,
+  },
+  choiceBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  choiceBtnActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  choiceBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  choiceBtnTextActive: {
+    color: "#FFF",
+  },
 });
 
 function formatDateToBR(dateStr: string): string {
@@ -416,6 +448,9 @@ export default function MotherRoutineScreen() {
         startTryTime: "08:00",
         fellAsleepTime: null,
         wakeUpTime: null,
+        sleepMethod: null,
+        environment: null,
+        wakeUpMood: null,
         observations: null,
       });
       setRoutine({
@@ -912,7 +947,52 @@ export default function MotherRoutineScreen() {
                       <Text style={styles.calcText}>💤 Duração: {minutesToHM(duration)}</Text>
                     )}
 
-                    <Text style={styles.fieldLabel}>Observações</Text>
+                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Dormiu como</Text>
+                    <View style={styles.choiceButtons}>
+                      {["No colo", "Com embalo", "Mamando", "Sozinho", "Outro"].map((method) => (
+                        <TouchableOpacity
+                          key={method}
+                          style={[styles.choiceBtn, nap.sleepMethod === method && styles.choiceBtnActive]}
+                          onPress={() => handleUpdateNap(nap.id, "sleepMethod", method)}
+                        >
+                          <Text style={[styles.choiceBtnText, nap.sleepMethod === method && styles.choiceBtnTextActive]}>
+                            {method}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Ambiente</Text>
+                    <View style={styles.choiceButtons}>
+                      {["Adequado", "Parcialmente adequado", "Inadequado"].map((env) => (
+                        <TouchableOpacity
+                          key={env}
+                          style={[styles.choiceBtn, nap.environment === env && styles.choiceBtnActive]}
+                          onPress={() => handleUpdateNap(nap.id, "environment", env)}
+                        >
+                          <Text style={[styles.choiceBtnText, nap.environment === env && styles.choiceBtnTextActive]}>
+                            {env}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Como acordou</Text>
+                    <View style={styles.choiceButtons}>
+                      {["Sorrindo", "Calmo", "Choroso", "Muito irritado"].map((mood) => (
+                        <TouchableOpacity
+                          key={mood}
+                          style={[styles.choiceBtn, nap.wakeUpMood === mood && styles.choiceBtnActive]}
+                          onPress={() => handleUpdateNap(nap.id, "wakeUpMood", mood)}
+                        >
+                          <Text style={[styles.choiceBtnText, nap.wakeUpMood === mood && styles.choiceBtnTextActive]}>
+                            {mood}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações</Text>
                     <TextInput
                       style={[styles.formInput, styles.textArea]}
                       placeholder="Suas observações sobre esta soneca..."
@@ -1016,7 +1096,52 @@ export default function MotherRoutineScreen() {
             </Text>
           )}
 
-          <Text style={styles.fieldLabel}>Observações</Text>
+          <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Dormiu como</Text>
+          <View style={styles.choiceButtons}>
+            {["No colo", "Com embalo", "Mamando", "Sozinho", "Outro"].map((method) => (
+              <TouchableOpacity
+                key={method}
+                style={[styles.choiceBtn, routine.nightSleep?.sleepMethod === method && styles.choiceBtnActive]}
+                onPress={() => handleUpdateNightSleep("sleepMethod", method)}
+              >
+                <Text style={[styles.choiceBtnText, routine.nightSleep?.sleepMethod === method && styles.choiceBtnTextActive]}>
+                  {method}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Ambiente</Text>
+          <View style={styles.choiceButtons}>
+            {["Adequado", "Parcialmente adequado", "Inadequado"].map((env) => (
+              <TouchableOpacity
+                key={env}
+                style={[styles.choiceBtn, routine.nightSleep?.environment === env && styles.choiceBtnActive]}
+                onPress={() => handleUpdateNightSleep("environment", env)}
+              >
+                <Text style={[styles.choiceBtnText, routine.nightSleep?.environment === env && styles.choiceBtnTextActive]}>
+                  {env}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Como acordou</Text>
+          <View style={styles.choiceButtons}>
+            {["Sorrindo", "Calmo", "Choroso", "Muito irritado"].map((mood) => (
+              <TouchableOpacity
+                key={mood}
+                style={[styles.choiceBtn, routine.nightSleep?.wakeUpMood === mood && styles.choiceBtnActive]}
+                onPress={() => handleUpdateNightSleep("wakeUpMood", mood)}
+              >
+                <Text style={[styles.choiceBtnText, routine.nightSleep?.wakeUpMood === mood && styles.choiceBtnTextActive]}>
+                  {mood}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações</Text>
           <TextInput
             style={[styles.formInput, styles.textArea]}
             placeholder="Suas observações sobre o sono noturno..."

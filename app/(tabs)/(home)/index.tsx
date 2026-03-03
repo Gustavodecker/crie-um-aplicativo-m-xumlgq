@@ -2040,44 +2040,33 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                     <Text style={styles.calcText}>💤 Quanto tempo dormiu: {minutesToHM(sleepDuration)}</Text>
                   )}
                   
-                  <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Dormiu como</Text>
-                  <View style={styles.choiceButtons}>
-                    {["No colo", "Com embalo", "Mamando", "Sozinho no berço"].map((method) => (
-                      <TouchableOpacity 
-                        key={method} 
-                        style={[styles.choiceBtn, nap.sleepMethod === method && styles.choiceBtnActive]} 
-                        onPress={() => handleUpdateNap(nap.id, { sleepMethod: method })}
-                      >
-                        <Text style={[styles.choiceBtnText, nap.sleepMethod === method && styles.choiceBtnTextActive]}>{method}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  {/* READ-ONLY FIELDS FOR CONSULTANT */}
+                  {nap.sleepMethod && (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={styles.fieldLabel}>Dormiu como</Text>
+                      <View style={styles.readOnlyBox}>
+                        <Text style={styles.readOnlyText}>{nap.sleepMethod}</Text>
+                      </View>
+                    </View>
+                  )}
                   
-                  <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Ambiente</Text>
-                  <View style={styles.choiceButtons}>
-                    {["Adequado", "Parcialmente adequado", "Inadequado"].map((env) => (
-                      <TouchableOpacity 
-                        key={env} 
-                        style={[styles.choiceBtn, nap.environment === env && styles.choiceBtnActive]} 
-                        onPress={() => handleUpdateNap(nap.id, { environment: env })}
-                      >
-                        <Text style={[styles.choiceBtnText, nap.environment === env && styles.choiceBtnTextActive]}>{env}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  {nap.environment && (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={styles.fieldLabel}>Ambiente</Text>
+                      <View style={styles.readOnlyBox}>
+                        <Text style={styles.readOnlyText}>{nap.environment}</Text>
+                      </View>
+                    </View>
+                  )}
                   
-                  <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Como acordou</Text>
-                  <View style={styles.choiceButtons}>
-                    {["De bom humor", "Sorrindo", "Choroso", "Muito irritado"].map((mood) => (
-                      <TouchableOpacity 
-                        key={mood} 
-                        style={[styles.choiceBtn, nap.wakeUpMood === mood && styles.choiceBtnActive]} 
-                        onPress={() => handleUpdateNap(nap.id, { wakeUpMood: mood })}
-                      >
-                        <Text style={[styles.choiceBtnText, nap.wakeUpMood === mood && styles.choiceBtnTextActive]}>{mood}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  {nap.wakeUpMood && (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={styles.fieldLabel}>Como acordou</Text>
+                      <View style={styles.readOnlyBox}>
+                        <Text style={styles.readOnlyText}>{nap.wakeUpMood}</Text>
+                      </View>
+                    </View>
+                  )}
                   
                   <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações (salva automaticamente)</Text>
                   <TextInput 
@@ -2182,6 +2171,34 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   </Text>
                   <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
                 </TouchableOpacity>
+                
+                {/* READ-ONLY FIELDS FOR CONSULTANT */}
+                {nightSleep.sleepMethod && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.fieldLabel}>Dormiu como</Text>
+                    <View style={styles.readOnlyBox}>
+                      <Text style={styles.readOnlyText}>{nightSleep.sleepMethod}</Text>
+                    </View>
+                  </View>
+                )}
+                
+                {nightSleep.environment && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.fieldLabel}>Ambiente</Text>
+                    <View style={styles.readOnlyBox}>
+                      <Text style={styles.readOnlyText}>{nightSleep.environment}</Text>
+                    </View>
+                  </View>
+                )}
+                
+                {nightSleep.wakeUpMood && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.fieldLabel}>Como acordou</Text>
+                    <View style={styles.readOnlyBox}>
+                      <Text style={styles.readOnlyText}>{nightSleep.wakeUpMood}</Text>
+                    </View>
+                  </View>
+                )}
                 
                 <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações (salva automaticamente)</Text>
                 <TextInput 
@@ -2821,6 +2838,19 @@ const styles = StyleSheet.create({
     fontSize: 15, 
     fontWeight: "600", 
     color: "#FFF" 
+  },
+  readOnlyBox: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  readOnlyText: {
+    fontSize: 15,
+    color: colors.text,
+    lineHeight: 22,
   },
 });
 
