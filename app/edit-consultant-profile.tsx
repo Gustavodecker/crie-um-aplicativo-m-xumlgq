@@ -150,11 +150,8 @@ export default function EditConsultantProfileScreen() {
           // CRITICAL FIX: Use XMLHttpRequest for better multipart/form-data support in React Native
           // React Native's fetch() has issues with FormData file uploads
           
-          // Prepare the file URI (remove file:// prefix on iOS if present)
-          let fileUri = asset.uri;
-          if (Platform.OS === 'ios' && fileUri.startsWith('file://')) {
-            fileUri = fileUri.substring(7);
-          }
+          // IMPORTANT: Keep the full URI with file:// prefix - React Native FormData needs it
+          const fileUri = asset.uri;
           
           // @ts-expect-error - React Native FormData typing
           formData.append("file", {
