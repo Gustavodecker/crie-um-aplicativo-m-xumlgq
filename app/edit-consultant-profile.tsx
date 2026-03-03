@@ -94,14 +94,8 @@ export default function EditConsultantProfileScreen() {
           type: asset.type,
           fileName: asset.fileName,
           fileSize: asset.fileSize,
+          mimeType: asset.mimeType,
         });
-
-        // Verify URI format
-        if (!asset.uri.startsWith('file://') && !asset.uri.startsWith('content://')) {
-          console.error("[Edit Profile] Invalid URI format:", asset.uri);
-          setError("Formato de imagem inválido");
-          return;
-        }
 
         setUploadingPhoto(true);
         setError(null);
@@ -116,31 +110,41 @@ export default function EditConsultantProfileScreen() {
           console.log("[Edit Profile] Token retrieved, preparing upload");
           console.log("[Edit Profile] Backend URL:", BACKEND_URL);
 
-          // Verify backend URL is HTTPS
-          if (!BACKEND_URL.startsWith('https://')) {
-            console.error("[Edit Profile] Backend URL is not HTTPS:", BACKEND_URL);
-            throw new Error("URL da API deve usar HTTPS");
-          }
-
           // Create form data for upload
           const formData = new FormData();
           
           // Extract filename from URI or use default
           const uriParts = asset.uri.split('/');
-          const fileName = asset.fileName || uriParts[uriParts.length - 1] || 'profile-photo.jpg';
+          let fileName = asset.fileName || uriParts[uriParts.length - 1] || 'profile-photo.jpg';
           
-          // Determine MIME type
-          let mimeType = 'image/jpeg';
-          if (fileName.toLowerCase().endsWith('.png')) {
-            mimeType = 'image/png';
-          } else if (fileName.toLowerCase().endsWith('.jpg') || fileName.toLowerCase().endsWith('.jpeg')) {
-            mimeType = 'image/jpeg';
+          // Determine MIME type from asset or filename
+          let mimeType = asset.mimeType || 'image/jpeg';
+          
+          // If no mimeType from asset, infer from filename
+          if (!asset.mimeType) {
+            const lowerFileName = fileName.toLowerCase();
+            if (lowerFileName.endsWith('.png')) {
+              mimeType = 'image/png';
+            } else if (lowerFileName.endsWith('.jpg') || lowerFileName.endsWith('.jpeg')) {
+              mimeType = 'image/jpeg';
+            } else if (lowerFileName.endsWith('.gif')) {
+              mimeType = 'image/gif';
+            } else if (lowerFileName.endsWith('.webp')) {
+              mimeType = 'image/webp';
+            }
+          }
+
+          // Ensure filename has correct extension
+          if (!fileName.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            const ext = mimeType.split('/')[1] || 'jpg';
+            fileName = `profile-photo.${ext}`;
           }
 
           console.log("[Edit Profile] File details:", {
             uri: asset.uri,
             name: fileName,
             type: mimeType,
+            platform: Platform.OS,
           });
 
           // Append file to FormData
