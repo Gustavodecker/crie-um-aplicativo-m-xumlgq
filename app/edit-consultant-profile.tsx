@@ -147,38 +147,86 @@ export default function EditConsultantProfileScreen() {
             platform: Platform.OS,
           });
 
-          // Append file to FormData
-          // @ts-expect-error - FormData append with file works in React Native
+          // CRITICAL FIX: Use XMLHttpRequest for better multipart/form-data support in React Native
+          // React Native's fetch() has issues with FormData file uploads
+          
+          // Prepare the file URI (remove file:// prefix on iOS if present)
+          let fileUri = asset.uri;
+          if (Platform.OS === 'ios' && fileUri.startsWith('file://')) {
+            fileUri = fileUri.substring(7);
+          }
+          
+          // @ts-expect-error - React Native FormData typing
           formData.append("file", {
-            uri: asset.uri,
+            uri: fileUri,
+            name: fileName,
+            type: mimeType,
+          } as any);
+
+          console.log("[Edit Profile] FormData prepared with file:", {
+            uri: fileUri,
             name: fileName,
             type: mimeType,
           });
+          console.log("[Edit Profile] Uploading to:", `${BACKEND_URL}/api/upload/profile-photo`);
 
-          console.log("[Edit Profile] FormData prepared, uploading to:", `${BACKEND_URL}/api/upload/profile-photo`);
-
-          // Upload photo to backend with authentication
-          const response = await fetch(`${BACKEND_URL}/api/upload/profile-photo`, {
-            method: "POST",
-            body: formData,
-            headers: {
-              Authorization: `Bearer ${token}`,
-              // CRITICAL: Do NOT set Content-Type header
-              // FormData automatically sets the correct multipart/form-data header with boundary
-            },
+          // Use XMLHttpRequest for better multipart support
+          const uploadResult = await new Promise<{ url: string; filename: string }>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            
+            xhr.onload = () => {
+              console.log("[Edit Profile] XHR Upload complete, status:", xhr.status);
+              
+              if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                  const response = JSON.parse(xhr.responseText);
+                  console.log("[Edit Profile] Upload successful:", response);
+                  resolve(response);
+                } catch (err) {
+                  console.error("[Edit Profile] Failed to parse response:", xhr.responseText);
+                  reject(new Error("Resposta inválida do servidor"));
+                }
+              } else {
+                console.error("[Edit Profile] Upload failed:", xhr.status, xhr.responseText);
+                
+                let errorMessage = "Erro ao fazer upload da foto";
+                try {
+                  const errorData = JSON.parse(xhr.responseText);
+                  errorMessage = errorData.error || errorMessage;
+                } catch {
+                  // Use default error message
+                }
+                
+                if (xhr.status === 400) {
+                  reject(new Error("Formato de imagem inválido. Tente outra foto."));
+                } else if (xhr.status === 413) {
+                  reject(new Error("Imagem muito grande. Escolha uma imagem menor."));
+                } else {
+                  reject(new Error(`${errorMessage} (${xhr.status})`));
+                }
+              }
+            };
+            
+            xhr.onerror = () => {
+              console.error("[Edit Profile] XHR Network error");
+              reject(new Error("Erro de rede ao fazer upload"));
+            };
+            
+            xhr.ontimeout = () => {
+              console.error("[Edit Profile] XHR Timeout");
+              reject(new Error("Tempo esgotado ao fazer upload"));
+            };
+            
+            xhr.open("POST", `${BACKEND_URL}/api/upload/profile-photo`);
+            xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+            // Do NOT set Content-Type - let XMLHttpRequest set it automatically with boundary
+            
+            xhr.timeout = 30000; // 30 second timeout
+            xhr.send(formData);
           });
 
-          console.log("[Edit Profile] Upload response status:", response.status);
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error("[Edit Profile] Upload failed:", response.status, errorText);
-            throw new Error(`Erro ao fazer upload da foto (${response.status})`);
-          }
-
-          const data = await response.json();
-          console.log("[Edit Profile] Photo uploaded successfully:", data.url);
-          setPhotoUrl(data.url);
+          console.log("[Edit Profile] Photo uploaded successfully:", uploadResult.url);
+          setPhotoUrl(uploadResult.url);
           
         } catch (uploadError: any) {
           console.error("[Edit Profile] Error uploading photo:", uploadError);
