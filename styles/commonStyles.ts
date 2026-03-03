@@ -1,36 +1,44 @@
 
 import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
 
-// Premium Sleep Consultant App Theme - Sophisticated & Professional
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎨 PREMIUM DESIGN SYSTEM - TODANOITE
+// Professional Sleep Consultancy Platform
+// ═══════════════════════════════════════════════════════════════════════════
+
 export const colors = {
-  // Premium palette
-  primary: '#4F6D7A',        // Azul acinzentado sofisticado
-  secondary: '#8AA399',      // Verde sálvia elegante
-  background: '#F7F9F9',     // Off-white clean
+  // ─── Premium Palette ─────────────────────────────────────────────────────
+  primary: '#2F4F6F',        // Azul profundo elegante
+  secondary: '#6C9A8B',      // Verde sutil clínico
+  background: '#F4F6F8',     // Off-white clean
   card: '#FFFFFF',           // Pure white for cards
-  text: '#2F3E46',           // Cinza escuro for primary text
+  text: '#1F2933',           // Texto principal
   textSecondary: '#6B7280',  // Subtle gray for secondary text
   
-  // Status colors (refined)
-  statusGood: '#8AA399',     // Verde sálvia
+  // ─── Status Colors (Refined) ─────────────────────────────────────────────
+  statusGood: '#6C9A8B',     // Verde sálvia
   statusMedium: '#D4A574',   // Warm amber
   statusPoor: '#C17B7B',     // Muted red
   
-  // UI elements
-  border: '#E5E7EB',
+  // ─── UI Elements ─────────────────────────────────────────────────────────
+  border: '#E6E9ED',         // Cinza neutro
   backgroundAlt: '#EEF0FB',
   accent: '#D4A574',
-  highlight: '#8AA399',
+  highlight: '#6C9A8B',
   error: '#C17B7B',
-  success: '#8AA399',
+  success: '#6C9A8B',
   warning: '#D4A574',
   grey: '#9CA3AF',
-  shadow: 'rgba(47, 62, 70, 0.08)',
+  shadow: 'rgba(47, 79, 111, 0.08)',  // Sombra suave baseada no primary
 };
 
-// Premium typography system
+// ═══════════════════════════════════════════════════════════════════════════
+// 📝 PREMIUM TYPOGRAPHY SYSTEM
+// Hierarquia clara e profissional
+// ═══════════════════════════════════════════════════════════════════════════
+
 export const typography = {
-  // Titles
+  // ─── Títulos (Semi-bold) ─────────────────────────────────────────────────
   h1: {
     fontSize: 32,
     fontWeight: '600' as const,
@@ -39,10 +47,10 @@ export const typography = {
     color: colors.text,
   },
   h2: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '600' as const,
     letterSpacing: -0.3,
-    lineHeight: 32,
+    lineHeight: 34,
     color: colors.text,
   },
   h3: {
@@ -53,14 +61,14 @@ export const typography = {
     color: colors.text,
   },
   h4: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600' as const,
     letterSpacing: 0,
-    lineHeight: 24,
+    lineHeight: 26,
     color: colors.text,
   },
   
-  // Subtitles
+  // ─── Subtítulos (Medium) ─────────────────────────────────────────────────
   subtitle1: {
     fontSize: 18,
     fontWeight: '500' as const,
@@ -76,39 +84,39 @@ export const typography = {
     color: colors.textSecondary,
   },
   
-  // Body text
+  // ─── Corpo (Regular) ─────────────────────────────────────────────────────
   body: {
     fontSize: 16,
     fontWeight: '400' as const,
     letterSpacing: 0,
-    lineHeight: 24,
+    lineHeight: 26,
     color: colors.text,
   },
   body1: {
     fontSize: 16,
     fontWeight: '400' as const,
     letterSpacing: 0,
-    lineHeight: 24,
+    lineHeight: 26,
     color: colors.text,
   },
   body2: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '400' as const,
     letterSpacing: 0,
+    lineHeight: 24,
+    color: colors.textSecondary,
+  },
+  
+  // ─── Small Text ──────────────────────────────────────────────────────────
+  caption: {
+    fontSize: 13,
+    fontWeight: '400' as const,
+    letterSpacing: 0.2,
     lineHeight: 20,
     color: colors.textSecondary,
   },
   
-  // Small text
-  caption: {
-    fontSize: 12,
-    fontWeight: '400' as const,
-    letterSpacing: 0.3,
-    lineHeight: 16,
-    color: colors.textSecondary,
-  },
-  
-  // Labels
+  // ─── Labels (Semi-bold) ──────────────────────────────────────────────────
   label: {
     fontSize: 14,
     fontWeight: '600' as const,
@@ -117,68 +125,85 @@ export const typography = {
     color: colors.text,
   },
   
-  // Button text
+  // ─── Button Text (Semi-bold) ─────────────────────────────────────────────
   button: {
     fontSize: 16,
     fontWeight: '600' as const,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
     lineHeight: 24,
     color: colors.text,
   },
 };
 
-// Premium spacing system
+// ═══════════════════════════════════════════════════════════════════════════
+// 📏 PREMIUM SPACING SYSTEM
+// Espaçamento maior entre blocos
+// ═══════════════════════════════════════════════════════════════════════════
+
 export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
+  xs: 6,
+  sm: 10,
+  md: 16,
+  lg: 20,
+  xl: 24,
+  xxl: 32,
+  xxxl: 40,
 };
 
-// Border radius system
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔲 BORDER RADIUS SYSTEM
+// BorderRadius 18 para cards elegantes
+// ═══════════════════════════════════════════════════════════════════════════
+
 export const borderRadius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
+  sm: 10,
+  md: 14,
+  lg: 18,
+  xl: 22,
+  xxl: 28,
   full: 9999,
 };
 
-// Premium shadow system
+// ═══════════════════════════════════════════════════════════════════════════
+// 🌫️ PREMIUM SHADOW SYSTEM
+// Sombras suaves e elegantes
+// ═══════════════════════════════════════════════════════════════════════════
+
 export const shadows = {
   sm: {
-    shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  md: {
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 1,
     shadowRadius: 4,
     elevation: 2,
   },
-  lg: {
+  md: {
     shadowColor: colors.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 1,
     shadowRadius: 8,
+    elevation: 3,
+  },
+  lg: {
+    shadowColor: colors.shadow,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
     elevation: 4,
   },
   xl: {
     shadowColor: colors.shadow,
-    shadowOffset: { width: 0, height: 8 },
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 1,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowRadius: 20,
+    elevation: 6,
   },
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎯 BUTTON STYLES
+// Botões premium com altura confortável
+// ═══════════════════════════════════════════════════════════════════════════
 
 export const buttonStyles = StyleSheet.create({
   instructionsButton: {
@@ -192,6 +217,11 @@ export const buttonStyles = StyleSheet.create({
     width: '100%',
   },
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🏗️ COMMON STYLES
+// Estilos base para o app
+// ═══════════════════════════════════════════════════════════════════════════
 
 export const commonStyles = StyleSheet.create({
   wrapper: {
@@ -236,9 +266,9 @@ export const commonStyles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: spacing.lg,
-    marginVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    marginVertical: spacing.md,
     width: '100%',
     ...shadows.md,
   },

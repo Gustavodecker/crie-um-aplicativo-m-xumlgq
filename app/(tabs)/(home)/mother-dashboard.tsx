@@ -9,10 +9,11 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
+  Animated,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
+import { colors, spacing, borderRadius, typography, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { ConsultantProfileCard } from "@/components/ConsultantProfileCard";
 import { apiGet } from "@/utils/api";
@@ -77,6 +78,8 @@ function resolveImageSource(source: string | number | undefined): { uri: string 
 export default function MotherDashboardScreen() {
   const router = useRouter();
   const isMountedRef = useRef(true);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [baby, setBaby] = useState<Baby | null>(null);
@@ -84,6 +87,15 @@ export default function MotherDashboardScreen() {
   const [lastOrientation, setLastOrientation] = useState<LastOrientation | null>(null);
   const [consultant, setConsultant] = useState<ConsultantProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Fade-in animation
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   const loadDashboard = useCallback(async () => {
     console.log("[Mother Dashboard] Loading dashboard data");
@@ -170,7 +182,7 @@ export default function MotherDashboardScreen() {
         console.log("[Mother Dashboard] No orientations found");
       }
 
-      // Load consultant profile using the NEW endpoint for mothers
+      // Load consultant profile
       try {
         console.log("[Mother Dashboard] Fetching consultant profile via /api/mother/consultant");
         const consultantData = await apiGet<ConsultantProfile>("/api/mother/consultant");
@@ -213,7 +225,6 @@ export default function MotherDashboardScreen() {
   }, []);
 
   useEffect(() => {
-    // Add a small delay to ensure token is saved after login
     const timer = setTimeout(() => {
       loadDashboard();
     }, 300);
@@ -270,8 +281,8 @@ export default function MotherDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScrollView 
-        style={styles.scrollView} 
+      <Animated.ScrollView 
+        style={[styles.scrollView, { opacity: fadeAnim }]} 
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl 
@@ -280,6 +291,7 @@ export default function MotherDashboardScreen() {
               setRefreshing(true); 
               loadDashboard(); 
             }} 
+            tintColor={colors.primary}
           />
         }
       >
@@ -339,7 +351,7 @@ export default function MotherDashboardScreen() {
               />
             </View>
             <View style={styles.warningContent}>
-              <Text style={styles.warningTitle}>⚠️ Contrato Necessário</Text>
+              <Text style={styles.warningTitle}>Contrato Necessário</Text>
               <Text style={styles.warningText}>
                 Para registrar a rotina de sono, é necessário ter um contrato ativo. Entre em contato com sua consultora para ativar o contrato.
               </Text>
@@ -363,12 +375,14 @@ export default function MotherDashboardScreen() {
             {todayRoutine ? (
               <View style={styles.summaryGrid}>
                 <View style={styles.summaryItem}>
-                  <IconSymbol 
-                    ios_icon_name="sunrise.fill" 
-                    android_material_icon_name="wb-sunny" 
-                    size={24} 
-                    color={colors.secondary} 
-                  />
+                  <View style={styles.summaryIconContainer}>
+                    <IconSymbol 
+                      ios_icon_name="sunrise.fill" 
+                      android_material_icon_name="wb-sunny" 
+                      size={24} 
+                      color={colors.secondary} 
+                    />
+                  </View>
                   <Text style={styles.summaryLabel}>Acordou às</Text>
                   <Text style={styles.summaryValue}>
                     {todayRoutine.wakeUpTime || "--:--"}
@@ -376,12 +390,14 @@ export default function MotherDashboardScreen() {
                 </View>
 
                 <View style={styles.summaryItem}>
-                  <IconSymbol 
-                    ios_icon_name="moon.zzz.fill" 
-                    android_material_icon_name="bedtime" 
-                    size={24} 
-                    color={colors.primary} 
-                  />
+                  <View style={styles.summaryIconContainer}>
+                    <IconSymbol 
+                      ios_icon_name="moon.zzz.fill" 
+                      android_material_icon_name="bedtime" 
+                      size={24} 
+                      color={colors.primary} 
+                    />
+                  </View>
                   <Text style={styles.summaryLabel}>Sonecas</Text>
                   <Text style={styles.summaryValue}>
                     {todayRoutine.napsCount}
@@ -389,12 +405,14 @@ export default function MotherDashboardScreen() {
                 </View>
 
                 <View style={styles.summaryItem}>
-                  <IconSymbol 
-                    ios_icon_name="sun.max.fill" 
-                    android_material_icon_name="wb-sunny" 
-                    size={24} 
-                    color={colors.success} 
-                  />
+                  <View style={styles.summaryIconContainer}>
+                    <IconSymbol 
+                      ios_icon_name="sun.max.fill" 
+                      android_material_icon_name="wb-sunny" 
+                      size={24} 
+                      color={colors.success} 
+                    />
+                  </View>
                   <Text style={styles.summaryLabel}>Sono Diurno</Text>
                   <Text style={styles.summaryValue}>
                     {minutesToHM(todayRoutine.daytimeSleepMinutes)}
@@ -402,12 +420,14 @@ export default function MotherDashboardScreen() {
                 </View>
 
                 <View style={styles.summaryItem}>
-                  <IconSymbol 
-                    ios_icon_name="moon.stars.fill" 
-                    android_material_icon_name="nights-stay" 
-                    size={24} 
-                    color={colors.primary} 
-                  />
+                  <View style={styles.summaryIconContainer}>
+                    <IconSymbol 
+                      ios_icon_name="moon.stars.fill" 
+                      android_material_icon_name="nights-stay" 
+                      size={24} 
+                      color={colors.primary} 
+                    />
+                  </View>
                   <Text style={styles.summaryLabel}>Sono Noturno</Text>
                   <Text style={styles.summaryValue}>
                     {minutesToHM(todayRoutine.nightSleepMinutes)}
@@ -556,13 +576,13 @@ export default function MotherDashboardScreen() {
             />
           </View>
           <View style={styles.tipContent}>
-            <Text style={styles.tipTitle}>💡 Dica</Text>
+            <Text style={styles.tipTitle}>Dica</Text>
             <Text style={styles.tipText}>
               Registre a rotina diariamente para que sua consultora possa acompanhar a evolução e ajustar as orientações.
             </Text>
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }
@@ -607,6 +627,10 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
+    minHeight: 52,
+    justifyContent: "center",
+    alignItems: "center",
+    ...shadows.md,
   },
   retryButtonText: {
     ...typography.button,
@@ -620,7 +644,7 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
   },
   welcomeSection: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl,
   },
   greeting: {
     ...typography.h1,
@@ -632,34 +656,32 @@ const styles = StyleSheet.create({
   },
   babyCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.xl,
+    ...shadows.md,
   },
   babyCardHeader: {
     flexDirection: "row",
     alignItems: "center",
   },
   babyIconContainer: {
-    marginRight: spacing.md,
+    marginRight: spacing.lg,
   },
   babyPhoto: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 72,
+    height: 72,
+    borderRadius: borderRadius.lg,
+    ...shadows.sm,
   },
   babyIconPlaceholder: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 72,
+    height: 72,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.background,
     justifyContent: "center",
     alignItems: "center",
+    ...shadows.sm,
   },
   babyInfo: {
     flex: 1,
@@ -676,10 +698,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
     borderLeftWidth: 4,
     borderLeftColor: colors.warning,
+    ...shadows.sm,
   },
   warningIcon: {
     marginRight: spacing.md,
@@ -695,23 +718,19 @@ const styles = StyleSheet.create({
   warningText: {
     ...typography.caption,
     color: colors.textSecondary,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   sectionCard: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.xl,
+    ...shadows.md,
   },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     gap: spacing.sm,
   },
   sectionTitle: {
@@ -727,9 +746,18 @@ const styles = StyleSheet.create({
     minWidth: "45%",
     backgroundColor: colors.background,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    padding: spacing.lg,
     alignItems: "center",
-    gap: spacing.xs,
+    gap: spacing.sm,
+  },
+  summaryIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.card,
+    justifyContent: "center",
+    alignItems: "center",
+    ...shadows.sm,
   },
   summaryLabel: {
     ...typography.caption,
@@ -742,7 +770,7 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: "center",
-    paddingVertical: spacing.xl,
+    paddingVertical: spacing.xxl,
   },
   emptyStateText: {
     ...typography.body,
@@ -757,19 +785,19 @@ const styles = StyleSheet.create({
   orientationBox: {
     backgroundColor: colors.background,
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    padding: spacing.lg,
   },
   orientationDate: {
     ...typography.caption,
     color: colors.primary,
     fontWeight: "600",
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   orientationText: {
     ...typography.body,
     color: colors.text,
-    lineHeight: 22,
-    marginBottom: spacing.sm,
+    lineHeight: 26,
+    marginBottom: spacing.md,
   },
   orientationLink: {
     flexDirection: "row",
@@ -783,31 +811,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   actionsSection: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   actionsTitle: {
     ...typography.h3,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   primaryActionButton: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.primary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    minHeight: 88,
+    ...shadows.lg,
   },
   disabledButton: {
     backgroundColor: colors.backgroundAlt,
     opacity: 0.6,
   },
   actionButtonIcon: {
-    marginRight: spacing.md,
+    marginRight: spacing.lg,
   },
   actionButtonContent: {
     flex: 1,
@@ -832,27 +857,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
-    padding: spacing.lg,
+    padding: spacing.xl,
     alignItems: "center",
-    gap: spacing.sm,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    gap: spacing.md,
+    minHeight: 120,
+    justifyContent: "center",
+    ...shadows.md,
   },
   secondaryActionText: {
     ...typography.button,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.text,
   },
   tipCard: {
     flexDirection: "row",
     backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    padding: spacing.lg,
     borderLeftWidth: 4,
     borderLeftColor: colors.primary,
+    ...shadows.sm,
   },
   tipIcon: {
     marginRight: spacing.md,
@@ -867,6 +891,6 @@ const styles = StyleSheet.create({
   tipText: {
     ...typography.caption,
     color: colors.textSecondary,
-    lineHeight: 18,
+    lineHeight: 20,
   },
 });

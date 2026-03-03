@@ -3,7 +3,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { IconSymbol } from "@/components/IconSymbol";
-import { colors, typography, spacing, shadows } from "@/styles/commonStyles";
+import { colors, typography, spacing, shadows, borderRadius } from "@/styles/commonStyles";
 
 interface ConsultantProfileCardProps {
   name: string;
@@ -68,7 +68,7 @@ export function ConsultantProfileCard({
               <IconSymbol
                 ios_icon_name="person.fill"
                 android_material_icon_name="person"
-                size={52}
+                size={48}
                 color={colors.primary}
               />
             </View>
@@ -90,10 +90,10 @@ export function ConsultantProfileCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.card,
-    borderRadius: 20,
+    borderRadius: borderRadius.xl,
     padding: spacing.xxl,
     marginBottom: spacing.xxxl,
-    ...shadows.lg,
+    ...shadows.md,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -109,14 +109,14 @@ const styles = StyleSheet.create({
   badge: {
     ...typography.caption,
     fontWeight: "700",
-    color: colors.primary,
+    color: colors.secondary,
     letterSpacing: 1.5,
     textTransform: "uppercase",
   },
   editButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: borderRadius.full,
     backgroundColor: colors.background,
     justifyContent: "center",
     alignItems: "center",
@@ -133,25 +133,29 @@ const styles = StyleSheet.create({
   photo: {
     width: 88,
     height: 88,
-    borderRadius: 20,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.background,
+    ...shadows.sm,
   },
   photoPlaceholder: {
     width: 88,
     height: 88,
-    borderRadius: 20,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.background,
     justifyContent: "center",
     alignItems: "center",
+    ...shadows.sm,
   },
   info: {
     flex: 1,
   },
   title: {
-    ...typography.body2,
+    ...typography.caption,
     fontWeight: "600",
     color: colors.secondary,
     marginBottom: spacing.xs,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
   },
   name: {
     ...typography.h3,
@@ -159,6 +163,6 @@ const styles = StyleSheet.create({
   },
   description: {
     ...typography.body2,
-    lineHeight: 22,
+    lineHeight: 24,
   },
 });
