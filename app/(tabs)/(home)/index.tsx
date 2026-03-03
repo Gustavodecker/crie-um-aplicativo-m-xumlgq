@@ -1918,57 +1918,38 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         <View style={styles.sectionCard}>
           <Text style={styles.sectionCardTitle}>☀️ Acordou</Text>
           
-          <Text style={styles.fieldLabel}>Horário (salva automaticamente)</Text>
-          <TouchableOpacity 
-            style={styles.timePickerButton} 
-            onPress={() => openTimePicker("wakeUpTime")}
-          >
-            <Text style={styles.timePickerText}>{wakeUpTime}</Text>
-            <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
-          </TouchableOpacity>
+          <Text style={styles.fieldLabel}>Horário</Text>
+          <View style={styles.readOnlyBox}>
+            <Text style={styles.readOnlyText}>{wakeUpTime}</Text>
+          </View>
           
-          <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações (salva automaticamente)</Text>
+          {routineObservations && (
+            <View style={{ marginTop: 12 }}>
+              <Text style={styles.fieldLabel}>Observações da Mãe</Text>
+              <View style={styles.readOnlyBox}>
+                <Text style={styles.readOnlyText}>{routineObservations}</Text>
+              </View>
+            </View>
+          )}
+          
+          <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentário da Consultora (salva automaticamente)</Text>
           <TextInput 
             style={[styles.formInput, styles.textArea]} 
-            placeholder="Observações da mãe..." 
-            value={routineObservations} 
+            placeholder="Comentários da consultora..." 
+            value={routineConsultantComments} 
             onChangeText={(text) => {
-              setRoutineObservations(text);
-              autoSaveRoutineObservations(text);
+              setRoutineConsultantComments(text);
+              autoSaveRoutineComments(text);
             }}
             multiline 
             numberOfLines={2} 
             placeholderTextColor={colors.textSecondary} 
           />
-          
-          {isConsultant && (
-            <>
-              <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentário da Consultora (salva automaticamente)</Text>
-              <TextInput 
-                style={[styles.formInput, styles.textArea]} 
-                placeholder="Comentários da consultora..." 
-                value={routineConsultantComments} 
-                onChangeText={(text) => {
-                  setRoutineConsultantComments(text);
-                  autoSaveRoutineComments(text);
-                }}
-                multiline 
-                numberOfLines={2} 
-                placeholderTextColor={colors.textSecondary} 
-              />
-            </>
-          )}
         </View>
 
         {/* SONECAS */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>😴 Sonecas</Text>
-          {naps.length < 6 && (
-            <TouchableOpacity style={styles.addSmallBtn} onPress={handleAddNap}>
-              <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
-              <Text style={styles.addSmallBtnText}>Adicionar</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {naps.map((nap, index) => {
@@ -2002,31 +1983,19 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
               {isExpanded && (
                 <View style={styles.expandableContent}>
                   <Text style={styles.fieldLabel}>Janela de sono - Início</Text>
-                  <TouchableOpacity 
-                    style={styles.timePickerButton} 
-                    onPress={() => openTimePicker("nap_startTryTime", nap.id)}
-                  >
-                    <Text style={styles.timePickerText}>{nap.startTryTime}</Text>
-                    <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
-                  </TouchableOpacity>
+                  <View style={styles.readOnlyBox}>
+                    <Text style={styles.readOnlyText}>{nap.startTryTime}</Text>
+                  </View>
                   
                   <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Dormiu às</Text>
-                  <TouchableOpacity 
-                    style={styles.timePickerButton} 
-                    onPress={() => openTimePicker("nap_fellAsleepTime", nap.id)}
-                  >
-                    <Text style={styles.timePickerText}>{nap.fellAsleepTime || "—"}</Text>
-                    <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
-                  </TouchableOpacity>
+                  <View style={styles.readOnlyBox}>
+                    <Text style={styles.readOnlyText}>{nap.fellAsleepTime || "—"}</Text>
+                  </View>
                   
                   <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Acordou às</Text>
-                  <TouchableOpacity 
-                    style={styles.timePickerButton} 
-                    onPress={() => openTimePicker("nap_wakeUpTime", nap.id)}
-                  >
-                    <Text style={styles.timePickerText}>{nap.wakeUpTime || "—"}</Text>
-                    <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
-                  </TouchableOpacity>
+                  <View style={styles.readOnlyBox}>
+                    <Text style={styles.readOnlyText}>{nap.wakeUpTime || "—"}</Text>
+                  </View>
                   
                   {sleepWindow !== null && (
                     <Text style={styles.calcText}>📊 Janela de sono (Total): {minutesToHM(sleepWindow)}</Text>
@@ -2040,7 +2009,6 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                     <Text style={styles.calcText}>💤 Quanto tempo dormiu: {minutesToHM(sleepDuration)}</Text>
                   )}
                   
-                  {/* READ-ONLY FIELDS FOR CONSULTANT */}
                   {nap.sleepMethod && (
                     <View style={{ marginTop: 12 }}>
                       <Text style={styles.fieldLabel}>Dormiu como</Text>
@@ -2068,42 +2036,28 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                     </View>
                   )}
                   
-                  <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações (salva automaticamente)</Text>
+                  {nap.observations && (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={styles.fieldLabel}>Observações da Mãe</Text>
+                      <View style={styles.readOnlyBox}>
+                        <Text style={styles.readOnlyText}>{nap.observations}</Text>
+                      </View>
+                    </View>
+                  )}
+                  
+                  <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentários da Consultora (salva automaticamente)</Text>
                   <TextInput 
                     style={[styles.formInput, styles.textArea]} 
-                    placeholder="Observações..." 
-                    value={napObservations[nap.id] || ""} 
+                    placeholder="Comentários da consultora..." 
+                    value={napConsultantComments[nap.id] || ""} 
                     onChangeText={(text) => {
-                      setNapObservations(prev => ({ ...prev, [nap.id]: text }));
-                      autoSaveNapObservations(nap.id, text);
+                      setNapConsultantComments(prev => ({ ...prev, [nap.id]: text }));
+                      autoSaveNapComments(nap.id, text);
                     }}
                     multiline 
                     numberOfLines={2} 
                     placeholderTextColor={colors.textSecondary} 
                   />
-                  
-                  {isConsultant && (
-                    <>
-                      <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentários da Consultora (salva automaticamente)</Text>
-                      <TextInput 
-                        style={[styles.formInput, styles.textArea]} 
-                        placeholder="Comentários da consultora..." 
-                        value={napConsultantComments[nap.id] || ""} 
-                        onChangeText={(text) => {
-                          setNapConsultantComments(prev => ({ ...prev, [nap.id]: text }));
-                          autoSaveNapComments(nap.id, text);
-                        }}
-                        multiline 
-                        numberOfLines={2} 
-                        placeholderTextColor={colors.textSecondary} 
-                      />
-                    </>
-                  )}
-                  
-                  <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteNap(nap.id)}>
-                    <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={18} color="#FFF" />
-                    <Text style={styles.deleteBtnText}>Excluir Soneca {nap.napNumber}</Text>
-                  </TouchableOpacity>
                 </View>
               )}
             </View>
@@ -2139,40 +2093,21 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
             
             {expandedNightSleep && (
               <View style={styles.expandableContent}>
-                <Text style={styles.fieldLabel}>Início (toque para definir)</Text>
-                <TouchableOpacity 
-                  style={styles.timePickerButton} 
-                  onPress={() => openTimePicker("nightSleep_startTryTime")}
-                >
-                  <Text style={[styles.timePickerText, !nightSleep.startTryTime && { color: colors.textSecondary }]}>
-                    {nightSleep.startTryTime || "—"}
-                  </Text>
-                  <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
-                </TouchableOpacity>
+                <Text style={styles.fieldLabel}>Início</Text>
+                <View style={styles.readOnlyBox}>
+                  <Text style={styles.readOnlyText}>{nightSleep.startTryTime || "—"}</Text>
+                </View>
                 
-                <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Dormiu (toque para definir)</Text>
-                <TouchableOpacity 
-                  style={styles.timePickerButton} 
-                  onPress={() => openTimePicker("nightSleep_fellAsleepTime")}
-                >
-                  <Text style={[styles.timePickerText, !nightSleep.fellAsleepTime && { color: colors.textSecondary }]}>
-                    {nightSleep.fellAsleepTime || "—"}
-                  </Text>
-                  <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
-                </TouchableOpacity>
+                <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Dormiu</Text>
+                <View style={styles.readOnlyBox}>
+                  <Text style={styles.readOnlyText}>{nightSleep.fellAsleepTime || "—"}</Text>
+                </View>
                 
-                <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Acordou (toque para definir)</Text>
-                <TouchableOpacity 
-                  style={styles.timePickerButton} 
-                  onPress={() => openTimePicker("nightSleep_finalWakeTime")}
-                >
-                  <Text style={[styles.timePickerText, !nightSleep.finalWakeTime && { color: colors.textSecondary }]}>
-                    {nightSleep.finalWakeTime || "—"}
-                  </Text>
-                  <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
-                </TouchableOpacity>
+                <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Acordou</Text>
+                <View style={styles.readOnlyBox}>
+                  <Text style={styles.readOnlyText}>{nightSleep.finalWakeTime || "—"}</Text>
+                </View>
                 
-                {/* READ-ONLY FIELDS FOR CONSULTANT */}
                 {nightSleep.sleepMethod && (
                   <View style={{ marginTop: 12 }}>
                     <Text style={styles.fieldLabel}>Dormiu como</Text>
@@ -2200,37 +2135,28 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   </View>
                 )}
                 
-                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Observações (salva automaticamente)</Text>
+                {nightSleep.observations && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.fieldLabel}>Observações da Mãe</Text>
+                    <View style={styles.readOnlyBox}>
+                      <Text style={styles.readOnlyText}>{nightSleep.observations}</Text>
+                    </View>
+                  </View>
+                )}
+                
+                <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentários da Consultora (salva automaticamente)</Text>
                 <TextInput 
                   style={[styles.formInput, styles.textArea]} 
-                  placeholder="Observações..." 
-                  value={nightSleepObservations} 
+                  placeholder="Comentários da consultora..." 
+                  value={nightSleepConsultantComments} 
                   onChangeText={(text) => {
-                    setNightSleepObservations(text);
-                    autoSaveNightSleepObservations(text);
+                    setNightSleepConsultantComments(text);
+                    autoSaveNightSleepComments(text);
                   }}
                   multiline 
                   numberOfLines={2} 
                   placeholderTextColor={colors.textSecondary} 
                 />
-                
-                {isConsultant && (
-                  <>
-                    <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Comentários da Consultora (salva automaticamente)</Text>
-                    <TextInput 
-                      style={[styles.formInput, styles.textArea]} 
-                      placeholder="Comentários da consultora..." 
-                      value={nightSleepConsultantComments} 
-                      onChangeText={(text) => {
-                        setNightSleepConsultantComments(text);
-                        autoSaveNightSleepComments(text);
-                      }}
-                      multiline 
-                      numberOfLines={2} 
-                      placeholderTextColor={colors.textSecondary} 
-                    />
-                  </>
-                )}
               </View>
             )}
           </View>
@@ -2242,14 +2168,10 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
         )}
 
         {/* DESPERTARES */}
-        {nightSleep && (
+        {nightSleep && (nightSleep.wakings || []).length > 0 && (
           <>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>🌜 Despertares</Text>
-              <TouchableOpacity style={styles.addSmallBtn} onPress={handleAddWaking}>
-                <IconSymbol ios_icon_name="plus" android_material_icon_name="add" size={18} color="#FFF" />
-                <Text style={styles.addSmallBtnText}>Adicionar</Text>
-              </TouchableOpacity>
             </View>
 
             {(nightSleep.wakings || []).map((waking, index) => {
@@ -2282,29 +2204,16 @@ function RoutineDetailScreen({ isConsultant, baby, routine: initialRoutine, dayN
                   {isExpanded && (
                     <View style={styles.expandableContent}>
                       <Text style={styles.fieldLabel}>Início</Text>
-                      <TouchableOpacity 
-                        style={styles.timePickerButton} 
-                        onPress={() => openTimePicker("waking_startTime", undefined, waking.id)}
-                      >
-                        <Text style={styles.timePickerText}>{waking.startTime}</Text>
-                        <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
-                      </TouchableOpacity>
+                      <View style={styles.readOnlyBox}>
+                        <Text style={styles.readOnlyText}>{waking.startTime}</Text>
+                      </View>
                       
                       <Text style={[styles.fieldLabel, { marginTop: 8 }]}>Término</Text>
-                      <TouchableOpacity 
-                        style={styles.timePickerButton} 
-                        onPress={() => openTimePicker("waking_endTime", undefined, waking.id)}
-                      >
-                        <Text style={styles.timePickerText}>{waking.endTime}</Text>
-                        <IconSymbol ios_icon_name="clock" android_material_icon_name="access-time" size={20} color={colors.primary} />
-                      </TouchableOpacity>
+                      <View style={styles.readOnlyBox}>
+                        <Text style={styles.readOnlyText}>{waking.endTime}</Text>
+                      </View>
                       
                       <Text style={styles.calcText}>⏱ Duração: {minutesToHM(duration)}</Text>
-                      
-                      <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteWaking(waking.id)}>
-                        <IconSymbol ios_icon_name="trash.fill" android_material_icon_name="delete" size={18} color="#FFF" />
-                        <Text style={styles.deleteBtnText}>Excluir Despertar</Text>
-                      </TouchableOpacity>
                     </View>
                   )}
                 </View>
