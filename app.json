@@ -1,6 +1,7 @@
+
 {
   "expo": {
-    "name": "TodaNoite",
+    "name": "crie-um-aplicativo-m",
     "slug": "crie-um-aplicativo-m",
     "version": "1.0.1",
     "orientation": "portrait",
@@ -16,7 +17,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.todanoite.baby",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Precisamos acessar suas fotos para atualizar sua imagem de perfil."
       }
     },
     "android": {
@@ -27,7 +29,10 @@
       "package": "com.todanoite.baby",
       "versionCode": 2,
       "edgeToEdgeEnabled": false,
-      "userInterfaceStyle": "automatic"
+      "userInterfaceStyle": "automatic",
+      "permissions": [
+        "READ_MEDIA_IMAGES"
+      ]
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",

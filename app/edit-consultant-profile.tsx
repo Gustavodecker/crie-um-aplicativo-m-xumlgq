@@ -74,6 +74,7 @@ export default function EditConsultantProfileScreen() {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (!permissionResult.granted) {
+        console.warn("[Edit Profile] Permission denied");
         setError("Permissão para acessar a galeria é necessária");
         return;
       }
@@ -88,33 +89,87 @@ export default function EditConsultantProfileScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        console.log("[Edit Profile] Image selected, uploading...");
+        console.log("[Edit Profile] Image selected:", {
+          uri: asset.uri,
+          type: asset.type,
+          fileName: asset.fileName,
+          fileSize: asset.fileSize,
+        });
+
+        // Verify URI format
+        if (!asset.uri.startsWith('file://') && !asset.uri.startsWith('content://')) {
+          console.error("[Edit Profile] Invalid URI format:", asset.uri);
+          setError("Formato de imagem inválido");
+          return;
+        }
+
         setUploadingPhoto(true);
+        setError(null);
 
         try {
+          // Get authentication token
+          const token = await getBearerToken();
+          if (!token) {
+            throw new Error("Token de autenticação não encontrado");
+          }
+
+          console.log("[Edit Profile] Token retrieved, preparing upload");
+          console.log("[Edit Profile] Backend URL:", BACKEND_URL);
+
+          // Verify backend URL is HTTPS
+          if (!BACKEND_URL.startsWith('https://')) {
+            console.error("[Edit Profile] Backend URL is not HTTPS:", BACKEND_URL);
+            throw new Error("URL da API deve usar HTTPS");
+          }
+
           // Create form data for upload
           const formData = new FormData();
           
-          // @ts-expect-error - FormData append with file works in React Native
-          formData.append("photo", {
+          // Extract filename from URI or use default
+          const uriParts = asset.uri.split('/');
+          const fileName = asset.fileName || uriParts[uriParts.length - 1] || 'profile-photo.jpg';
+          
+          // Determine MIME type
+          let mimeType = 'image/jpeg';
+          if (fileName.toLowerCase().endsWith('.png')) {
+            mimeType = 'image/png';
+          } else if (fileName.toLowerCase().endsWith('.jpg') || fileName.toLowerCase().endsWith('.jpeg')) {
+            mimeType = 'image/jpeg';
+          }
+
+          console.log("[Edit Profile] File details:", {
             uri: asset.uri,
-            type: asset.type || "image/jpeg",
-            name: asset.fileName || "profile-photo.jpg",
+            name: fileName,
+            type: mimeType,
           });
 
+          // Append file to FormData
+          // @ts-expect-error - FormData append with file works in React Native
+          formData.append("file", {
+            uri: asset.uri,
+            name: fileName,
+            type: mimeType,
+          });
+
+          console.log("[Edit Profile] FormData prepared, uploading to:", `${BACKEND_URL}/api/upload/profile-photo`);
+
           // Upload photo to backend with authentication
-          const token = await getBearerToken();
           const response = await fetch(`${BACKEND_URL}/api/upload/profile-photo`, {
             method: "POST",
             body: formData,
             headers: {
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-              // Don't set Content-Type - let the browser set it with boundary
+              Authorization: `Bearer ${token}`,
+              // CRITICAL: Do NOT set Content-Type header
+              // FormData automatically sets the correct multipart/form-data header with boundary
             },
           });
 
+          console.log("[Edit Profile] Upload response status:", response.status);
+
           if (!response.ok) {
-            throw new Error("Erro ao fazer upload da foto");
+            const errorText = await response.text();
+            console.error("[Edit Profile] Upload failed:", response.status, errorText);
+            throw new Error(`Erro ao fazer upload da foto (${response.status})`);
           }
 
           const data = await response.json();
@@ -131,6 +186,7 @@ export default function EditConsultantProfileScreen() {
     } catch (error: any) {
       console.error("[Edit Profile] Error picking image:", error);
       setError(error.message || "Erro ao selecionar imagem");
+      setUploadingPhoto(false);
     }
   };
 
