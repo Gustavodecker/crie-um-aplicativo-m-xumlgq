@@ -406,10 +406,15 @@ export default function ConsultantDashboardScreen() {
     }
   };
 
-  const handleRegisterBaby = () => {
-    console.log("User tapped Register Baby button - navigating to registration screen");
-    router.push("/register-baby");
-  };
+  const handleRegisterBaby = useCallback(() => {
+    console.log("🔵 [Cadastrar Bebê] Button pressed - navigating to /register-baby");
+    try {
+      router.push("/register-baby");
+      console.log("🔵 [Cadastrar Bebê] Navigation command executed");
+    } catch (error) {
+      console.error("🔴 [Cadastrar Bebê] Navigation error:", error);
+    }
+  }, [router]);
 
   if (loading) {
     return (
@@ -1077,7 +1082,11 @@ export default function ConsultantDashboardScreen() {
         )}
 
         <View style={styles.registerButtonContainer}>
-          <TouchableOpacity style={styles.registerButton} onPress={handleRegisterBaby}>
+          <TouchableOpacity 
+            style={styles.registerButton} 
+            onPress={handleRegisterBaby}
+            activeOpacity={0.7}
+          >
             <IconSymbol
               ios_icon_name="plus.circle.fill"
               android_material_icon_name="add-circle"
@@ -1230,6 +1239,7 @@ const styles = StyleSheet.create({
   registerButtonContainer: {
     padding: spacing.lg,
     paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
   },
   registerButton: {
     flexDirection: "row",
@@ -1240,6 +1250,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.lg,
     gap: spacing.sm,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   registerButtonText: {
     fontSize: 16,
