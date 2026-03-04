@@ -1,20 +1,1258 @@
 
-The file is too long to display in full. I'll fix the syntax error at the end of the styles object by ensuring it's properly closed.
+import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
+import React, { useState, useEffect, useCallback } from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  TextInput,
+  Platform,
+  RefreshControl,
+} from "react-native";
+import { IconSymbol } from "@/components/IconSymbol";
+import { ConfirmModal } from "@/components/ConfirmModal";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { Stack, useRouter } from "expo-router";
+import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
 
-Looking at the code, the issue is that the styles object is incomplete. The last few style definitions are missing closing braces. Let me provide the corrected ending:
+interface Baby {
+  id: string;
+  name: string;
+  birthDate: string;
+  motherName: string;
+  motherPhone: string;
+  motherEmail: string;
+  ageMonths: number;
+  ageDays: number;
+  photo?: string | null;
+  activeContract: any | null;
+}
 
-Actually, I can see the file is cut off. Let me just add the missing closing brace and export:
+interface Nap {
+  id: string;
+  routineId: string;
+  napNumber: number;
+  startTryTime: string;
+  fellAsleepTime: string | null;
+  wakeUpTime: string | null;
+  sleepMethod: string | null;
+  environment: string | null;
+  wakeUpMood: string | null;
+  observations: string | null;
+  consultantComments: string | null;
+}
 
-I see the issue - the file was truncated. Let me check what's missing and complete it properly. The error is at line 2723 which suggests the styles object is incomplete. Let me add the missing parts:
+interface NightWaking {
+  id: string;
+  nightSleepId: string;
+  startTime: string;
+  endTime: string;
+}
 
-Since the file is very long and I can see it's cut off, let me just fix the specific syntax error by ensuring the styles object is properly closed. Looking at the last visible line, I need to complete the styles object.
+interface NightSleep {
+  id: string;
+  routineId: string;
+  startTryTime: string | null;
+  fellAsleepTime: string | null;
+  finalWakeTime: string | null;
+  sleepMethod: string | null;
+  environment: string | null;
+  wakeUpMood: string | null;
+  observations: string | null;
+  consultantComments: string | null;
+  wakings?: NightWaking[];
+}
 
-Let me provide a targeted fix by completing the styles object:
+interface Routine {
+  id: string;
+  babyId: string;
+  date: string;
+  wakeUpTime: string | null;
+  motherObservations: string | null;
+  consultantComments: string | null;
+  naps?: Nap[];
+  nightSleep?: NightSleep | null;
+}
 
-Actually, looking more carefully at the code, I can see the styles object ends with several incomplete style definitions. The file appears to be cut off mid-definition. Let me search for where it cuts off and complete it:
+function formatDateToBR(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-");
+  return `${day}/${month}/${year}`;
+}
 
-The last complete style I can see is `deleteButtonText`. After that, the file seems incomplete. Let me add the missing closing braces and complete the export:
+function getDayOfWeek(dateString: string): string {
+  const [year, month, day] = dateString.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  const options: Intl.DateTimeFormatOptions = { weekday: "long" };
+  return date.toLocaleDateString("pt-BR", options).toUpperCase();
+}
 
-Since I cannot see the exact line 2723 in the provided code, and the file appears to be truncated, let me provide a complete fix by ensuring the styles object is properly closed and the file exports correctly. I'll add the missing styles that were referenced in the code but not defined:
+function calcTimeDiff(start: string, end: string): number {
+  const [startH, startM] = start.split(":").map(Number);
+  const [endH, endM] = end.split(":").map(Number);
+  const startDate = new Date(0, 0, 0, startH, startM);
+  const endDate = new Date(0, 0, 0, endH, endM);
+  let diffMinutes = (endDate.getTime() - startDate.getTime()) / (1000 * 60);
+  if (diffMinutes < 0) {
+    diffMinutes += 24 * 60;
+  }
+  return diffMinutes;
+}
 
-Let me just fix the immediate syntax error by ensuring proper closing of the styles object:
+function minutesToHM(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h > 0 && m > 0) {
+    return `${h}h${m}min`;
+  } else if (h > 0) {
+    return `${h}h`;
+  } else {
+    return `${m}min`;
+  }
+}
+
+function diffTime(start: string | null | undefined, end: string | null | undefined): string {
+  if (!start || !end) return "";
+
+  const [startH, startM] = start.split(":").map(Number);
+  const [endH, endM] = end.split(":").map(Number);
+
+  const startDate = new Date(0, 0, 0, startH, startM);
+  const endDate = new Date(0, 0, 0, endH, endM);
+
+  let diffMinutes = (endDate.getTime() - startDate.getTime()) / (1000 * 60);
+
+  if (diffMinutes < 0) {
+    diffMinutes += 24 * 60;
+  }
+
+  const hours = Math.floor(diffMinutes / 60);
+  const minutes = diffMinutes % 60;
+
+  if (hours > 0 && minutes > 0) {
+    return `${hours}h${minutes}`;
+  } else if (hours > 0) {
+    return `${hours}h`;
+  } else if (minutes > 0) {
+    return `${minutes}min`;
+  }
+  return "0min";
+}
+
+export default function ConsultantDashboardScreen() {
+  const router = useRouter();
+  const [babies, setBabies] = useState<Baby[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedBaby, setSelectedBaby] = useState<Baby | null>(null);
+  const [routines, setRoutines] = useState<Routine[]>([]);
+  const [loadingRoutines, setLoadingRoutines] = useState(false);
+  const [selectedRoutine, setSelectedRoutine] = useState<Routine | null>(null);
+  const [editingComments, setEditingComments] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState("");
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [timePickerField, setTimePickerField] = useState<string | null>(null);
+  const [timePickerValue, setTimePickerValue] = useState(new Date());
+  const [confirmDelete, setConfirmDelete] = useState<{
+    visible: boolean;
+    napId: string;
+    napNumber: number;
+  }>({ visible: false, napId: "", napNumber: 0 });
+
+  const loadBabies = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await apiGet<Baby[]>("/api/consultant/babies");
+      setBabies(data);
+    } catch (error) {
+      console.error("Error loading babies:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadBabies();
+    if (selectedBaby) {
+      await loadRoutines(selectedBaby.id);
+    }
+    setRefreshing(false);
+  }, [loadBabies, selectedBaby]);
+
+  useEffect(() => {
+    loadBabies();
+  }, [loadBabies]);
+
+  const loadRoutines = async (babyId: string) => {
+    try {
+      setLoadingRoutines(true);
+      const data = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
+      setRoutines(data);
+    } catch (error) {
+      console.error("Error loading routines:", error);
+    } finally {
+      setLoadingRoutines(false);
+    }
+  };
+
+  const handleSelectBaby = (baby: Baby) => {
+    setSelectedBaby(baby);
+    setSelectedRoutine(null);
+    loadRoutines(baby.id);
+  };
+
+  const handleSelectRoutine = (routine: Routine) => {
+    setSelectedRoutine(routine);
+  };
+
+  const handleBackToBabies = () => {
+    setSelectedBaby(null);
+    setRoutines([]);
+    setSelectedRoutine(null);
+  };
+
+  const handleBackToRoutines = () => {
+    setSelectedRoutine(null);
+  };
+
+  const handleEditComments = (field: string, currentValue: string | null) => {
+    setEditingComments(field);
+    setCommentText(currentValue || "");
+  };
+
+  const handleSaveComments = async () => {
+    if (!selectedRoutine || !editingComments) return;
+
+    try {
+      if (editingComments === "consultantComments") {
+        await apiPut(`/api/routines/${selectedRoutine.id}`, {
+          consultantComments: commentText,
+        });
+        setSelectedRoutine({
+          ...selectedRoutine,
+          consultantComments: commentText,
+        });
+      }
+      setEditingComments(null);
+      setCommentText("");
+    } catch (error) {
+      console.error("Error saving comments:", error);
+    }
+  };
+
+  const handleUpdateNap = async (napId: string, field: string, value: string | null) => {
+    if (!selectedRoutine) return;
+
+    try {
+      await apiPut(`/api/naps/${napId}`, { [field]: value });
+      const updatedNaps = selectedRoutine.naps?.map((nap) =>
+        nap.id === napId ? { ...nap, [field]: value } : nap
+      );
+      setSelectedRoutine({
+        ...selectedRoutine,
+        naps: updatedNaps,
+      });
+    } catch (error) {
+      console.error("Error updating nap:", error);
+    }
+  };
+
+  const handleSaveNapComments = async (napId: string) => {
+    if (!selectedRoutine) return;
+
+    try {
+      await apiPut(`/api/naps/${napId}`, {
+        consultantComments: commentText,
+      });
+      const updatedNaps = selectedRoutine.naps?.map((nap) =>
+        nap.id === napId ? { ...nap, consultantComments: commentText } : nap
+      );
+      setSelectedRoutine({
+        ...selectedRoutine,
+        naps: updatedNaps,
+      });
+      setEditingComments(null);
+      setCommentText("");
+    } catch (error) {
+      console.error("Error saving nap comments:", error);
+    }
+  };
+
+  const handleDeleteNap = async (napId: string, napNumber: number) => {
+    setConfirmDelete({ visible: true, napId, napNumber });
+  };
+
+  const confirmDeleteNap = async () => {
+    const { napId } = confirmDelete;
+    if (!selectedRoutine || !napId) return;
+
+    try {
+      await apiDelete(`/api/naps/${napId}`);
+      const updatedNaps = selectedRoutine.naps?.filter((nap) => nap.id !== napId);
+      setSelectedRoutine({
+        ...selectedRoutine,
+        naps: updatedNaps,
+      });
+      setConfirmDelete({ visible: false, napId: "", napNumber: 0 });
+    } catch (error) {
+      console.error("Error deleting nap:", error);
+    }
+  };
+
+  const handleUpdateNightSleep = async (field: string, value: string | null) => {
+    if (!selectedRoutine || !selectedRoutine.nightSleep) return;
+
+    try {
+      await apiPut(`/api/night-sleep/${selectedRoutine.nightSleep.id}`, {
+        [field]: value,
+      });
+      setSelectedRoutine({
+        ...selectedRoutine,
+        nightSleep: {
+          ...selectedRoutine.nightSleep,
+          [field]: value,
+        },
+      });
+    } catch (error) {
+      console.error("Error updating night sleep:", error);
+    }
+  };
+
+  const handleSaveNightComments = async () => {
+    if (!selectedRoutine || !selectedRoutine.nightSleep) return;
+
+    try {
+      await apiPut(`/api/night-sleep/${selectedRoutine.nightSleep.id}`, {
+        consultantComments: commentText,
+      });
+      setSelectedRoutine({
+        ...selectedRoutine,
+        nightSleep: {
+          ...selectedRoutine.nightSleep,
+          consultantComments: commentText,
+        },
+      });
+      setEditingComments(null);
+      setCommentText("");
+    } catch (error) {
+      console.error("Error saving night comments:", error);
+    }
+  };
+
+  const openTimePicker = (field: string, currentValue: string | null) => {
+    const [hours, minutes] = currentValue ? currentValue.split(":").map(Number) : [7, 0];
+    const date = new Date();
+    date.setHours(hours);
+    date.setMinutes(minutes);
+    setTimePickerValue(date);
+    setTimePickerField(field);
+    setShowTimePicker(true);
+  };
+
+  const handleTimeChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android") {
+      setShowTimePicker(false);
+    }
+
+    if (event.type === "dismissed") {
+      setShowTimePicker(false);
+      return;
+    }
+
+    if (selectedDate && timePickerField) {
+      const hours = selectedDate.getHours().toString().padStart(2, "0");
+      const minutes = selectedDate.getMinutes().toString().padStart(2, "0");
+      const timeString = `${hours}:${minutes}`;
+
+      if (timePickerField.startsWith("nap-")) {
+        const [, napId, field] = timePickerField.split("-");
+        handleUpdateNap(napId, field, timeString);
+      } else if (timePickerField.startsWith("night-")) {
+        const field = timePickerField.replace("night-", "");
+        handleUpdateNightSleep(field, timeString);
+      }
+
+      if (Platform.OS === "ios") {
+        setShowTimePicker(false);
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Stack.Screen options={{ title: "Consultora - Dashboard", headerShown: true }} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (selectedRoutine) {
+    const dayOfWeek = getDayOfWeek(selectedRoutine.date);
+    const dateDisplay = formatDateToBR(selectedRoutine.date);
+
+    return (
+      <SafeAreaView style={styles.container}>
+        <Stack.Screen
+          options={{
+            title: `Rotina - ${selectedBaby?.name}`,
+            headerShown: true,
+          }}
+        />
+        <ScrollView
+          style={styles.scrollView}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          <TouchableOpacity style={styles.backButton} onPress={handleBackToRoutines}>
+            <IconSymbol
+              ios_icon_name="arrow.left"
+              android_material_icon_name="arrow-back"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.backButtonText}>Voltar para Rotinas</Text>
+          </TouchableOpacity>
+
+          <View style={styles.card}>
+            <Text style={styles.dayOfWeek}>{dayOfWeek}</Text>
+            <Text style={styles.dateTitle}>{dateDisplay}</Text>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Horário que Acordou</Text>
+              <Text style={styles.timeText}>{selectedRoutine.wakeUpTime || "Não informado"}</Text>
+            </View>
+
+            {selectedRoutine.naps && selectedRoutine.naps.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Sonecas</Text>
+                {selectedRoutine.naps.map((nap, index) => {
+                  const previousNapWakeUpTime =
+                    index > 0 && selectedRoutine.naps ? selectedRoutine.naps[index - 1].wakeUpTime : null;
+                  const windowStart = index === 0 ? selectedRoutine.wakeUpTime : previousNapWakeUpTime;
+
+                  const showResults =
+                    windowStart &&
+                    nap.startTryTime &&
+                    nap.fellAsleepTime &&
+                    nap.wakeUpTime;
+
+                  const janelaRealizada = showResults
+                    ? diffTime(windowStart, nap.startTryTime)
+                    : "";
+                  const tempoAdormecer = showResults
+                    ? diffTime(nap.startTryTime, nap.fellAsleepTime)
+                    : "";
+                  const duracaoSono = showResults
+                    ? diffTime(nap.fellAsleepTime, nap.wakeUpTime)
+                    : "";
+
+                  return (
+                    <View key={nap.id} style={styles.napCard}>
+                      <View style={styles.napHeader}>
+                        <Text style={styles.napTitle}>Soneca {nap.napNumber}</Text>
+                        <TouchableOpacity
+                          onPress={() => handleDeleteNap(nap.id, nap.napNumber)}
+                          style={styles.deleteButton}
+                        >
+                          <IconSymbol
+                            ios_icon_name="trash"
+                            android_material_icon_name="delete"
+                            size={18}
+                            color={colors.error}
+                          />
+                        </TouchableOpacity>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.timeRow}
+                        onPress={() => openTimePicker(`nap-${nap.id}-startTryTime`, nap.startTryTime)}
+                      >
+                        <Text style={styles.timeLabel}>Janela início:</Text>
+                        <Text style={styles.timeValue}>{nap.startTryTime || "Não informado"}</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.timeRow}
+                        onPress={() => openTimePicker(`nap-${nap.id}-fellAsleepTime`, nap.fellAsleepTime)}
+                      >
+                        <Text style={styles.timeLabel}>Dormiu às:</Text>
+                        <Text style={styles.timeValue}>{nap.fellAsleepTime || "Não informado"}</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.timeRow}
+                        onPress={() => openTimePicker(`nap-${nap.id}-wakeUpTime`, nap.wakeUpTime)}
+                      >
+                        <Text style={styles.timeLabel}>Acordou às:</Text>
+                        <Text style={styles.timeValue}>{nap.wakeUpTime || "Não informado"}</Text>
+                      </TouchableOpacity>
+
+                      {showResults && (
+                        <View style={styles.resultsBox}>
+                          <Text style={styles.resultsTitle}>Resultados:</Text>
+                          <Text style={styles.resultText}>Janela realizada: {janelaRealizada}</Text>
+                          <Text style={styles.resultText}>Tempo para adormecer: {tempoAdormecer}</Text>
+                          <Text style={styles.resultText}>Duração do sono: {duracaoSono}</Text>
+                        </View>
+                      )}
+
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Dormiu como:</Text>
+                        <Text style={styles.infoValue}>{nap.sleepMethod || "Não informado"}</Text>
+                      </View>
+
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Ambiente:</Text>
+                        <Text style={styles.infoValue}>{nap.environment || "Não informado"}</Text>
+                      </View>
+
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Como acordou:</Text>
+                        <Text style={styles.infoValue}>{nap.wakeUpMood || "Não informado"}</Text>
+                      </View>
+
+                      {nap.observations && (
+                        <View style={styles.observationsBox}>
+                          <Text style={styles.observationsLabel}>Observações da Mãe:</Text>
+                          <Text style={styles.observationsText}>{nap.observations}</Text>
+                        </View>
+                      )}
+
+                      <View style={styles.commentsSection}>
+                        <Text style={styles.commentsLabel}>Comentários da Consultora:</Text>
+                        {editingComments === `nap-${nap.id}` ? (
+                          <View>
+                            <TextInput
+                              style={styles.commentsInput}
+                              value={commentText}
+                              onChangeText={setCommentText}
+                              placeholder="Adicione seus comentários..."
+                              multiline
+                              numberOfLines={4}
+                            />
+                            <View style={styles.commentButtons}>
+                              <TouchableOpacity
+                                style={styles.saveButton}
+                                onPress={() => handleSaveNapComments(nap.id)}
+                              >
+                                <Text style={styles.saveButtonText}>Salvar</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.cancelButton}
+                                onPress={() => {
+                                  setEditingComments(null);
+                                  setCommentText("");
+                                }}
+                              >
+                                <Text style={styles.cancelButtonText}>Cancelar</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            onPress={() =>
+                              handleEditComments(`nap-${nap.id}`, nap.consultantComments)
+                            }
+                          >
+                            <Text style={styles.commentsText}>
+                              {nap.consultantComments || "Toque para adicionar comentários"}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {selectedRoutine.nightSleep && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Sono Noturno</Text>
+                <View style={styles.napCard}>
+                  <TouchableOpacity
+                    style={styles.timeRow}
+                    onPress={() =>
+                      openTimePicker(
+                        "night-startTryTime",
+                        selectedRoutine.nightSleep?.startTryTime || null
+                      )
+                    }
+                  >
+                    <Text style={styles.timeLabel}>Início tentativa:</Text>
+                    <Text style={styles.timeValue}>
+                      {selectedRoutine.nightSleep.startTryTime || "Não informado"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.timeRow}
+                    onPress={() =>
+                      openTimePicker(
+                        "night-fellAsleepTime",
+                        selectedRoutine.nightSleep?.fellAsleepTime || null
+                      )
+                    }
+                  >
+                    <Text style={styles.timeLabel}>Dormiu às:</Text>
+                    <Text style={styles.timeValue}>
+                      {selectedRoutine.nightSleep.fellAsleepTime || "Não informado"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.timeRow}
+                    onPress={() =>
+                      openTimePicker(
+                        "night-finalWakeTime",
+                        selectedRoutine.nightSleep?.finalWakeTime || null
+                      )
+                    }
+                  >
+                    <Text style={styles.timeLabel}>Acordou às:</Text>
+                    <Text style={styles.timeValue}>
+                      {selectedRoutine.nightSleep.finalWakeTime || "Não informado"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Dormiu como:</Text>
+                    <Text style={styles.infoValue}>
+                      {selectedRoutine.nightSleep.sleepMethod || "Não informado"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Ambiente:</Text>
+                    <Text style={styles.infoValue}>
+                      {selectedRoutine.nightSleep.environment || "Não informado"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Como acordou:</Text>
+                    <Text style={styles.infoValue}>
+                      {selectedRoutine.nightSleep.wakeUpMood || "Não informado"}
+                    </Text>
+                  </View>
+
+                  {selectedRoutine.nightSleep.observations && (
+                    <View style={styles.observationsBox}>
+                      <Text style={styles.observationsLabel}>Observações da Mãe:</Text>
+                      <Text style={styles.observationsText}>
+                        {selectedRoutine.nightSleep.observations}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={styles.commentsSection}>
+                    <Text style={styles.commentsLabel}>Comentários da Consultora:</Text>
+                    {editingComments === "nightSleep" ? (
+                      <View>
+                        <TextInput
+                          style={styles.commentsInput}
+                          value={commentText}
+                          onChangeText={setCommentText}
+                          placeholder="Adicione seus comentários..."
+                          multiline
+                          numberOfLines={4}
+                        />
+                        <View style={styles.commentButtons}>
+                          <TouchableOpacity
+                            style={styles.saveButton}
+                            onPress={handleSaveNightComments}
+                          >
+                            <Text style={styles.saveButtonText}>Salvar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.cancelButton}
+                            onPress={() => {
+                              setEditingComments(null);
+                              setCommentText("");
+                            }}
+                          >
+                            <Text style={styles.cancelButtonText}>Cancelar</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() =>
+                          handleEditComments(
+                            "nightSleep",
+                            selectedRoutine.nightSleep?.consultantComments || null
+                          )
+                        }
+                      >
+                        <Text style={styles.commentsText}>
+                          {selectedRoutine.nightSleep.consultantComments ||
+                            "Toque para adicionar comentários"}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Comentários Gerais da Consultora</Text>
+              {editingComments === "consultantComments" ? (
+                <View>
+                  <TextInput
+                    style={styles.commentsInput}
+                    value={commentText}
+                    onChangeText={setCommentText}
+                    placeholder="Adicione comentários gerais sobre o dia..."
+                    multiline
+                    numberOfLines={4}
+                  />
+                  <View style={styles.commentButtons}>
+                    <TouchableOpacity style={styles.saveButton} onPress={handleSaveComments}>
+                      <Text style={styles.saveButtonText}>Salvar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.cancelButton}
+                      onPress={() => {
+                        setEditingComments(null);
+                        setCommentText("");
+                      }}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancelar</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={() =>
+                    handleEditComments("consultantComments", selectedRoutine.consultantComments)
+                  }
+                >
+                  <Text style={styles.commentsText}>
+                    {selectedRoutine.consultantComments || "Toque para adicionar comentários"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </ScrollView>
+
+        {showTimePicker && (
+          <DateTimePicker
+            value={timePickerValue}
+            mode="time"
+            is24Hour={true}
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            onChange={handleTimeChange}
+          />
+        )}
+
+        <ConfirmModal
+          visible={confirmDelete.visible}
+          title="Confirmar Exclusão"
+          message={`Tem certeza que deseja excluir a Soneca ${confirmDelete.napNumber}?`}
+          onConfirm={confirmDeleteNap}
+          onCancel={() => setConfirmDelete({ visible: false, napId: "", napNumber: 0 })}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (selectedBaby) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <Stack.Screen
+          options={{
+            title: `Rotinas - ${selectedBaby.name}`,
+            headerShown: true,
+          }}
+        />
+        <ScrollView
+          style={styles.scrollView}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          <TouchableOpacity style={styles.backButton} onPress={handleBackToBabies}>
+            <IconSymbol
+              ios_icon_name="arrow.left"
+              android_material_icon_name="arrow-back"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.backButtonText}>Voltar para Bebês</Text>
+          </TouchableOpacity>
+
+          <View style={styles.card}>
+            <Text style={styles.babyName}>{selectedBaby.name}</Text>
+            <Text style={styles.babyInfo}>
+              {selectedBaby.ageMonths} meses e {selectedBaby.ageDays} dias
+            </Text>
+            <Text style={styles.babyInfo}>Mãe: {selectedBaby.motherName}</Text>
+          </View>
+
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() =>
+                router.push({
+                  pathname: "/acompanhamento",
+                  params: { babyId: selectedBaby.id, babyName: selectedBaby.name },
+                })
+              }
+            >
+              <IconSymbol
+                ios_icon_name="chart.bar"
+                android_material_icon_name="assessment"
+                size={24}
+                color={colors.primary}
+              />
+              <Text style={styles.actionButtonText}>Acompanhamento</Text>
+            </TouchableOpacity>
+          </View>
+
+          {loadingRoutines ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : routines.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Nenhuma rotina cadastrada ainda</Text>
+            </View>
+          ) : (
+            <View style={styles.routinesList}>
+              <Text style={styles.listTitle}>Rotinas Cadastradas</Text>
+              {routines.map((routine) => {
+                const dayOfWeek = getDayOfWeek(routine.date);
+                const dateDisplay = formatDateToBR(routine.date);
+                return (
+                  <TouchableOpacity
+                    key={routine.id}
+                    style={styles.routineCard}
+                    onPress={() => handleSelectRoutine(routine)}
+                  >
+                    <View style={styles.routineHeader}>
+                      <View>
+                        <Text style={styles.routineDayOfWeek}>{dayOfWeek}</Text>
+                        <Text style={styles.routineDate}>{dateDisplay}</Text>
+                      </View>
+                      <IconSymbol
+                        ios_icon_name="chevron.right"
+                        android_material_icon_name="chevron-right"
+                        size={24}
+                        color={colors.textSecondary}
+                      />
+                    </View>
+                    <Text style={styles.routineInfo}>
+                      Acordou: {routine.wakeUpTime || "Não informado"}
+                    </Text>
+                    <Text style={styles.routineInfo}>
+                      Sonecas: {routine.naps?.length || 0}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <Stack.Screen options={{ title: "Consultora - Dashboard", headerShown: true }} />
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>Meus Bebês</Text>
+          <Text style={styles.subtitle}>Selecione um bebê para ver as rotinas</Text>
+        </View>
+
+        {babies.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Nenhum bebê cadastrado ainda</Text>
+          </View>
+        ) : (
+          <View style={styles.babiesList}>
+            {babies.map((baby) => (
+              <TouchableOpacity
+                key={baby.id}
+                style={styles.babyCard}
+                onPress={() => handleSelectBaby(baby)}
+              >
+                <View style={styles.babyCardContent}>
+                  <View style={styles.babyIcon}>
+                    <IconSymbol
+                      ios_icon_name="person.circle"
+                      android_material_icon_name="account-circle"
+                      size={48}
+                      color={colors.primary}
+                    />
+                  </View>
+                  <View style={styles.babyDetails}>
+                    <Text style={styles.babyCardName}>{baby.name}</Text>
+                    <Text style={styles.babyCardInfo}>
+                      {baby.ageMonths} meses e {baby.ageDays} dias
+                    </Text>
+                    <Text style={styles.babyCardInfo}>Mãe: {baby.motherName}</Text>
+                  </View>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="chevron-right"
+                    size={24}
+                    color={colors.textSecondary}
+                  />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl,
+  },
+  header: {
+    padding: spacing.lg,
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  title: {
+    fontSize: typography.sizes.xxl,
+    fontWeight: typography.weights.bold,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  subtitle: {
+    fontSize: typography.sizes.md,
+    color: colors.textSecondary,
+  },
+  emptyContainer: {
+    padding: spacing.xl,
+    alignItems: "center",
+  },
+  emptyText: {
+    fontSize: typography.sizes.md,
+    color: colors.textSecondary,
+    textAlign: "center",
+  },
+  babiesList: {
+    padding: spacing.md,
+  },
+  babyCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  babyCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  babyIcon: {
+    marginRight: spacing.md,
+  },
+  babyDetails: {
+    flex: 1,
+  },
+  babyCardName: {
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.semibold,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  babyCardInfo: {
+    fontSize: typography.sizes.sm,
+    color: colors.textSecondary,
+    marginBottom: spacing.xxs,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backButtonText: {
+    fontSize: typography.sizes.md,
+    color: colors.primary,
+    marginLeft: spacing.sm,
+  },
+  card: {
+    backgroundColor: colors.card,
+    margin: spacing.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  babyName: {
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.weights.bold,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  babyInfo: {
+    fontSize: typography.sizes.md,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  actionButton: {
+    flex: 1,
+    backgroundColor: colors.card,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  actionButtonText: {
+    fontSize: typography.sizes.sm,
+    color: colors.primary,
+    marginTop: spacing.sm,
+    fontWeight: typography.weights.semibold,
+  },
+  routinesList: {
+    padding: spacing.md,
+  },
+  listTitle: {
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.semibold,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  routineCard: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  routineHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  routineDayOfWeek: {
+    fontSize: typography.sizes.xs,
+    color: colors.textSecondary,
+    fontWeight: typography.weights.semibold,
+    textTransform: "uppercase",
+  },
+  routineDate: {
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.semibold,
+    color: colors.text,
+  },
+  routineInfo: {
+    fontSize: typography.sizes.sm,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  dayOfWeek: {
+    fontSize: typography.sizes.xs,
+    color: colors.textSecondary,
+    fontWeight: typography.weights.semibold,
+    textTransform: "uppercase",
+    marginBottom: spacing.xs,
+  },
+  dateTitle: {
+    fontSize: typography.sizes.xl,
+    fontWeight: typography.weights.bold,
+    color: colors.text,
+    marginBottom: spacing.lg,
+  },
+  section: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  sectionTitle: {
+    fontSize: typography.sizes.lg,
+    fontWeight: typography.weights.semibold,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  timeText: {
+    fontSize: typography.sizes.md,
+    color: colors.text,
+  },
+  napCard: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  napHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  napTitle: {
+    fontSize: typography.sizes.md,
+    fontWeight: typography.weights.semibold,
+    color: colors.text,
+  },
+  deleteButton: {
+    padding: spacing.xs,
+  },
+  timeRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  timeLabel: {
+    fontSize: typography.sizes.sm,
+    color: colors.textSecondary,
+  },
+  timeValue: {
+    fontSize: typography.sizes.md,
+    color: colors.text,
+    fontWeight: typography.weights.medium,
+  },
+  resultsBox: {
+    backgroundColor: colors.primary + "15",
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary + "30",
+  },
+  resultsTitle: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
+    color: colors.primary,
+    marginBottom: spacing.sm,
+  },
+  resultText: {
+    fontSize: typography.sizes.sm,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  infoLabel: {
+    fontSize: typography.sizes.sm,
+    color: colors.textSecondary,
+  },
+  infoValue: {
+    fontSize: typography.sizes.sm,
+    color: colors.text,
+  },
+  observationsBox: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.sm,
+    padding: spacing.md,
+    marginTop: spacing.md,
+  },
+  observationsLabel: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  observationsText: {
+    fontSize: typography.sizes.sm,
+    color: colors.text,
+  },
+  commentsSection: {
+    marginTop: spacing.md,
+  },
+  commentsLabel: {
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
+    color: colors.primary,
+    marginBottom: spacing.sm,
+  },
+  commentsText: {
+    fontSize: typography.sizes.sm,
+    color: colors.text,
+    fontStyle: "italic",
+  },
+  commentsInput: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: typography.sizes.sm,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  commentButtons: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
+  },
+  saveButtonText: {
+    color: colors.white,
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: colors.background,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cancelButtonText: {
+    color: colors.text,
+    fontSize: typography.sizes.sm,
+    fontWeight: typography.weights.semibold,
+  },
+});
