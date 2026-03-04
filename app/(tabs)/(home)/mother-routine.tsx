@@ -329,7 +329,6 @@ export default function MotherRoutineScreen() {
   const router = useRouter();
   const { date } = useLocalSearchParams<{ date?: string }>();
 
-  // 🔥 LOCAL STATE FOR OBSERVATIONS - Prevents character loss
   const [localMotherObservations, setLocalMotherObservations] = useState<string>("");
   const [localNapObservations, setLocalNapObservations] = useState<{ [napId: string]: string }>({});
   const [localNightObservations, setLocalNightObservations] = useState<string>("");
@@ -340,7 +339,6 @@ export default function MotherRoutineScreen() {
       const babyData = await apiGet<Baby>("/api/mother/baby");
       setBaby(babyData);
 
-      // Check if baby has an active contract
       if (!babyData.activeContract) {
         console.log("[Mother Routine] No active contract found");
         setNoContract(true);
@@ -348,11 +346,9 @@ export default function MotherRoutineScreen() {
         return;
       }
 
-      // Get the date from params or use today
       const targetDate = date || new Date().toISOString().split("T")[0];
       console.log("[Mother Routine] Target date:", targetDate);
       
-      // 🔥 FIX: Fetch ALL routines to get complete data including wakings
       try {
         const routinesData = await apiGet<Routine[]>(`/api/routines/baby/${babyData.id}`);
         console.log("[Mother Routine] Fetched routines:", routinesData.length);
@@ -364,11 +360,9 @@ export default function MotherRoutineScreen() {
           console.log("[Mother Routine] Night sleep wakings:", todayRoutine.nightSleep?.wakings?.length || 0);
           
           setRoutine(todayRoutine);
-          // Initialize local state from routine data
           setLocalMotherObservations(todayRoutine.motherObservations || "");
           setLocalNightObservations(todayRoutine.nightSleep?.observations || "");
           
-          // Initialize nap observations
           const napObs: { [napId: string]: string } = {};
           (todayRoutine.naps || []).forEach((nap) => {
             napObs[nap.id] = nap.observations || "";
@@ -376,7 +370,6 @@ export default function MotherRoutineScreen() {
           setLocalNapObservations(napObs);
         } else {
           console.log("[Mother Routine] No routine found for date, creating new one");
-          // Create routine for the target date
           const newRoutine = await apiPost<Routine>("/api/routines", {
             babyId: babyData.id,
             date: targetDate,
@@ -409,7 +402,6 @@ export default function MotherRoutineScreen() {
     loadData();
   }, [loadData]);
 
-  // 🔥 Sync local state when routine changes (but only when routine ID changes, not on every update)
   useEffect(() => {
     if (routine) {
       setLocalMotherObservations(routine.motherObservations || "");
@@ -433,10 +425,9 @@ export default function MotherRoutineScreen() {
     }
   };
 
-  // 🔥 Save mother observations on blur
   const handleSaveMotherObservations = async () => {
     if (!routine) return;
-    if (localMotherObservations === routine.motherObservations) return; // No change
+    if (localMotherObservations === routine.motherObservations) return;
     
     try {
       console.log("[Mother Routine] Saving mother observations");
@@ -488,14 +479,13 @@ export default function MotherRoutineScreen() {
     }
   };
 
-  // 🔥 Save nap observations on blur
   const handleSaveNapObservations = async (napId: string) => {
     if (!routine) return;
     const nap = routine.naps?.find((n) => n.id === napId);
     if (!nap) return;
     
     const localValue = localNapObservations[napId] || "";
-    if (localValue === (nap.observations || "")) return; // No change
+    if (localValue === (nap.observations || "")) return;
     
     try {
       console.log(`[Mother Routine] Saving nap ${napId} observations`);
@@ -524,7 +514,6 @@ export default function MotherRoutineScreen() {
         ...routine,
         naps: routine.naps?.filter((nap) => nap.id !== napToDelete),
       });
-      // Clean up local state
       const newLocalNapObs = { ...localNapObservations };
       delete newLocalNapObs[napToDelete];
       setLocalNapObservations(newLocalNapObs);
@@ -540,7 +529,6 @@ export default function MotherRoutineScreen() {
     if (!routine) return;
     
     try {
-      // If night sleep doesn't exist, create it first
       if (!routine.nightSleep) {
         const newNightSleep = await apiPost<NightSleep>("/api/night-sleep", {
           routineId: routine.id,
@@ -551,7 +539,6 @@ export default function MotherRoutineScreen() {
         });
         setRoutine({ ...routine, nightSleep: newNightSleep });
       } else {
-        // Update existing night sleep
         await apiPut(`/api/night-sleep/${routine.nightSleep.id}`, { [field]: value });
         setRoutine({
           ...routine,
@@ -563,10 +550,8 @@ export default function MotherRoutineScreen() {
     }
   };
 
-  // 🔥 Save night sleep observations on blur
   const handleSaveNightObservations = async () => {
     if (!routine?.nightSleep) {
-      // If night sleep doesn't exist yet, create it with observations
       if (localNightObservations.trim()) {
         try {
           console.log("[Mother Routine] Creating night sleep with observations");
@@ -585,7 +570,7 @@ export default function MotherRoutineScreen() {
       return;
     }
     
-    if (localNightObservations === (routine.nightSleep.observations || "")) return; // No change
+    if (localNightObservations === (routine.nightSleep.observations || "")) return;
     
     try {
       console.log("[Mother Routine] Saving night sleep observations");
@@ -599,7 +584,6 @@ export default function MotherRoutineScreen() {
     }
   };
 
-  // 🔥 FIXED: Ensure night sleep exists before adding waking
   const handleAddWaking = async () => {
     if (!routine) {
       console.error("[Mother Routine] Cannot add waking: no routine");
@@ -609,7 +593,6 @@ export default function MotherRoutineScreen() {
     setAddingWaking(true);
     
     try {
-      // 🔥 CRITICAL: If night sleep doesn't exist, create it first
       let nightSleepId = routine.nightSleep?.id;
       
       if (!nightSleepId) {
@@ -622,7 +605,6 @@ export default function MotherRoutineScreen() {
           observations: null,
         });
         
-        // Update routine with new night sleep
         setRoutine({
           ...routine,
           nightSleep: newNightSleep,
@@ -632,7 +614,6 @@ export default function MotherRoutineScreen() {
         console.log("[Mother Routine] Night sleep created with ID:", nightSleepId);
       }
       
-      // Now add the waking
       console.log("[Mother Routine] Adding waking to night sleep ID:", nightSleepId);
       const newWaking = await apiPost<NightWaking>("/api/night-wakings", {
         nightSleepId: nightSleepId,
@@ -643,7 +624,6 @@ export default function MotherRoutineScreen() {
       
       console.log("[Mother Routine] Waking added successfully:", newWaking);
       
-      // 🔥 FIX: Reload the routine to get fresh data with wakings
       await loadData();
       
       console.log("[Mother Routine] Routine reloaded after adding waking");
@@ -660,8 +640,6 @@ export default function MotherRoutineScreen() {
     
     try {
       await apiDelete(`/api/night-wakings/${wakingId}`);
-      
-      // 🔥 FIX: Reload the routine to get fresh data
       await loadData();
     } catch (err: any) {
       console.error("[Mother Routine] Error deleting waking:", err);
@@ -766,7 +744,6 @@ export default function MotherRoutineScreen() {
     );
   }
 
-  // Show "No Contract" screen
   if (noContract) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
@@ -832,7 +809,6 @@ export default function MotherRoutineScreen() {
         }}
       />
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {/* Wake Up Time */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>☀️ Acordou</Text>
           <Text style={styles.fieldLabel}>Horário</Text>
@@ -862,7 +838,6 @@ export default function MotherRoutineScreen() {
             placeholderTextColor={colors.textSecondary}
           />
 
-          {/* Consultant Comments - READ ONLY */}
           {routine.consultantComments && (
             <View style={styles.readOnlyBox}>
               <Text style={styles.readOnlyLabel}>💬 Orientação da Consultora:</Text>
@@ -871,7 +846,6 @@ export default function MotherRoutineScreen() {
           )}
         </View>
 
-        {/* Naps */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>😴 Sonecas</Text>
           {(routine.naps || []).map((nap) => {
@@ -1037,7 +1011,6 @@ export default function MotherRoutineScreen() {
           )}
         </View>
 
-        {/* Night Sleep */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>🌙 Sono Noturno</Text>
           
@@ -1153,7 +1126,6 @@ export default function MotherRoutineScreen() {
             placeholderTextColor={colors.textSecondary}
           />
 
-          {/* Awakenings */}
           <View style={styles.wakingsSection}>
             <Text style={styles.sectionTitle}>🌟 Despertares Noturnos</Text>
             {(routine.nightSleep?.wakings || []).map((waking, index) => {

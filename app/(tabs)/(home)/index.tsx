@@ -244,12 +244,15 @@ export default function ConsultantDashboardScreen() {
   };
 
   const handleEditComments = (field: string, currentValue: string | null) => {
+    console.log("🔵 [Edit Comments] Tapped on field:", field, "Current value:", currentValue);
     setEditingComments(field);
     setCommentText(currentValue || "");
   };
 
   const handleSaveComments = async () => {
     if (!selectedRoutine || !editingComments) return;
+
+    console.log("💾 [Save Comments] Saving comments for field:", editingComments);
 
     try {
       if (editingComments === "consultantComments") {
@@ -260,11 +263,12 @@ export default function ConsultantDashboardScreen() {
           ...selectedRoutine,
           consultantComments: commentText,
         });
+        console.log("✅ [Save Comments] Successfully saved general comments");
       }
       setEditingComments(null);
       setCommentText("");
     } catch (error) {
-      console.error("Error saving comments:", error);
+      console.error("❌ [Save Comments] Error saving comments:", error);
     }
   };
 
@@ -746,6 +750,7 @@ export default function ConsultantDashboardScreen() {
                     placeholder="Adicione comentários gerais sobre o dia..."
                     multiline
                     numberOfLines={4}
+                    autoFocus
                   />
                   <View style={styles.commentButtons}>
                     <TouchableOpacity style={styles.saveButton} onPress={handleSaveComments}>
@@ -754,6 +759,7 @@ export default function ConsultantDashboardScreen() {
                     <TouchableOpacity
                       style={styles.cancelButton}
                       onPress={() => {
+                        console.log("🔴 [Cancel Comments] Canceling edit");
                         setEditingComments(null);
                         setCommentText("");
                       }}
@@ -764,9 +770,12 @@ export default function ConsultantDashboardScreen() {
                 </View>
               ) : (
                 <TouchableOpacity
-                  onPress={() =>
-                    handleEditComments("consultantComments", selectedRoutine.consultantComments)
-                  }
+                  style={styles.generalCommentsButton}
+                  onPress={() => {
+                    console.log("🟢 [General Comments] Tapped to edit general comments");
+                    handleEditComments("consultantComments", selectedRoutine.consultantComments);
+                  }}
+                  activeOpacity={0.7}
                 >
                   <Text style={styles.commentsText}>
                     {selectedRoutine.consultantComments || "Toque para adicionar comentários"}
@@ -1137,7 +1146,7 @@ const styles = StyleSheet.create({
   },
   greetingText: {
     fontSize: 24,
-    fontWeight: '700' as const,
+    fontWeight: '700',
     color: colors.text,
     marginBottom: spacing.xs,
   },
@@ -1170,7 +1179,7 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     fontSize: 14,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: colors.text,
   },
   filterButtonTextActive: {
@@ -1195,7 +1204,7 @@ const styles = StyleSheet.create({
   },
   registerButtonText: {
     fontSize: 16,
-    fontWeight: '700' as const,
+    fontWeight: '700',
     color: colors.card,
   },
   emptyContainer: {
@@ -1205,7 +1214,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: colors.textSecondary,
-    textAlign: "center" as const,
+    textAlign: "center",
   },
   babiesList: {
     paddingHorizontal: spacing.lg,
@@ -1230,7 +1239,7 @@ const styles = StyleSheet.create({
   },
   babyCardName: {
     fontSize: 18,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: colors.text,
     marginBottom: spacing.xs,
   },
@@ -1260,7 +1269,7 @@ const styles = StyleSheet.create({
   },
   contractBadgeText: {
     fontSize: 11,
-    fontWeight: '600' as const,
+    fontWeight: '600',
   },
   backButton: {
     flexDirection: "row",
@@ -1285,7 +1294,7 @@ const styles = StyleSheet.create({
   },
   babyName: {
     fontSize: 22,
-    fontWeight: '700' as const,
+    fontWeight: '700',
     color: colors.text,
     marginBottom: spacing.sm,
   },
@@ -1308,7 +1317,7 @@ const styles = StyleSheet.create({
   },
   contractTitle: {
     fontSize: 16,
-    fontWeight: "600" as const,
+    fontWeight: "600",
     color: colors.primary,
   },
   contractDetail: {
@@ -1326,7 +1335,7 @@ const styles = StyleSheet.create({
   },
   contractStatusText: {
     fontSize: 12,
-    fontWeight: "600" as const,
+    fontWeight: "600",
     color: colors.success,
   },
   actionButtons: {
@@ -1347,14 +1356,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.primary,
     marginTop: spacing.sm,
-    fontWeight: '600' as const,
+    fontWeight: '600',
   },
   routinesList: {
     padding: spacing.md,
   },
   listTitle: {
     fontSize: 18,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: colors.text,
     marginBottom: spacing.md,
   },
@@ -1375,12 +1384,12 @@ const styles = StyleSheet.create({
   routineDayOfWeek: {
     fontSize: 12,
     color: colors.textSecondary,
-    fontWeight: '600' as const,
-    textTransform: "uppercase" as const,
+    fontWeight: '600',
+    textTransform: "uppercase",
   },
   routineDate: {
     fontSize: 18,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: colors.text,
   },
   routineInfo: {
@@ -1391,13 +1400,13 @@ const styles = StyleSheet.create({
   dayOfWeek: {
     fontSize: 12,
     color: colors.textSecondary,
-    fontWeight: '600' as const,
-    textTransform: "uppercase" as const,
+    fontWeight: '600',
+    textTransform: "uppercase",
     marginBottom: spacing.xs,
   },
   dateTitle: {
     fontSize: 22,
-    fontWeight: '700' as const,
+    fontWeight: '700',
     color: colors.text,
     marginBottom: spacing.lg,
   },
@@ -1409,7 +1418,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: colors.text,
     marginBottom: spacing.md,
   },
@@ -1433,7 +1442,7 @@ const styles = StyleSheet.create({
   },
   napTitle: {
     fontSize: 16,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: colors.text,
   },
   deleteButton: {
@@ -1454,7 +1463,7 @@ const styles = StyleSheet.create({
   timeValue: {
     fontSize: 16,
     color: colors.text,
-    fontWeight: '500' as const,
+    fontWeight: '500',
   },
   resultsBox: {
     backgroundColor: colors.primary + "15",
@@ -1466,7 +1475,7 @@ const styles = StyleSheet.create({
   },
   resultsTitle: {
     fontSize: 14,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: colors.primary,
     marginBottom: spacing.sm,
   },
@@ -1498,7 +1507,7 @@ const styles = StyleSheet.create({
   },
   observationsLabel: {
     fontSize: 14,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: colors.textSecondary,
     marginBottom: spacing.xs,
   },
@@ -1511,14 +1520,15 @@ const styles = StyleSheet.create({
   },
   commentsLabel: {
     fontSize: 14,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: colors.primary,
     marginBottom: spacing.sm,
   },
   commentsText: {
     fontSize: 14,
     color: colors.text,
-    fontStyle: "italic" as const,
+    fontStyle: "italic",
+    padding: spacing.md,
   },
   commentsInput: {
     backgroundColor: colors.background,
@@ -1529,7 +1539,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     minHeight: 80,
-    textAlignVertical: "top" as const,
+    textAlignVertical: "top",
   },
   commentButtons: {
     flexDirection: "row",
@@ -1546,7 +1556,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '600' as const,
+    fontWeight: '600',
   },
   cancelButton: {
     flex: 1,
@@ -1560,6 +1570,14 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: colors.text,
     fontSize: 14,
-    fontWeight: '600' as const,
+    fontWeight: '600',
+  },
+  generalCommentsButton: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 80,
   },
 });
