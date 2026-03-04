@@ -413,7 +413,7 @@ export default function MotherRoutineScreen() {
       });
       setLocalNapObservations(napObs);
     }
-  }, [routine?.id]);
+  }, [routine]);
 
   const handleUpdateWakeUpTime = async (time: string) => {
     if (!routine) return;
