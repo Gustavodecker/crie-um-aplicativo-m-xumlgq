@@ -1,8 +1,9 @@
+
 // Global error logging for runtime errors
 // Captures console.log/warn/error and sends to Natively server for AI debugging
 
-import { Platform } from "react-native";
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 
 // Declare __DEV__ global (React Native global for development mode detection)
 declare const __DEV__: boolean;
@@ -25,7 +26,7 @@ const shouldMuteMessage = (message: string): boolean => {
 };
 
 // Queue for batching logs
-let logQueue: Array<{ level: string; message: string; source: string; timestamp: string; platform: string }> = [];
+let logQueue: { level: string; message: string; source: string; timestamp: string; platform: string }[] = [];
 let flushTimeout: ReturnType<typeof setTimeout> | null = null;
 const FLUSH_INTERVAL = 500; // Flush every 500ms
 
