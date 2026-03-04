@@ -823,9 +823,56 @@ export default function ConsultantDashboardScreen() {
               {selectedBaby.ageMonths} meses e {selectedBaby.ageDays} dias
             </Text>
             <Text style={styles.babyInfo}>Mãe: {selectedBaby.motherName}</Text>
+
+            {selectedBaby.activeContract && (
+              <View style={styles.contractInfo}>
+                <View style={styles.contractHeader}>
+                  <IconSymbol
+                    ios_icon_name="doc.text"
+                    android_material_icon_name="description"
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.contractTitle}>Contrato Ativo</Text>
+                </View>
+                <Text style={styles.contractDetail}>
+                  Início: {formatDateToBR(selectedBaby.activeContract.startDate)}
+                </Text>
+                <Text style={styles.contractDetail}>
+                  Duração: {selectedBaby.activeContract.durationDays} dias
+                </Text>
+                <View style={styles.contractStatusBadge}>
+                  <Text style={styles.contractStatusText}>
+                    {selectedBaby.activeContract.status === "active"
+                      ? "Vigente"
+                      : selectedBaby.activeContract.status === "paused"
+                      ? "Em Pausa"
+                      : "Concluído"}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
           <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() =>
+                router.push({
+                  pathname: "/contract-details",
+                  params: { babyId: selectedBaby.id, babyName: selectedBaby.name },
+                })
+              }
+            >
+              <IconSymbol
+                ios_icon_name="doc.text"
+                android_material_icon_name="description"
+                size={24}
+                color={colors.primary}
+              />
+              <Text style={styles.actionButtonText}>Contrato</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() =>
@@ -963,8 +1010,22 @@ export default function ConsultantDashboardScreen() {
         ) : (
           <View style={styles.babiesList}>
             {displayedBabies.map((baby) => {
-              const contractStatus = baby.activeContract ? "Vigente" : "Sem contrato";
-              const contractColor = baby.activeContract ? colors.success : colors.textSecondary;
+              let contractStatus = "Sem contrato";
+              let contractColor = colors.textSecondary;
+
+              if (baby.activeContract) {
+                const status = baby.activeContract.status;
+                if (status === "active") {
+                  contractStatus = "Vigente";
+                  contractColor = colors.success;
+                } else if (status === "paused") {
+                  contractStatus = "Em Pausa";
+                  contractColor = colors.warning;
+                } else if (status === "completed") {
+                  contractStatus = "Concluído";
+                  contractColor = colors.textSecondary;
+                }
+              }
 
               return (
                 <TouchableOpacity
@@ -1217,6 +1278,41 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
     marginBottom: spacing.xs,
+  },
+  contractInfo: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  contractHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  contractTitle: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    color: colors.primary,
+  },
+  contractDetail: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  contractStatusBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.success + "20",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    marginTop: spacing.sm,
+  },
+  contractStatusText: {
+    fontSize: 12,
+    fontWeight: "600" as const,
+    color: colors.success,
   },
   actionButtons: {
     flexDirection: "row",
