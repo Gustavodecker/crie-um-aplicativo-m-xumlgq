@@ -8196,6 +8196,64 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 22,
   },
+  dateHeaderCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  dayOfWeekText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: colors.primary,
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  dateText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    fontWeight: "500",
+  },
+  resultsSection: {
+    backgroundColor: colors.backgroundAlt,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  resultsSectionTitle: {
+    fontSize: 15,
+    fontWeight: "bold",
+    color: colors.text,
+    marginBottom: 12,
+  },
+  resultRow: {
+    marginBottom: 10,
+  },
+  resultLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.textSecondary,
+    marginBottom: 2,
+  },
+  resultValue: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: colors.primary,
+    marginBottom: 2,
+  },
+  resultDetail: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontStyle: "italic",
+  },
 });
 
 export default HomeScreen;
