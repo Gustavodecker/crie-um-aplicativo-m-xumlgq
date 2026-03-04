@@ -1086,11 +1086,12 @@ export default function ConsultantDashboardScreen() {
             style={styles.registerButton} 
             onPress={handleRegisterBaby}
             activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <IconSymbol
               ios_icon_name="plus.circle.fill"
               android_material_icon_name="add-circle"
-              size={24}
+              size={20}
               color={colors.card}
             />
             <Text style={styles.registerButtonText}>Cadastrar Novo Bebê</Text>
@@ -1237,8 +1238,8 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
   },
   registerButtonContainer: {
-    padding: spacing.lg,
-    paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
   },
   registerButton: {
@@ -1246,18 +1247,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
     gap: spacing.sm,
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
   },
   registerButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600' as const,
     color: colors.card,
   },
