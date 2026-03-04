@@ -36,6 +36,7 @@ interface NightWaking {
   nightSleepId: string;
   startTime: string;
   endTime: string;
+  backToSleepMethod: string | null;
   createdAt: string;
 }
 
@@ -85,6 +86,7 @@ interface CalculatedWaking {
   index: number;
   displayText: string;
   durationMinutes: number;
+  backToSleepMethod: string | null;
 }
 
 interface DailyReport {
@@ -446,6 +448,7 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
           index: index + 1,
           displayText: `${waking.startTime} - ${waking.endTime}`,
           durationMinutes: wakingDuration,
+          backToSleepMethod: waking.backToSleepMethod || null,
         };
 
         report.wakings.push(calculatedWaking);
@@ -882,9 +885,18 @@ export default function AcompanhamentoScreen() {
                         const wakingDurationText = formatTimeDuration(waking.durationMinutes);
 
                         return (
-                          <View key={waking.index} style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>{wakingLabel}</Text>
-                            <Text style={styles.infoText}>{waking.displayText} ({wakingDurationText})</Text>
+                          <View key={waking.index} style={styles.napCard}>
+                            <View style={styles.infoRow}>
+                              <Text style={styles.infoLabel}>{wakingLabel}</Text>
+                              <Text style={styles.infoText}>{waking.displayText} ({wakingDurationText})</Text>
+                            </View>
+                            {waking.backToSleepMethod && (
+                              <View style={styles.badgesRow}>
+                                <View style={[styles.badge, { backgroundColor: colors.primary }]}>
+                                  <Text style={styles.badgeText}>↩ {waking.backToSleepMethod}</Text>
+                                </View>
+                              </View>
+                            )}
                           </View>
                         );
                       })}

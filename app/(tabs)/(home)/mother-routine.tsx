@@ -42,6 +42,7 @@ interface NightWaking {
   nightSleepId: string;
   startTime: string;
   endTime: string;
+  backToSleepMethod?: string | null;
 }
 
 interface NightSleep {
@@ -630,6 +631,7 @@ export default function MotherRoutineScreen() {
         nightSleepId: nightSleepId,
         startTime: "02:00",
         endTime: "02:30",
+        backToSleepMethod: null,
       });
       
       console.log("[Mother Routine] Waking added successfully:", newWaking);
@@ -1205,6 +1207,21 @@ export default function MotherRoutineScreen() {
                   <Text style={styles.calcText}>
                     ⏱️ Duração: {minutesToHM(wakingDuration)}
                   </Text>
+
+                  <Text style={[styles.fieldLabel, { marginTop: 12 }]}>Como voltou a dormir</Text>
+                  <View style={styles.choiceButtons}>
+                    {["Mamando", "Embalando", "Sozinho", "Tapinha no bumbum"].map((method) => (
+                      <TouchableOpacity
+                        key={method}
+                        style={[styles.choiceBtn, waking.backToSleepMethod === method && styles.choiceBtnActive]}
+                        onPress={() => handleUpdateWaking(waking.id, "backToSleepMethod", method)}
+                      >
+                        <Text style={[styles.choiceBtnText, waking.backToSleepMethod === method && styles.choiceBtnTextActive]}>
+                          {method}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
               );
             })}
