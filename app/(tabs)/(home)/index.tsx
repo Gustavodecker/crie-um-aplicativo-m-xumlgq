@@ -951,23 +951,30 @@ export default function ConsultantDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ title: "Bebês", headerShown: true }} />
+      <Stack.Screen 
+        options={{ 
+          title: "Bebês", 
+          headerShown: true,
+          headerRight: () => (
+            <TouchableOpacity 
+              onPress={() => router.push('/edit-consultant-profile')}
+              style={{ marginRight: spacing.md }}
+            >
+              <IconSymbol
+                ios_icon_name="person.circle"
+                android_material_icon_name="account-circle"
+                size={28}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+          ),
+        }} 
+      />
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {consultantProfile && (
-          <View style={styles.profileSection}>
-            <ConsultantProfileCard
-              name={consultantProfile.name}
-              professionalTitle={consultantProfile.professionalTitle || undefined}
-              description={consultantProfile.description || undefined}
-              photoUrl={consultantProfile.photo || undefined}
-              isConsultant={true}
-            />
-          </View>
-        )}
-
         <View style={styles.greetingSection}>
           <Text style={styles.greetingText}>Olá, Consultora! 👋</Text>
           <Text style={styles.babyCountText}>{babyCount} bebê cadastrado</Text>
@@ -1004,6 +1011,20 @@ export default function ConsultantDashboardScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity 
+          style={styles.registerButton} 
+          onPress={handleRegisterBaby}
+          activeOpacity={0.7}
+        >
+          <IconSymbol
+            ios_icon_name="plus.circle.fill"
+            android_material_icon_name="add-circle"
+            size={24}
+            color={colors.card}
+          />
+          <Text style={styles.registerButtonText}>Cadastrar Novo Bebê</Text>
+        </TouchableOpacity>
 
         {displayedBabies.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -1080,23 +1101,6 @@ export default function ConsultantDashboardScreen() {
             })}
           </View>
         )}
-
-        <View style={styles.registerButtonContainer}>
-          <TouchableOpacity 
-            style={styles.registerButton} 
-            onPress={handleRegisterBaby}
-            activeOpacity={0.7}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <IconSymbol
-              ios_icon_name="plus.circle.fill"
-              android_material_icon_name="add-circle"
-              size={20}
-              color={colors.card}
-            />
-            <Text style={styles.registerButtonText}>Cadastrar Novo Bebê</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
 
       <ConfirmModal
@@ -1118,15 +1122,14 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  scrollViewContent: {
+    paddingBottom: 100,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: spacing.xl,
-  },
-  profileSection: {
-    padding: spacing.lg,
-    paddingBottom: 0,
   },
   greetingSection: {
     padding: spacing.lg,
@@ -1171,6 +1174,28 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   filterButtonTextActive: {
+    color: colors.card,
+  },
+  registerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.lg,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    gap: spacing.md,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  registerButtonText: {
+    fontSize: 16,
+    fontWeight: '700' as const,
     color: colors.card,
   },
   emptyContainer: {
@@ -1236,31 +1261,6 @@ const styles = StyleSheet.create({
   contractBadgeText: {
     fontSize: 11,
     fontWeight: '600' as const,
-  },
-  registerButtonContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xl,
-  },
-  registerButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    gap: spacing.sm,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-  },
-  registerButtonText: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: colors.card,
   },
   backButton: {
     flexDirection: "row",
