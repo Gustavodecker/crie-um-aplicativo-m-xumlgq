@@ -108,6 +108,8 @@ interface DailyReport {
   nightSleepMethod: string | null;
   nightEnvironment: string | null;
   nightWakeUpMood: string | null;
+  nightObservations: string | null;
+  nightConsultantComments: string | null;
   motherObservations: string | null;
   consultantComments: string | null;
 }
@@ -243,6 +245,9 @@ const styles = StyleSheet.create({
   badgeRed: {
     backgroundColor: '#F44336',
   },
+  badgePrimary: {
+    backgroundColor: colors.primary,
+  },
   badgeText: {
     fontSize: 11,
     fontWeight: '600',
@@ -291,6 +296,20 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 20,
   },
+  wakingCard: {
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF9800',
+  },
+  wakingHeader: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
 });
 
 function timeToMinutes(time: string): number {
@@ -337,7 +356,7 @@ function getEnvironmentColor(environment: string | null): string {
 function getMoodColor(mood: string | null): string {
   if (!mood) return '#9E9E9E';
   const m = mood.toLowerCase();
-  if (m.includes('bom') || m.includes('sorrindo')) return '#4CAF50';
+  if (m.includes('bom') || m.includes('sorrindo') || m.includes('calmo')) return '#4CAF50';
   if (m.includes('choroso')) return '#FFC107';
   if (m.includes('irritado')) return '#F44336';
   return '#9E9E9E';
@@ -371,6 +390,8 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
     nightSleepMethod: null,
     nightEnvironment: null,
     nightWakeUpMood: null,
+    nightObservations: null,
+    nightConsultantComments: null,
     motherObservations: routine.motherObservations,
     consultantComments: routine.consultantComments,
   };
@@ -429,6 +450,8 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
     report.nightSleepMethod = nightSleep.sleepMethod;
     report.nightEnvironment = nightSleep.environment;
     report.nightWakeUpMood = nightSleep.wakeUpMood;
+    report.nightObservations = nightSleep.observations;
+    report.nightConsultantComments = nightSleep.consultantComments;
 
     const bruteDuration = calculateTimeDifference(
       nightSleep.fellAsleepTime,
@@ -438,6 +461,8 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
 
     let totalWakingMinutes = 0;
     const wakings = nightSleep.wakings || [];
+
+    console.log(`[Acompanhamento] Processing ${wakings.length} wakings for day ${dayIndex}`);
 
     wakings.forEach((waking, index) => {
       if (waking.startTime && waking.endTime) {
@@ -450,6 +475,12 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
           durationMinutes: wakingDuration,
           backToSleepMethod: waking.backToSleepMethod || null,
         };
+
+        console.log(`[Acompanhamento] Waking ${index + 1}:`, {
+          displayText: calculatedWaking.displayText,
+          duration: wakingDuration,
+          backToSleepMethod: calculatedWaking.backToSleepMethod,
+        });
 
         report.wakings.push(calculatedWaking);
       }
@@ -465,6 +496,9 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
       brute: report.nightSleepBrute,
       liquid: report.nightSleepLiquidTotal,
       wakingsCount: report.wakings.length,
+      sleepMethod: report.nightSleepMethod,
+      environment: report.nightEnvironment,
+      wakeUpMood: report.nightWakeUpMood,
     });
   } else {
     console.log(`[Acompanhamento] Night sleep incomplete for day ${dayIndex}:`, {
@@ -528,7 +562,6 @@ export default function AcompanhamentoScreen() {
       wakeUpMood: raw.wakeUpMood || null,
       wakings: wakings,
       createdAt: raw.createdAt,
-      updatedAt: raw.updatedAt,
     };
 
     console.log("[Acompanhamento] normalizeNightSleep: normalized", {
@@ -536,6 +569,9 @@ export default function AcompanhamentoScreen() {
       fellAsleepTime: normalized.fellAsleepTime,
       finalWakeTime: normalized.finalWakeTime,
       wakingsCount: normalized.wakings?.length || 0,
+      sleepMethod: normalized.sleepMethod,
+      environment: normalized.environment,
+      wakeUpMood: normalized.wakeUpMood,
     });
 
     return normalized;
@@ -795,18 +831,18 @@ export default function AcompanhamentoScreen() {
                             {(nap.sleepMethod || nap.environment || nap.wakeUpMood) && (
                               <View style={styles.badgesRow}>
                                 {nap.sleepMethod && (
-                                  <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-                                    <Text style={styles.badgeText}>{nap.sleepMethod}</Text>
+                                  <View style={[styles.badge, styles.badgePrimary]}>
+                                    <Text style={styles.badgeText}>Dormiu: {nap.sleepMethod}</Text>
                                   </View>
                                 )}
                                 {nap.environment && (
                                   <View style={[styles.badge, { backgroundColor: getEnvironmentColor(nap.environment) }]}>
-                                    <Text style={styles.badgeText}>{nap.environment}</Text>
+                                    <Text style={styles.badgeText}>Ambiente: {nap.environment}</Text>
                                   </View>
                                 )}
                                 {nap.wakeUpMood && (
                                   <View style={[styles.badge, { backgroundColor: getMoodColor(nap.wakeUpMood) }]}>
-                                    <Text style={styles.badgeText}>{nap.wakeUpMood}</Text>
+                                    <Text style={styles.badgeText}>Acordou: {nap.wakeUpMood}</Text>
                                   </View>
                                 )}
                               </View>
@@ -858,20 +894,34 @@ export default function AcompanhamentoScreen() {
                       {(report.nightSleepMethod || report.nightEnvironment || report.nightWakeUpMood) && (
                         <View style={styles.badgesRow}>
                           {report.nightSleepMethod && (
-                            <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-                              <Text style={styles.badgeText}>{report.nightSleepMethod}</Text>
+                            <View style={[styles.badge, styles.badgePrimary]}>
+                              <Text style={styles.badgeText}>Dormiu: {report.nightSleepMethod}</Text>
                             </View>
                           )}
                           {report.nightEnvironment && (
                             <View style={[styles.badge, { backgroundColor: getEnvironmentColor(report.nightEnvironment) }]}>
-                              <Text style={styles.badgeText}>{report.nightEnvironment}</Text>
+                              <Text style={styles.badgeText}>Ambiente: {report.nightEnvironment}</Text>
                             </View>
                           )}
                           {report.nightWakeUpMood && (
                             <View style={[styles.badge, { backgroundColor: getMoodColor(report.nightWakeUpMood) }]}>
-                              <Text style={styles.badgeText}>{report.nightWakeUpMood}</Text>
+                              <Text style={styles.badgeText}>Acordou: {report.nightWakeUpMood}</Text>
                             </View>
                           )}
+                        </View>
+                      )}
+
+                      {report.nightObservations && (
+                        <View style={styles.observationBox}>
+                          <Text style={styles.observationLabel}>Observações da Mãe:</Text>
+                          <Text style={styles.observationText}>{report.nightObservations}</Text>
+                        </View>
+                      )}
+
+                      {report.nightConsultantComments && (
+                        <View style={[styles.observationBox, { borderLeftColor: colors.primary }]}>
+                          <Text style={[styles.observationLabel, { color: colors.primary }]}>Comentários da Consultora:</Text>
+                          <Text style={styles.observationText}>{report.nightConsultantComments}</Text>
                         </View>
                       )}
                     </View>
@@ -879,21 +929,26 @@ export default function AcompanhamentoScreen() {
 
                   {report.wakings.length > 0 && (
                     <View style={styles.section}>
-                      <Text style={styles.sectionTitle}>DESPERTARES ({report.wakings.length})</Text>
+                      <Text style={styles.sectionTitle}>DESPERTARES NOTURNOS ({report.wakings.length})</Text>
                       {report.wakings.map((waking) => {
-                        const wakingLabel = `${waking.index}º Despertar:`;
+                        const wakingIndexText = `${waking.index}º Despertar`;
                         const wakingDurationText = formatTimeDuration(waking.durationMinutes);
 
                         return (
-                          <View key={waking.index} style={styles.napCard}>
+                          <View key={waking.index} style={styles.wakingCard}>
+                            <Text style={styles.wakingHeader}>{wakingIndexText}</Text>
                             <View style={styles.infoRow}>
-                              <Text style={styles.infoLabel}>{wakingLabel}</Text>
-                              <Text style={styles.infoText}>{waking.displayText} ({wakingDurationText})</Text>
+                              <Text style={styles.infoLabel}>Horário:</Text>
+                              <Text style={styles.infoText}>{waking.displayText}</Text>
+                            </View>
+                            <View style={styles.infoRow}>
+                              <Text style={styles.infoLabel}>Duração:</Text>
+                              <Text style={styles.infoText}>{wakingDurationText}</Text>
                             </View>
                             {waking.backToSleepMethod && (
                               <View style={styles.badgesRow}>
-                                <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-                                  <Text style={styles.badgeText}>↩ {waking.backToSleepMethod}</Text>
+                                <View style={[styles.badge, styles.badgePrimary]}>
+                                  <Text style={styles.badgeText}>Voltou a dormir: {waking.backToSleepMethod}</Text>
                                 </View>
                               </View>
                             )}
@@ -906,7 +961,7 @@ export default function AcompanhamentoScreen() {
                   {report.motherObservations && (
                     <View style={styles.section}>
                       <View style={styles.observationBox}>
-                        <Text style={styles.observationLabel}>Observações da Mãe:</Text>
+                        <Text style={styles.observationLabel}>Observações da Mãe (Dia):</Text>
                         <Text style={styles.observationText}>{report.motherObservations}</Text>
                       </View>
                     </View>
@@ -915,7 +970,7 @@ export default function AcompanhamentoScreen() {
                   {report.consultantComments && (
                     <View style={styles.section}>
                       <View style={[styles.observationBox, { borderLeftColor: colors.primary }]}>
-                        <Text style={[styles.observationLabel, { color: colors.primary }]}>Comentários da Consultora:</Text>
+                        <Text style={[styles.observationLabel, { color: colors.primary }]}>Comentários da Consultora (Dia):</Text>
                         <Text style={styles.observationText}>{report.consultantComments}</Text>
                       </View>
                     </View>
