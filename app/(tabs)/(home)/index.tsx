@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { IconSymbol } from "@/components/IconSymbol";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { ConsultantProfileCard } from "@/components/ConsultantProfileCard";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Stack, useRouter } from "expo-router";
 import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
@@ -30,6 +31,7 @@ interface Baby {
   ageDays: number;
   photo?: string | null;
   activeContract: any | null;
+  archived?: boolean;
 }
 
 interface Nap {
@@ -76,6 +78,15 @@ interface Routine {
   consultantComments: string | null;
   naps?: Nap[];
   nightSleep?: NightSleep | null;
+}
+
+interface ConsultantProfile {
+  id: string;
+  userId: string;
+  name: string;
+  photo: string | null;
+  professionalTitle: string | null;
+  description: string | null;
 }
 
 function formatDateToBR(dateStr: string): string {
@@ -161,6 +172,17 @@ export default function ConsultantDashboardScreen() {
     napId: string;
     napNumber: number;
   }>({ visible: false, napId: "", napNumber: 0 });
+  const [consultantProfile, setConsultantProfile] = useState<ConsultantProfile | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+
+  const loadConsultantProfile = useCallback(async () => {
+    try {
+      const data = await apiGet<ConsultantProfile>("/api/consultant/profile");
+      setConsultantProfile(data);
+    } catch (error) {
+      console.error("Error loading consultant profile:", error);
+    }
+  }, []);
 
   const loadBabies = useCallback(async () => {
     try {
@@ -176,16 +198,18 @@ export default function ConsultantDashboardScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    await loadConsultantProfile();
     await loadBabies();
     if (selectedBaby) {
       await loadRoutines(selectedBaby.id);
     }
     setRefreshing(false);
-  }, [loadBabies, selectedBaby]);
+  }, [loadBabies, loadConsultantProfile, selectedBaby]);
 
   useEffect(() => {
+    loadConsultantProfile();
     loadBabies();
-  }, [loadBabies]);
+  }, [loadConsultantProfile, loadBabies]);
 
   const loadRoutines = async (babyId: string) => {
     try {
@@ -382,10 +406,16 @@ export default function ConsultantDashboardScreen() {
     }
   };
 
+  const handleRegisterBaby = () => {
+    console.log("User tapped Register Baby button");
+    // TODO: Navigate to baby registration screen
+    // router.push('/register-baby');
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <Stack.Screen options={{ title: "Consultora - Dashboard", headerShown: true }} />
+        <Stack.Screen options={{ title: "Bebês", headerShown: true }} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -863,58 +893,149 @@ export default function ConsultantDashboardScreen() {
     );
   }
 
+  const activeBabies = babies.filter((baby) => !baby.archived);
+  const archivedBabies = babies.filter((baby) => baby.archived);
+  const displayedBabies = showArchived ? archivedBabies : activeBabies;
+  const babyCount = showArchived ? archivedBabies.length : activeBabies.length;
+
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ title: "Consultora - Dashboard", headerShown: true }} />
+      <Stack.Screen options={{ title: "Bebês", headerShown: true }} />
       <ScrollView
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Meus Bebês</Text>
-          <Text style={styles.subtitle}>Selecione um bebê para ver as rotinas</Text>
+        {consultantProfile && (
+          <View style={styles.profileSection}>
+            <ConsultantProfileCard
+              name={consultantProfile.name}
+              professionalTitle={consultantProfile.professionalTitle || undefined}
+              description={consultantProfile.description || undefined}
+              photoUrl={consultantProfile.photo || undefined}
+              isConsultant={true}
+            />
+          </View>
+        )}
+
+        <View style={styles.greetingSection}>
+          <Text style={styles.greetingText}>Olá, Consultora! 👋</Text>
+          <Text style={styles.babyCountText}>{babyCount} bebê cadastrado</Text>
         </View>
 
-        {babies.length === 0 ? (
+        <View style={styles.filterButtons}>
+          <TouchableOpacity
+            style={[styles.filterButton, !showArchived && styles.filterButtonActive]}
+            onPress={() => setShowArchived(false)}
+          >
+            <IconSymbol
+              ios_icon_name="arrow.2.circlepath"
+              android_material_icon_name="sync"
+              size={20}
+              color={!showArchived ? colors.card : colors.text}
+            />
+            <Text style={[styles.filterButtonText, !showArchived && styles.filterButtonTextActive]}>
+              Ativos
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterButton, showArchived && styles.filterButtonActive]}
+            onPress={() => setShowArchived(true)}
+          >
+            <IconSymbol
+              ios_icon_name="archivebox"
+              android_material_icon_name="archive"
+              size={20}
+              color={showArchived ? colors.card : colors.text}
+            />
+            <Text style={[styles.filterButtonText, showArchived && styles.filterButtonTextActive]}>
+              Arquivados
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {displayedBabies.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Nenhum bebê cadastrado ainda</Text>
+            <Text style={styles.emptyText}>
+              {showArchived ? "Nenhum bebê arquivado" : "Nenhum bebê ativo"}
+            </Text>
           </View>
         ) : (
           <View style={styles.babiesList}>
-            {babies.map((baby) => (
-              <TouchableOpacity
-                key={baby.id}
-                style={styles.babyCard}
-                onPress={() => handleSelectBaby(baby)}
-              >
-                <View style={styles.babyCardContent}>
-                  <View style={styles.babyIcon}>
+            {displayedBabies.map((baby) => {
+              const contractStatus = baby.activeContract ? "Vigente" : "Sem contrato";
+              const contractColor = baby.activeContract ? colors.success : colors.textSecondary;
+
+              return (
+                <TouchableOpacity
+                  key={baby.id}
+                  style={styles.babyCard}
+                  onPress={() => handleSelectBaby(baby)}
+                >
+                  <View style={styles.babyCardContent}>
+                    <View style={styles.babyIcon}>
+                      <IconSymbol
+                        ios_icon_name="person.circle"
+                        android_material_icon_name="account-circle"
+                        size={48}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={styles.babyDetails}>
+                      <Text style={styles.babyCardName}>{baby.name}</Text>
+                      <Text style={styles.babyCardInfo}>{baby.motherName}</Text>
+                      <View style={styles.babyCardFooter}>
+                        <View style={styles.ageContainer}>
+                          <IconSymbol
+                            ios_icon_name="calendar"
+                            android_material_icon_name="calendar-today"
+                            size={14}
+                            color={colors.textSecondary}
+                          />
+                          <Text style={styles.ageText}>
+                            {baby.ageMonths}m {baby.ageDays}d
+                          </Text>
+                        </View>
+                        <View style={[styles.contractBadge, { backgroundColor: contractColor + "20" }]}>
+                          <Text style={[styles.contractBadgeText, { color: contractColor }]}>
+                            {contractStatus}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
                     <IconSymbol
-                      ios_icon_name="person.circle"
-                      android_material_icon_name="account-circle"
-                      size={48}
-                      color={colors.primary}
+                      ios_icon_name="chevron.right"
+                      android_material_icon_name="chevron-right"
+                      size={24}
+                      color={colors.textSecondary}
                     />
                   </View>
-                  <View style={styles.babyDetails}>
-                    <Text style={styles.babyCardName}>{baby.name}</Text>
-                    <Text style={styles.babyCardInfo}>
-                      {baby.ageMonths} meses e {baby.ageDays} dias
-                    </Text>
-                    <Text style={styles.babyCardInfo}>Mãe: {baby.motherName}</Text>
-                  </View>
-                  <IconSymbol
-                    ios_icon_name="chevron.right"
-                    android_material_icon_name="chevron-right"
-                    size={24}
-                    color={colors.textSecondary}
-                  />
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
+
+        <View style={styles.registerButtonContainer}>
+          <TouchableOpacity style={styles.registerButton} onPress={handleRegisterBaby}>
+            <IconSymbol
+              ios_icon_name="plus.circle.fill"
+              android_material_icon_name="add-circle"
+              size={24}
+              color={colors.card}
+            />
+            <Text style={styles.registerButtonText}>Cadastrar Novo Bebê</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
+
+      <ConfirmModal
+        visible={confirmDelete.visible}
+        title="Confirmar Exclusão"
+        message={`Tem certeza que deseja excluir a Soneca ${confirmDelete.napNumber}?`}
+        onConfirm={confirmDeleteNap}
+        onCancel={() => setConfirmDelete({ visible: false, napId: "", napNumber: 0 })}
+      />
     </SafeAreaView>
   );
 }
@@ -933,21 +1054,54 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: spacing.xl,
   },
-  header: {
+  profileSection: {
     padding: spacing.lg,
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingBottom: 0,
   },
-  title: {
-    fontSize: 28,
+  greetingSection: {
+    padding: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  greetingText: {
+    fontSize: 24,
     fontWeight: '700' as const,
     color: colors.text,
     marginBottom: spacing.xs,
   },
-  subtitle: {
-    fontSize: 16,
+  babyCountText: {
+    fontSize: 14,
     color: colors.textSecondary,
+  },
+  filterButtons: {
+    flexDirection: "row",
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  filterButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
+  },
+  filterButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterButtonText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: colors.text,
+  },
+  filterButtonTextActive: {
+    color: colors.card,
   },
   emptyContainer: {
     padding: spacing.xl,
@@ -959,7 +1113,7 @@ const styles = StyleSheet.create({
     textAlign: "center" as const,
   },
   babiesList: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
   babyCard: {
     backgroundColor: colors.card,
@@ -988,7 +1142,49 @@ const styles = StyleSheet.create({
   babyCardInfo: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: spacing.sm,
+  },
+  babyCardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  ageContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  ageText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  contractBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  contractBadgeText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
+  },
+  registerButtonContainer: {
+    padding: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  registerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.lg,
+    gap: spacing.sm,
+  },
+  registerButtonText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: colors.card,
   },
   backButton: {
     flexDirection: "row",
