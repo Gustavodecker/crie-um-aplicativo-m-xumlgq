@@ -491,7 +491,7 @@ export default function MotherDashboardScreen() {
               styles.primaryActionButton,
               !hasActiveContract && styles.disabledButton
             ]}
-            onPress={() => hasActiveContract && router.push("/(tabs)/(home)/mother-routine")}
+            onPress={() => hasActiveContract && router.push("/(tabs)/(home)/mother-day-selection")}
             disabled={!hasActiveContract}
           >
             <View style={styles.actionButtonIcon}>
@@ -514,7 +514,7 @@ export default function MotherDashboardScreen() {
                 !hasActiveContract && styles.disabledText
               ]}>
                 {hasActiveContract 
-                  ? "Adicione sonecas e sono noturno"
+                  ? "Escolha o dia e adicione sonecas"
                   : "Contrato necessário"
                 }
               </Text>

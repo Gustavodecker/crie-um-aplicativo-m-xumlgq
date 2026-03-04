@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import {
   View,
   Text,
@@ -326,6 +326,7 @@ export default function MotherRoutineScreen() {
   const [napToDelete, setNapToDelete] = useState<string | null>(null);
   const [addingWaking, setAddingWaking] = useState(false);
   const router = useRouter();
+  const { date } = useLocalSearchParams<{ date?: string }>();
 
   // 🔥 LOCAL STATE FOR OBSERVATIONS - Prevents character loss
   const [localMotherObservations, setLocalMotherObservations] = useState<string>("");
@@ -346,13 +347,13 @@ export default function MotherRoutineScreen() {
         return;
       }
 
-      // Get today's date
-      const today = new Date().toISOString().split("T")[0];
+      // Get the date from params or use today
+      const targetDate = date || new Date().toISOString().split("T")[0];
       
-      // Try to get today's routine
+      // Try to get the routine for the target date
       try {
         const routineData = await apiGet<Routine[]>(`/api/routines/baby/${babyData.id}`);
-        const todayRoutine = routineData.find((r: Routine) => r.date === today);
+        const todayRoutine = routineData.find((r: Routine) => r.date === targetDate);
         
         if (todayRoutine) {
           setRoutine(todayRoutine);
@@ -367,10 +368,10 @@ export default function MotherRoutineScreen() {
           });
           setLocalNapObservations(napObs);
         } else {
-          // Create today's routine
+          // Create routine for the target date
           const newRoutine = await apiPost<Routine>("/api/routines", {
             babyId: babyData.id,
-            date: today,
+            date: targetDate,
             wakeUpTime: "07:00",
             motherObservations: null,
             consultantComments: null,
@@ -394,7 +395,7 @@ export default function MotherRoutineScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [date]);
 
   useEffect(() => {
     loadData();
