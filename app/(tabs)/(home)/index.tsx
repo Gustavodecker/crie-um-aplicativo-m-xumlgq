@@ -940,13 +940,13 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   title: {
-    fontSize: typography.sizes.xxl,
-    fontWeight: typography.weights.bold,
+    fontSize: 28,
+    fontWeight: '700' as const,
     color: colors.text,
     marginBottom: spacing.xs,
   },
   subtitle: {
-    fontSize: typography.sizes.md,
+    fontSize: 16,
     color: colors.textSecondary,
   },
   emptyContainer: {
@@ -954,9 +954,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   emptyText: {
-    fontSize: typography.sizes.md,
+    fontSize: 16,
     color: colors.textSecondary,
-    textAlign: "center",
+    textAlign: "center" as const,
   },
   babiesList: {
     padding: spacing.md,
@@ -980,15 +980,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   babyCardName: {
-    fontSize: typography.sizes.lg,
-    fontWeight: typography.weights.semibold,
+    fontSize: 18,
+    fontWeight: '600' as const,
     color: colors.text,
     marginBottom: spacing.xs,
   },
   babyCardInfo: {
-    fontSize: typography.sizes.sm,
+    fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: spacing.xxs,
+    marginBottom: 4,
   },
   backButton: {
     flexDirection: "row",
@@ -999,7 +999,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   backButtonText: {
-    fontSize: typography.sizes.md,
+    fontSize: 16,
     color: colors.primary,
     marginLeft: spacing.sm,
   },
@@ -1012,13 +1012,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   babyName: {
-    fontSize: typography.sizes.xl,
-    fontWeight: typography.weights.bold,
+    fontSize: 22,
+    fontWeight: '700' as const,
     color: colors.text,
     marginBottom: spacing.sm,
   },
   babyInfo: {
-    fontSize: typography.sizes.md,
+    fontSize: 16,
     color: colors.textSecondary,
     marginBottom: spacing.xs,
   },
@@ -1037,17 +1037,17 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   actionButtonText: {
-    fontSize: typography.sizes.sm,
+    fontSize: 14,
     color: colors.primary,
     marginTop: spacing.sm,
-    fontWeight: typography.weights.semibold,
+    fontWeight: '600' as const,
   },
   routinesList: {
     padding: spacing.md,
   },
   listTitle: {
-    fontSize: typography.sizes.lg,
-    fontWeight: typography.weights.semibold,
+    fontSize: 18,
+    fontWeight: '600' as const,
     color: colors.text,
     marginBottom: spacing.md,
   },
@@ -1066,31 +1066,31 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   routineDayOfWeek: {
-    fontSize: typography.sizes.xs,
+    fontSize: 12,
     color: colors.textSecondary,
-    fontWeight: typography.weights.semibold,
-    textTransform: "uppercase",
+    fontWeight: '600' as const,
+    textTransform: "uppercase" as const,
   },
   routineDate: {
-    fontSize: typography.sizes.lg,
-    fontWeight: typography.weights.semibold,
+    fontSize: 18,
+    fontWeight: '600' as const,
     color: colors.text,
   },
   routineInfo: {
-    fontSize: typography.sizes.sm,
+    fontSize: 14,
     color: colors.textSecondary,
     marginTop: spacing.xs,
   },
   dayOfWeek: {
-    fontSize: typography.sizes.xs,
+    fontSize: 12,
     color: colors.textSecondary,
-    fontWeight: typography.weights.semibold,
-    textTransform: "uppercase",
+    fontWeight: '600' as const,
+    textTransform: "uppercase" as const,
     marginBottom: spacing.xs,
   },
   dateTitle: {
-    fontSize: typography.sizes.xl,
-    fontWeight: typography.weights.bold,
+    fontSize: 22,
+    fontWeight: '700' as const,
     color: colors.text,
     marginBottom: spacing.lg,
   },
@@ -1101,13 +1101,13 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   sectionTitle: {
-    fontSize: typography.sizes.lg,
-    fontWeight: typography.weights.semibold,
+    fontSize: 18,
+    fontWeight: '600' as const,
     color: colors.text,
     marginBottom: spacing.md,
   },
   timeText: {
-    fontSize: typography.sizes.md,
+    fontSize: 16,
     color: colors.text,
   },
   napCard: {
@@ -1125,8 +1125,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   napTitle: {
-    fontSize: typography.sizes.md,
-    fontWeight: typography.weights.semibold,
+    fontSize: 16,
+    fontWeight: '600' as const,
     color: colors.text,
   },
   deleteButton: {
@@ -1141,13 +1141,13 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   timeLabel: {
-    fontSize: typography.sizes.sm,
+    fontSize: 14,
     color: colors.textSecondary,
   },
   timeValue: {
-    fontSize: typography.sizes.md,
+    fontSize: 16,
     color: colors.text,
-    fontWeight: typography.weights.medium,
+    fontWeight: '500' as const,
   },
   resultsBox: {
     backgroundColor: colors.primary + "15",
@@ -1158,13 +1158,13 @@ const styles = StyleSheet.create({
     borderColor: colors.primary + "30",
   },
   resultsTitle: {
-    fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.semibold,
+    fontSize: 14,
+    fontWeight: '600' as const,
     color: colors.primary,
     marginBottom: spacing.sm,
   },
   resultText: {
-    fontSize: typography.sizes.sm,
+    fontSize: 14,
     color: colors.text,
     marginBottom: spacing.xs,
   },
@@ -1176,11 +1176,11 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   infoLabel: {
-    fontSize: typography.sizes.sm,
+    fontSize: 14,
     color: colors.textSecondary,
   },
   infoValue: {
-    fontSize: typography.sizes.sm,
+    fontSize: 14,
     color: colors.text,
   },
   observationsBox: {
@@ -1190,39 +1190,39 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   observationsLabel: {
-    fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.semibold,
+    fontSize: 14,
+    fontWeight: '600' as const,
     color: colors.textSecondary,
     marginBottom: spacing.xs,
   },
   observationsText: {
-    fontSize: typography.sizes.sm,
+    fontSize: 14,
     color: colors.text,
   },
   commentsSection: {
     marginTop: spacing.md,
   },
   commentsLabel: {
-    fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.semibold,
+    fontSize: 14,
+    fontWeight: '600' as const,
     color: colors.primary,
     marginBottom: spacing.sm,
   },
   commentsText: {
-    fontSize: typography.sizes.sm,
+    fontSize: 14,
     color: colors.text,
-    fontStyle: "italic",
+    fontStyle: "italic" as const,
   },
   commentsInput: {
     backgroundColor: colors.background,
     borderRadius: borderRadius.md,
     padding: spacing.md,
-    fontSize: typography.sizes.sm,
+    fontSize: 14,
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.border,
     minHeight: 80,
-    textAlignVertical: "top",
+    textAlignVertical: "top" as const,
   },
   commentButtons: {
     flexDirection: "row",
@@ -1237,9 +1237,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   saveButtonText: {
-    color: colors.white,
-    fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.semibold,
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600' as const,
   },
   cancelButton: {
     flex: 1,
@@ -1252,7 +1252,7 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: colors.text,
-    fontSize: typography.sizes.sm,
-    fontWeight: typography.weights.semibold,
+    fontSize: 14,
+    fontWeight: '600' as const,
   },
 });
