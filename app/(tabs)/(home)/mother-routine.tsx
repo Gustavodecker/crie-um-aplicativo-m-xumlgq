@@ -350,13 +350,19 @@ export default function MotherRoutineScreen() {
 
       // Get the date from params or use today
       const targetDate = date || new Date().toISOString().split("T")[0];
+      console.log("[Mother Routine] Target date:", targetDate);
       
-      // Try to get the routine for the target date
+      // 🔥 FIX: Fetch ALL routines to get complete data including wakings
       try {
-        const routineData = await apiGet<Routine[]>(`/api/routines/baby/${babyData.id}`);
-        const todayRoutine = routineData.find((r: Routine) => r.date === targetDate);
+        const routinesData = await apiGet<Routine[]>(`/api/routines/baby/${babyData.id}`);
+        console.log("[Mother Routine] Fetched routines:", routinesData.length);
+        
+        const todayRoutine = routinesData.find((r: Routine) => r.date === targetDate);
         
         if (todayRoutine) {
+          console.log("[Mother Routine] Found routine for date:", targetDate);
+          console.log("[Mother Routine] Night sleep wakings:", todayRoutine.nightSleep?.wakings?.length || 0);
+          
           setRoutine(todayRoutine);
           // Initialize local state from routine data
           setLocalMotherObservations(todayRoutine.motherObservations || "");
@@ -369,6 +375,7 @@ export default function MotherRoutineScreen() {
           });
           setLocalNapObservations(napObs);
         } else {
+          console.log("[Mother Routine] No routine found for date, creating new one");
           // Create routine for the target date
           const newRoutine = await apiPost<Routine>("/api/routines", {
             babyId: babyData.id,
@@ -414,7 +421,7 @@ export default function MotherRoutineScreen() {
       });
       setLocalNapObservations(napObs);
     }
-  }, [routine]);
+  }, [routine?.id]);
 
   const handleUpdateWakeUpTime = async (time: string) => {
     if (!routine) return;
@@ -636,20 +643,10 @@ export default function MotherRoutineScreen() {
       
       console.log("[Mother Routine] Waking added successfully:", newWaking);
       
-      // Update routine with new waking
-      setRoutine((prevRoutine) => {
-        if (!prevRoutine?.nightSleep) return prevRoutine;
-        
-        return {
-          ...prevRoutine,
-          nightSleep: {
-            ...prevRoutine.nightSleep,
-            wakings: [...(prevRoutine.nightSleep.wakings || []), newWaking],
-          },
-        };
-      });
+      // 🔥 FIX: Reload the routine to get fresh data with wakings
+      await loadData();
       
-      console.log("[Mother Routine] Waking added to local state successfully");
+      console.log("[Mother Routine] Routine reloaded after adding waking");
     } catch (err: any) {
       console.error("[Mother Routine] Error adding waking:", err);
       alert("Erro ao adicionar despertar. Tente novamente.");
@@ -663,13 +660,9 @@ export default function MotherRoutineScreen() {
     
     try {
       await apiDelete(`/api/night-wakings/${wakingId}`);
-      setRoutine({
-        ...routine,
-        nightSleep: {
-          ...routine.nightSleep,
-          wakings: routine.nightSleep.wakings?.filter((w) => w.id !== wakingId),
-        },
-      });
+      
+      // 🔥 FIX: Reload the routine to get fresh data
+      await loadData();
     } catch (err: any) {
       console.error("[Mother Routine] Error deleting waking:", err);
     }
@@ -824,6 +817,9 @@ export default function MotherRoutineScreen() {
       </SafeAreaView>
     );
   }
+
+  const wakingsCount = routine.nightSleep?.wakings?.length || 0;
+  console.log("[Mother Routine] Rendering with wakings count:", wakingsCount);
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
