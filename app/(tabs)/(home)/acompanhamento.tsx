@@ -6,7 +6,7 @@ import { apiGet } from "@/utils/api";
 import { colors } from "@/styles/commonStyles";
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Platform } from "react-native";
+import { Platform, Dimensions } from "react-native";
 import {
   View,
   Text,
@@ -74,6 +74,11 @@ interface CalculatedNap {
   displayText: string;
   windowText: string;
   durationMinutes: number;
+  sleepMethod: string | null;
+  environment: string | null;
+  wakeUpMood: string | null;
+  observations: string | null;
+  consultantComments: string | null;
 }
 
 interface CalculatedWaking {
@@ -89,11 +94,20 @@ interface DailyReport {
   firstNapWindow: string | null;
   naps: CalculatedNap[];
   daytimeSleepTotal: string | null;
+  daytimeSleepMinutes: number;
   nightSleepStart: string | null;
   nightSleepEnd: string | null;
   nightSleepBrute: string | null;
   nightSleepLiquidTotal: string | null;
+  nightSleepMinutes: number;
+  total24h: string | null;
+  total24hMinutes: number;
   wakings: CalculatedWaking[];
+  nightSleepMethod: string | null;
+  nightEnvironment: string | null;
+  nightWakeUpMood: string | null;
+  motherObservations: string | null;
+  consultantComments: string | null;
 }
 
 const styles = StyleSheet.create({
@@ -104,49 +118,158 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
   },
+  cardsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
   card: {
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  cardLandscape: {
+    width: '48%',
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 16,
     paddingBottom: 12,
-    borderBottomWidth: 1,
+    borderBottomWidth: 2,
     borderBottomColor: colors.border,
   },
   dayTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "bold",
-    color: colors.text,
+    color: colors.primary,
   },
   dateText: {
     fontSize: 14,
     color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  summaryBox: {
+    backgroundColor: colors.primary + '15',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  summaryLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  summaryValue: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: colors.primary,
   },
   section: {
-    marginTop: 12,
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '50',
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: 6,
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.primary,
+    marginBottom: 8,
     textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  infoLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    width: 100,
   },
   infoText: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.text,
+    flex: 1,
+  },
+  napCard: {
+    backgroundColor: colors.background,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.accent || colors.primary,
+  },
+  napHeader: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 6,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  badgeGreen: {
+    backgroundColor: '#4CAF50',
+  },
+  badgeYellow: {
+    backgroundColor: '#FFC107',
+  },
+  badgeRed: {
+    backgroundColor: '#F44336',
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 6,
+  },
+  observationBox: {
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.textSecondary,
+  },
+  observationLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
     marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  observationText: {
+    fontSize: 12,
+    color: colors.text,
+    lineHeight: 18,
   },
   emptyText: {
     fontSize: 14,
@@ -184,7 +307,13 @@ function calculateTimeDifference(startTime: string, endTime: string): number {
 function formatTimeDuration(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return `${hours}h${minutes.toString().padStart(2, "0")}min`;
+  if (hours > 0 && minutes > 0) {
+    return `${hours}h${minutes.toString().padStart(2, "0")}min`;
+  } else if (hours > 0) {
+    return `${hours}h`;
+  } else {
+    return `${minutes}min`;
+  }
 }
 
 function formatDateToBR(dateStr: string): string {
@@ -193,6 +322,23 @@ function formatDateToBR(dateStr: string): string {
   const month = (date.getMonth() + 1).toString().padStart(2, "0");
   const year = date.getFullYear();
   return `${day}/${month}/${year}`;
+}
+
+function getEnvironmentColor(environment: string | null): string {
+  if (!environment) return '#9E9E9E';
+  const env = environment.toLowerCase();
+  if (env.includes('adequado') && !env.includes('parcial')) return '#4CAF50';
+  if (env.includes('parcial')) return '#FFC107';
+  return '#F44336';
+}
+
+function getMoodColor(mood: string | null): string {
+  if (!mood) return '#9E9E9E';
+  const m = mood.toLowerCase();
+  if (m.includes('bom') || m.includes('sorrindo')) return '#4CAF50';
+  if (m.includes('choroso')) return '#FFC107';
+  if (m.includes('irritado')) return '#F44336';
+  return '#9E9E9E';
 }
 
 function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
@@ -211,14 +357,22 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
     firstNapWindow: null,
     naps: [],
     daytimeSleepTotal: null,
+    daytimeSleepMinutes: 0,
     nightSleepStart: null,
     nightSleepEnd: null,
     nightSleepBrute: null,
     nightSleepLiquidTotal: null,
+    nightSleepMinutes: 0,
+    total24h: null,
+    total24hMinutes: 0,
     wakings: [],
+    nightSleepMethod: null,
+    nightEnvironment: null,
+    nightWakeUpMood: null,
+    motherObservations: routine.motherObservations,
+    consultantComments: routine.consultantComments,
   };
 
-  // Calculate naps
   const sortedNaps = (routine.naps || [])
     .filter((n) => n.fellAsleepTime && n.wakeUpTime)
     .sort((a, b) => a.napNumber - b.napNumber);
@@ -240,9 +394,14 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
       napNumber: nap.napNumber,
       startTime: nap.fellAsleepTime,
       endTime: nap.wakeUpTime,
-      displayText: `Das ${nap.fellAsleepTime} às ${nap.wakeUpTime}`,
+      displayText: `${nap.fellAsleepTime} - ${nap.wakeUpTime}`,
       windowText: `Janela: ${formatTimeDuration(windowMinutes)}`,
       durationMinutes: napDuration,
+      sleepMethod: nap.sleepMethod,
+      environment: nap.environment,
+      wakeUpMood: nap.wakeUpMood,
+      observations: nap.observations,
+      consultantComments: nap.consultantComments,
     };
 
     report.naps.push(calculatedNap);
@@ -256,15 +415,18 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
 
   if (totalDaytimeSleep > 0) {
     report.daytimeSleepTotal = formatTimeDuration(totalDaytimeSleep);
+    report.daytimeSleepMinutes = totalDaytimeSleep;
   }
 
-  // Calculate night sleep
   const nightSleep = routine.nightSleep;
   console.log(`[Acompanhamento] Night sleep data for day ${dayIndex}:`, nightSleep);
 
   if (nightSleep && nightSleep.fellAsleepTime && nightSleep.finalWakeTime) {
     report.nightSleepStart = nightSleep.fellAsleepTime;
     report.nightSleepEnd = nightSleep.finalWakeTime;
+    report.nightSleepMethod = nightSleep.sleepMethod;
+    report.nightEnvironment = nightSleep.environment;
+    report.nightWakeUpMood = nightSleep.wakeUpMood;
 
     const bruteDuration = calculateTimeDifference(
       nightSleep.fellAsleepTime,
@@ -282,7 +444,7 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
 
         const calculatedWaking: CalculatedWaking = {
           index: index + 1,
-          displayText: `${index + 1}º - ${waking.startTime} às ${waking.endTime}`,
+          displayText: `${waking.startTime} - ${waking.endTime}`,
           durationMinutes: wakingDuration,
         };
 
@@ -292,6 +454,7 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
 
     const liquidDuration = bruteDuration - totalWakingMinutes;
     report.nightSleepLiquidTotal = formatTimeDuration(liquidDuration);
+    report.nightSleepMinutes = liquidDuration;
 
     console.log(`[Acompanhamento] Night sleep calculated for day ${dayIndex}:`, {
       start: report.nightSleepStart,
@@ -307,6 +470,12 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
     });
   }
 
+  const total24hMinutes = report.daytimeSleepMinutes + report.nightSleepMinutes;
+  if (total24hMinutes > 0) {
+    report.total24h = formatTimeDuration(total24hMinutes);
+    report.total24hMinutes = total24hMinutes;
+  }
+
   return report;
 }
 
@@ -316,6 +485,7 @@ export default function AcompanhamentoScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reports, setReports] = useState<DailyReport[]>([]);
+  const [isLandscape, setIsLandscape] = useState(false);
 
   const normalizeNightSleep = useCallback((raw: any): NightSleep | null => {
     if (!raw) {
@@ -452,12 +622,23 @@ export default function AcompanhamentoScreen() {
   }, [babyId, normalizeNightSleep]);
 
   useEffect(() => {
-    // Only unlock orientation on native platforms
     if (Platform.OS !== 'web') {
       ScreenOrientation.unlockAsync().catch((err) => {
         console.log("[Acompanhamento] Screen orientation unlock not supported:", err.message);
       });
     }
+
+    const updateOrientation = () => {
+      const { width, height } = Dimensions.get('window');
+      setIsLandscape(width > height);
+    };
+
+    updateOrientation();
+    const subscription = Dimensions.addEventListener('change', updateOrientation);
+
+    return () => {
+      subscription?.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -539,87 +720,198 @@ export default function AcompanhamentoScreen() {
         {reports.length === 0 ? (
           <Text style={styles.emptyText}>Nenhum dado de rotina disponível</Text>
         ) : (
-          reports.map((report) => {
-            const dayNumberText = `DIA ${report.dayNumber}`;
-            const wakeUpText = report.wakeUpTime || "Não registrado";
-            const firstNapWindowText = report.firstNapWindow || "N/A";
+          <View style={isLandscape ? styles.cardsRow : undefined}>
+            {reports.map((report) => {
+              const dayNumberText = `DIA ${report.dayNumber}`;
+              const wakeUpText = report.wakeUpTime || "Não registrado";
+              const firstNapWindowText = report.firstNapWindow || "N/A";
 
-            return (
-              <View key={report.dayNumber} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.dayTitle}>{dayNumberText}</Text>
-                  <Text style={styles.dateText}>{report.dateDisplay}</Text>
-                </View>
-
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>ACORDOU:</Text>
-                  <Text style={styles.infoText}>{wakeUpText}</Text>
-                </View>
-
-                {report.firstNapWindow && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>JANELA DA 1ª SONECA</Text>
-                    <Text style={styles.infoText}>{firstNapWindowText}</Text>
+              return (
+                <View 
+                  key={report.dayNumber} 
+                  style={[styles.card, isLandscape && styles.cardLandscape]}
+                >
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.dayTitle}>{dayNumberText}</Text>
+                    <Text style={styles.dateText}>{report.dateDisplay}</Text>
                   </View>
-                )}
 
-                {report.naps.length > 0 && (
+                  {report.total24h && (
+                    <View style={styles.summaryBox}>
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Sono Diurno:</Text>
+                        <Text style={styles.summaryValue}>{report.daytimeSleepTotal || '0h'}</Text>
+                      </View>
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Sono Noturno:</Text>
+                        <Text style={styles.summaryValue}>{report.nightSleepLiquidTotal || '0h'}</Text>
+                      </View>
+                      <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: colors.primary + '30', paddingTop: 6, marginTop: 6 }]}>
+                        <Text style={[styles.summaryLabel, { fontWeight: 'bold' }]}>Total 24h:</Text>
+                        <Text style={[styles.summaryValue, { fontSize: 15, fontWeight: 'bold' }]}>{report.total24h}</Text>
+                      </View>
+                    </View>
+                  )}
+
                   <View style={styles.section}>
-                    {report.naps.map((nap) => {
-                      const napTitle = `SONECA ${nap.napNumber}`;
-                      const napDurationText = formatTimeDuration(nap.durationMinutes);
-
-                      return (
-                        <React.Fragment key={nap.napNumber}>
-                          <Text style={styles.sectionTitle}>{napTitle}</Text>
-                          <Text style={styles.infoText}>{nap.displayText}</Text>
-                          <Text style={styles.infoText}>({napDurationText})</Text>
-                          <Text style={styles.infoText}>{nap.windowText}</Text>
-                        </React.Fragment>
-                      );
-                    })}
-                  </View>
-                )}
-
-                {report.daytimeSleepTotal && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>SONO DIURNO</Text>
-                    <Text style={styles.infoText}>Total: {report.daytimeSleepTotal}</Text>
-                  </View>
-                )}
-
-                {report.nightSleepStart && report.nightSleepEnd && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>SONO NOTURNO</Text>
-                    <Text style={styles.infoText}>Início: {report.nightSleepStart}</Text>
-                    <Text style={styles.infoText}>Fim: {report.nightSleepEnd}</Text>
-                    {report.nightSleepBrute && (
-                      <Text style={styles.infoText}>Total bruto: {report.nightSleepBrute}</Text>
-                    )}
-                    {report.nightSleepLiquidTotal && (
-                      <Text style={styles.infoText}>Total líquido: {report.nightSleepLiquidTotal}</Text>
+                    <Text style={styles.sectionTitle}>ACORDOU</Text>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Horário:</Text>
+                      <Text style={styles.infoText}>{wakeUpText}</Text>
+                    </View>
+                    {report.firstNapWindow && (
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>1ª Janela:</Text>
+                        <Text style={styles.infoText}>{firstNapWindowText}</Text>
+                      </View>
                     )}
                   </View>
-                )}
 
-                {report.wakings.length > 0 && (
-                  <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>DESPERTARES</Text>
-                    {report.wakings.map((waking) => {
-                      const wakingDurationText = `(${formatTimeDuration(waking.durationMinutes)})`;
+                  {report.naps.length > 0 && (
+                    <View style={styles.section}>
+                      <Text style={styles.sectionTitle}>SONECAS ({report.naps.length})</Text>
+                      {report.naps.map((nap) => {
+                        const napTitle = `Soneca ${nap.napNumber}`;
+                        const napDurationText = formatTimeDuration(nap.durationMinutes);
 
-                      return (
-                        <React.Fragment key={waking.index}>
-                          <Text style={styles.infoText}>{waking.displayText}</Text>
-                          <Text style={styles.infoText}>{wakingDurationText}</Text>
-                        </React.Fragment>
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
-            );
-          })
+                        return (
+                          <View key={nap.napNumber} style={styles.napCard}>
+                            <Text style={styles.napHeader}>{napTitle}</Text>
+                            <View style={styles.infoRow}>
+                              <Text style={styles.infoLabel}>Horário:</Text>
+                              <Text style={styles.infoText}>{nap.displayText}</Text>
+                            </View>
+                            <View style={styles.infoRow}>
+                              <Text style={styles.infoLabel}>Duração:</Text>
+                              <Text style={styles.infoText}>{napDurationText}</Text>
+                            </View>
+                            <View style={styles.infoRow}>
+                              <Text style={styles.infoLabel}>{nap.windowText}</Text>
+                            </View>
+
+                            {(nap.sleepMethod || nap.environment || nap.wakeUpMood) && (
+                              <View style={styles.badgesRow}>
+                                {nap.sleepMethod && (
+                                  <View style={[styles.badge, { backgroundColor: colors.primary }]}>
+                                    <Text style={styles.badgeText}>{nap.sleepMethod}</Text>
+                                  </View>
+                                )}
+                                {nap.environment && (
+                                  <View style={[styles.badge, { backgroundColor: getEnvironmentColor(nap.environment) }]}>
+                                    <Text style={styles.badgeText}>{nap.environment}</Text>
+                                  </View>
+                                )}
+                                {nap.wakeUpMood && (
+                                  <View style={[styles.badge, { backgroundColor: getMoodColor(nap.wakeUpMood) }]}>
+                                    <Text style={styles.badgeText}>{nap.wakeUpMood}</Text>
+                                  </View>
+                                )}
+                              </View>
+                            )}
+
+                            {nap.observations && (
+                              <View style={styles.observationBox}>
+                                <Text style={styles.observationLabel}>Observações da Mãe:</Text>
+                                <Text style={styles.observationText}>{nap.observations}</Text>
+                              </View>
+                            )}
+
+                            {nap.consultantComments && (
+                              <View style={[styles.observationBox, { borderLeftColor: colors.primary }]}>
+                                <Text style={[styles.observationLabel, { color: colors.primary }]}>Comentários da Consultora:</Text>
+                                <Text style={styles.observationText}>{nap.consultantComments}</Text>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  {report.nightSleepStart && report.nightSleepEnd && (
+                    <View style={styles.section}>
+                      <Text style={styles.sectionTitle}>SONO NOTURNO</Text>
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Início:</Text>
+                        <Text style={styles.infoText}>{report.nightSleepStart}</Text>
+                      </View>
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Fim:</Text>
+                        <Text style={styles.infoText}>{report.nightSleepEnd}</Text>
+                      </View>
+                      {report.nightSleepBrute && (
+                        <View style={styles.infoRow}>
+                          <Text style={styles.infoLabel}>Total bruto:</Text>
+                          <Text style={styles.infoText}>{report.nightSleepBrute}</Text>
+                        </View>
+                      )}
+                      {report.nightSleepLiquidTotal && (
+                        <View style={styles.infoRow}>
+                          <Text style={styles.infoLabel}>Total líquido:</Text>
+                          <Text style={[styles.infoText, { fontWeight: 'bold', color: colors.primary }]}>{report.nightSleepLiquidTotal}</Text>
+                        </View>
+                      )}
+
+                      {(report.nightSleepMethod || report.nightEnvironment || report.nightWakeUpMood) && (
+                        <View style={styles.badgesRow}>
+                          {report.nightSleepMethod && (
+                            <View style={[styles.badge, { backgroundColor: colors.primary }]}>
+                              <Text style={styles.badgeText}>{report.nightSleepMethod}</Text>
+                            </View>
+                          )}
+                          {report.nightEnvironment && (
+                            <View style={[styles.badge, { backgroundColor: getEnvironmentColor(report.nightEnvironment) }]}>
+                              <Text style={styles.badgeText}>{report.nightEnvironment}</Text>
+                            </View>
+                          )}
+                          {report.nightWakeUpMood && (
+                            <View style={[styles.badge, { backgroundColor: getMoodColor(report.nightWakeUpMood) }]}>
+                              <Text style={styles.badgeText}>{report.nightWakeUpMood}</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {report.wakings.length > 0 && (
+                    <View style={styles.section}>
+                      <Text style={styles.sectionTitle}>DESPERTARES ({report.wakings.length})</Text>
+                      {report.wakings.map((waking) => {
+                        const wakingLabel = `${waking.index}º Despertar:`;
+                        const wakingDurationText = formatTimeDuration(waking.durationMinutes);
+
+                        return (
+                          <View key={waking.index} style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>{wakingLabel}</Text>
+                            <Text style={styles.infoText}>{waking.displayText} ({wakingDurationText})</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  {report.motherObservations && (
+                    <View style={styles.section}>
+                      <View style={styles.observationBox}>
+                        <Text style={styles.observationLabel}>Observações da Mãe:</Text>
+                        <Text style={styles.observationText}>{report.motherObservations}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {report.consultantComments && (
+                    <View style={styles.section}>
+                      <View style={[styles.observationBox, { borderLeftColor: colors.primary }]}>
+                        <Text style={[styles.observationLabel, { color: colors.primary }]}>Comentários da Consultora:</Text>
+                        <Text style={styles.observationText}>{report.consultantComments}</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
