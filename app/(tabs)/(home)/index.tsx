@@ -407,9 +407,8 @@ export default function ConsultantDashboardScreen() {
   };
 
   const handleRegisterBaby = () => {
-    console.log("User tapped Register Baby button");
-    // TODO: Navigate to baby registration screen
-    // router.push('/register-baby');
+    console.log("User tapped Register Baby button - navigating to registration screen");
+    router.push("/register-baby");
   };
 
   if (loading) {
