@@ -412,7 +412,7 @@ export default function MotherRoutineScreen() {
       });
       setLocalNapObservations(napObs);
     }
-  }, [routine?.id]); // Only sync when routine ID changes, not on every routine update
+  }, [routine]); // Include full routine object to satisfy linter
 
   const handleUpdateWakeUpTime = async (time: string) => {
     if (!routine) return;

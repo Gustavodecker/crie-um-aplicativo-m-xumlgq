@@ -95,7 +95,7 @@ export default function MotherDashboardScreen() {
       duration: 600,
       useNativeDriver: true,
     }).start();
-  }, []);
+  }, [fadeAnim]);
 
   const loadDashboard = useCallback(async () => {
     console.log("[Mother Dashboard] Loading dashboard data");

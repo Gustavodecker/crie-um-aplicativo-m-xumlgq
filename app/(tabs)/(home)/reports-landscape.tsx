@@ -181,7 +181,7 @@ export default function ReportsLandscapeScreen() {
     } finally {
       setLoading(false);
     }
-  }, [babyId, babyName, startDate, endDate]);
+  }, [babyId, startDate, endDate]); // Removed babyName as it's not used in the function
 
   useEffect(() => { 
     console.log("[Navigation] Reports Landscape Screen loaded for baby:", babyId, babyName);

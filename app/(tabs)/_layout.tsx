@@ -53,7 +53,7 @@ export default function TabLayout() {
     };
 
     checkRole();
-  }, [user?.id]);
+  }, [user]);
 
   // Navigate mothers to their dashboard exactly once using router.replace
   useEffect(() => {
@@ -69,7 +69,7 @@ export default function TabLayout() {
         hasRedirectedRef.current = true;
       }
     }
-  }, [userRole, segments]);
+  }, [userRole, segments, router]);
 
   if (loading || checkingRole) {
     return (
