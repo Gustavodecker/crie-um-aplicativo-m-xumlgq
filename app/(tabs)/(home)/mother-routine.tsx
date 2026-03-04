@@ -402,7 +402,7 @@ export default function MotherRoutineScreen() {
 
   // 🔥 Sync local state when routine changes (but only when routine ID changes, not on every update)
   useEffect(() => {
-    if (routine?.id) {
+    if (routine) {
       setLocalMotherObservations(routine.motherObservations || "");
       setLocalNightObservations(routine.nightSleep?.observations || "");
       
@@ -412,7 +412,7 @@ export default function MotherRoutineScreen() {
       });
       setLocalNapObservations(napObs);
     }
-  }, [routine?.id]); // Only re-run when routine ID changes
+  }, [routine?.id]); // Only sync when routine ID changes, not on every routine update
 
   const handleUpdateWakeUpTime = async (time: string) => {
     if (!routine) return;
