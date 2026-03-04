@@ -461,7 +461,4 @@ export default function MotherDaySelectionScreen() {
       </ScrollView>
     </SafeAreaView>
   );
-}Good, the iOS version just re-exports the base file. Now let me create the iOS version for the day selection screen:
-
-<write file="app/(tabs)/(home)/mother-day-selection.ios.tsx">
-export { default } from './mother-day-selection';
+}
