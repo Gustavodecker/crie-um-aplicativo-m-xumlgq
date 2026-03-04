@@ -1,7 +1,7 @@
 
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import React, { useState, useEffect, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
 import {
   View,
   Text,
@@ -13,12 +13,12 @@ import {
   Platform,
   RefreshControl,
 } from "react-native";
+import { ConsultantProfileCard } from "@/components/ConsultantProfileCard";
 import { IconSymbol } from "@/components/IconSymbol";
 import { ConfirmModal } from "@/components/ConfirmModal";
-import { ConsultantProfileCard } from "@/components/ConsultantProfileCard";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Stack, useRouter } from "expo-router";
-import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
+import React, { useState, useEffect, useCallback } from "react";
 
 interface Baby {
   id: string;
@@ -89,291 +89,616 @@ interface ConsultantProfile {
   description: string | null;
 }
 
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  scrollContent: {
+    padding: spacing.lg,
+    paddingBottom: 100,
+  },
+  header: {
+    marginBottom: spacing.xl,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+  },
+  profileSection: {
+    marginBottom: spacing.xl,
+  },
+  registerBabyButton: {
+    backgroundColor: colors.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.xl,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  registerBabyButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: spacing.sm,
+  },
+  toggleContainer: {
+    flexDirection: "row",
+    marginBottom: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: 4,
+  },
+  toggleButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
+  },
+  toggleButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  toggleButtonTextActive: {
+    color: colors.white,
+  },
+  babyCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  babyHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: spacing.md,
+  },
+  babyInfo: {
+    flex: 1,
+  },
+  babyName: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  babyDetails: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: 2,
+  },
+  babyActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  iconButton: {
+    padding: spacing.sm,
+  },
+  contractStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+  },
+  contractStatusActive: {
+    backgroundColor: "#E8F5E9",
+  },
+  contractStatusPaused: {
+    backgroundColor: "#FFF3E0",
+  },
+  contractStatusCompleted: {
+    backgroundColor: "#EEEEEE",
+  },
+  contractStatusNone: {
+    backgroundColor: "#FFEBEE",
+  },
+  contractStatusText: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: spacing.xs,
+  },
+  contractStatusTextActive: {
+    color: "#2E7D32",
+  },
+  contractStatusTextPaused: {
+    color: "#F57C00",
+  },
+  contractStatusTextCompleted: {
+    color: "#616161",
+  },
+  contractStatusTextNone: {
+    color: "#C62828",
+  },
+  babyCardButtons: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  babyCardButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
+  },
+  babyCardButtonSecondary: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  babyCardButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.white,
+  },
+  babyCardButtonTextSecondary: {
+    color: colors.text,
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: spacing.xxl * 2,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: "center",
+    marginTop: spacing.lg,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  routinesList: {
+    marginTop: spacing.lg,
+  },
+  routineCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  routineHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  routineDate: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  routineStats: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  routineStat: {
+    flex: 1,
+  },
+  routineStatLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  routineStatValue: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.lg,
+    padding: spacing.sm,
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: colors.primary,
+    marginLeft: spacing.xs,
+  },
+  routineDetailSection: {
+    marginBottom: spacing.xl,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  infoValue: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  napCard: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  napHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
+  napTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  napDetails: {
+    gap: spacing.xs,
+  },
+  napDetailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  napDetailLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  napDetailValue: {
+    fontSize: 14,
+    color: colors.text,
+  },
+  commentSection: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+  },
+  commentLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  commentText: {
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  commentInput: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: 14,
+    color: colors.text,
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  saveButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
+    marginTop: spacing.md,
+  },
+  saveButtonText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  deleteButton: {
+    padding: spacing.sm,
+  },
+  timePickerButton: {
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  timePickerButtonText: {
+    fontSize: 14,
+    color: colors.text,
+  },
+});
+
 function formatDateToBR(dateStr: string): string {
-  const [year, month, day] = dateStr.split("-");
-  return `${day}/${month}/${year}`;
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("pt-BR");
 }
 
 function getDayOfWeek(dateString: string): string {
-  const [year, month, day] = dateString.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  const options: Intl.DateTimeFormatOptions = { weekday: "long" };
-  return date.toLocaleDateString("pt-BR", options).toUpperCase();
+  const days = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+  const date = new Date(dateString);
+  return days[date.getDay()];
 }
 
 function calcTimeDiff(start: string, end: string): number {
-  const [startH, startM] = start.split(":").map(Number);
-  const [endH, endM] = end.split(":").map(Number);
-  const startDate = new Date(0, 0, 0, startH, startM);
-  const endDate = new Date(0, 0, 0, endH, endM);
-  let diffMinutes = (endDate.getTime() - startDate.getTime()) / (1000 * 60);
-  if (diffMinutes < 0) {
-    diffMinutes += 24 * 60;
-  }
-  return diffMinutes;
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  const startMinutes = sh * 60 + sm;
+  const endMinutes = eh * 60 + em;
+  return endMinutes - startMinutes;
 }
 
 function minutesToHM(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
-  if (h > 0 && m > 0) {
-    return `${h}h${m}min`;
-  } else if (h > 0) {
-    return `${h}h`;
-  } else {
-    return `${m}min`;
-  }
+  return `${h}h${m.toString().padStart(2, "0")}`;
 }
 
-function diffTime(start: string | null | undefined, end: string | null | undefined): string {
-  if (!start || !end) return "";
-
-  const [startH, startM] = start.split(":").map(Number);
-  const [endH, endM] = end.split(":").map(Number);
-
-  const startDate = new Date(0, 0, 0, startH, startM);
-  const endDate = new Date(0, 0, 0, endH, endM);
-
-  let diffMinutes = (endDate.getTime() - startDate.getTime()) / (1000 * 60);
-
-  if (diffMinutes < 0) {
-    diffMinutes += 24 * 60;
-  }
-
-  const hours = Math.floor(diffMinutes / 60);
-  const minutes = diffMinutes % 60;
-
-  if (hours > 0 && minutes > 0) {
-    return `${hours}h${minutes}`;
-  } else if (hours > 0) {
-    return `${hours}h`;
-  } else if (minutes > 0) {
-    return `${minutes}min`;
-  }
-  return "0min";
+function diffTime(
+  start: string | null | undefined,
+  end: string | null | undefined
+): string {
+  if (!start || !end) return "-";
+  const diff = calcTimeDiff(start, end);
+  return minutesToHM(diff);
 }
 
 export default function ConsultantDashboardScreen() {
   const router = useRouter();
-  const [babies, setBabies] = useState<Baby[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [consultantProfile, setConsultantProfile] =
+    useState<ConsultantProfile | null>(null);
+  const [babies, setBabies] = useState<Baby[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [selectedBaby, setSelectedBaby] = useState<Baby | null>(null);
   const [routines, setRoutines] = useState<Routine[]>([]);
-  const [loadingRoutines, setLoadingRoutines] = useState(false);
   const [selectedRoutine, setSelectedRoutine] = useState<Routine | null>(null);
-  const [editingComments, setEditingComments] = useState<string | null>(null);
-  const [commentText, setCommentText] = useState("");
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>("");
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [timePickerField, setTimePickerField] = useState<string | null>(null);
+  const [timePickerField, setTimePickerField] = useState<string>("");
   const [timePickerValue, setTimePickerValue] = useState(new Date());
-  const [confirmDelete, setConfirmDelete] = useState<{
-    visible: boolean;
-    napId: string;
-    napNumber: number;
-  }>({ visible: false, napId: "", napNumber: 0 });
-  const [consultantProfile, setConsultantProfile] = useState<ConsultantProfile | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
+  const [deleteNapId, setDeleteNapId] = useState<string | null>(null);
+  const [deleteNapNumber, setDeleteNapNumber] = useState<number | null>(null);
 
   const loadConsultantProfile = useCallback(async () => {
     try {
-      const data = await apiGet<ConsultantProfile>("/api/consultant/profile");
-      setConsultantProfile(data);
+      console.log("🔵 [Dashboard] Loading consultant profile");
+      const profile = await apiGet<ConsultantProfile>("/api/consultant/profile");
+      setConsultantProfile(profile);
+      console.log("✅ [Dashboard] Profile loaded:", profile.name);
     } catch (error) {
-      console.error("Error loading consultant profile:", error);
+      console.error("🔴 [Dashboard] Error loading profile:", error);
     }
   }, []);
 
   const loadBabies = useCallback(async () => {
     try {
-      setLoading(true);
-      const data = await apiGet<Baby[]>("/api/consultant/babies");
+      console.log("🔵 [Dashboard] Loading babies list");
+      const data = await apiGet<Baby[]>("/api/babies");
       setBabies(data);
+      console.log(`✅ [Dashboard] Loaded ${data.length} babies`);
     } catch (error) {
-      console.error("Error loading babies:", error);
+      console.error("🔴 [Dashboard] Error loading babies:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadConsultantProfile();
-    await loadBabies();
-    if (selectedBaby) {
-      await loadRoutines(selectedBaby.id);
-    }
-    setRefreshing(false);
-  }, [loadBabies, loadConsultantProfile, selectedBaby]);
 
   useEffect(() => {
     loadConsultantProfile();
     loadBabies();
   }, [loadConsultantProfile, loadBabies]);
 
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadConsultantProfile();
+    loadBabies();
+  }, [loadConsultantProfile, loadBabies]);
+
+  const handleRegisterBaby = useCallback(() => {
+    console.log("🔵 [Cadastrar Bebê] Button pressed - navigating to /register-baby");
+    try {
+      router.push("/register-baby");
+      console.log("🔵 [Cadastrar Bebê] Navigation command executed");
+    } catch (error) {
+      console.error("🔴 [Cadastrar Bebê] Navigation error:", error);
+    }
+  }, [router]);
+
   const loadRoutines = async (babyId: string) => {
     try {
-      setLoadingRoutines(true);
-      const data = await apiGet<Routine[]>(`/api/routines/baby/${babyId}`);
+      console.log(`🔵 [Dashboard] Loading routines for baby ${babyId}`);
+      const data = await apiGet<Routine[]>(`/api/routines?babyId=${babyId}`);
       setRoutines(data);
+      console.log(`✅ [Dashboard] Loaded ${data.length} routines`);
     } catch (error) {
-      console.error("Error loading routines:", error);
-    } finally {
-      setLoadingRoutines(false);
+      console.error("🔴 [Dashboard] Error loading routines:", error);
     }
   };
 
   const handleSelectBaby = (baby: Baby) => {
+    console.log(`🔵 [Dashboard] Selected baby: ${baby.name}`);
     setSelectedBaby(baby);
-    setSelectedRoutine(null);
     loadRoutines(baby.id);
   };
 
   const handleSelectRoutine = (routine: Routine) => {
+    console.log(`🔵 [Dashboard] Selected routine: ${routine.date}`);
     setSelectedRoutine(routine);
   };
 
   const handleBackToBabies = () => {
+    console.log("🔵 [Dashboard] Back to babies list");
     setSelectedBaby(null);
     setRoutines([]);
     setSelectedRoutine(null);
   };
 
   const handleBackToRoutines = () => {
+    console.log("🔵 [Dashboard] Back to routines list");
     setSelectedRoutine(null);
   };
 
   const handleEditComments = (field: string, currentValue: string | null) => {
-    setEditingComments(field);
-    setCommentText(currentValue || "");
+    console.log(`🔵 [Dashboard] Editing field: ${field}`);
+    setEditingField(field);
+    setEditValue(currentValue || "");
   };
 
   const handleSaveComments = async () => {
-    if (!selectedRoutine || !editingComments) return;
+    if (!selectedRoutine || !editingField) return;
 
     try {
-      if (editingComments === "consultantComments") {
-        await apiPut(`/api/routines/${selectedRoutine.id}`, {
-          consultantComments: commentText,
-        });
-        setSelectedRoutine({
-          ...selectedRoutine,
-          consultantComments: commentText,
-        });
-      }
-      setEditingComments(null);
-      setCommentText("");
+      console.log(`🔵 [Dashboard] Saving ${editingField}`);
+      await apiPut(`/api/routines/${selectedRoutine.id}`, {
+        [editingField]: editValue,
+      });
+
+      setSelectedRoutine({
+        ...selectedRoutine,
+        [editingField]: editValue,
+      });
+
+      setEditingField(null);
+      setEditValue("");
+      console.log("✅ [Dashboard] Comments saved");
     } catch (error) {
-      console.error("Error saving comments:", error);
+      console.error("🔴 [Dashboard] Error saving comments:", error);
     }
   };
 
-  const handleUpdateNap = async (napId: string, field: string, value: string | null) => {
-    if (!selectedRoutine) return;
-
+  const handleUpdateNap = async (
+    napId: string,
+    field: string,
+    value: string | null
+  ) => {
     try {
+      console.log(`🔵 [Dashboard] Updating nap ${napId}, field: ${field}`);
       await apiPut(`/api/naps/${napId}`, { [field]: value });
-      const updatedNaps = selectedRoutine.naps?.map((nap) =>
-        nap.id === napId ? { ...nap, [field]: value } : nap
-      );
-      setSelectedRoutine({
-        ...selectedRoutine,
-        naps: updatedNaps,
-      });
+
+      if (selectedRoutine?.naps) {
+        const updatedNaps = selectedRoutine.naps.map((nap) =>
+          nap.id === napId ? { ...nap, [field]: value } : nap
+        );
+        setSelectedRoutine({ ...selectedRoutine, naps: updatedNaps });
+      }
+
+      console.log("✅ [Dashboard] Nap updated");
     } catch (error) {
-      console.error("Error updating nap:", error);
+      console.error("🔴 [Dashboard] Error updating nap:", error);
     }
   };
 
   const handleSaveNapComments = async (napId: string) => {
-    if (!selectedRoutine) return;
+    if (!editingField || !editingField.startsWith(`nap-${napId}`)) return;
 
-    try {
-      await apiPut(`/api/naps/${napId}`, {
-        consultantComments: commentText,
-      });
-      const updatedNaps = selectedRoutine.naps?.map((nap) =>
-        nap.id === napId ? { ...nap, consultantComments: commentText } : nap
-      );
-      setSelectedRoutine({
-        ...selectedRoutine,
-        naps: updatedNaps,
-      });
-      setEditingComments(null);
-      setCommentText("");
-    } catch (error) {
-      console.error("Error saving nap comments:", error);
-    }
+    const field = editingField.split("-")[2];
+    await handleUpdateNap(napId, field, editValue);
+    setEditingField(null);
+    setEditValue("");
   };
 
-  const handleDeleteNap = async (napId: string, napNumber: number) => {
-    setConfirmDelete({ visible: true, napId, napNumber });
+  const handleDeleteNap = (napId: string, napNumber: number) => {
+    console.log(`🔵 [Dashboard] Requesting delete for nap ${napNumber}`);
+    setDeleteNapId(napId);
+    setDeleteNapNumber(napNumber);
   };
 
   const confirmDeleteNap = async () => {
-    const { napId } = confirmDelete;
-    if (!selectedRoutine || !napId) return;
+    if (!deleteNapId || !selectedRoutine) return;
 
     try {
-      await apiDelete(`/api/naps/${napId}`);
-      const updatedNaps = selectedRoutine.naps?.filter((nap) => nap.id !== napId);
-      setSelectedRoutine({
-        ...selectedRoutine,
-        naps: updatedNaps,
-      });
-      setConfirmDelete({ visible: false, napId: "", napNumber: 0 });
+      console.log(`🔵 [Dashboard] Deleting nap ${deleteNapId}`);
+      await apiDelete(`/api/naps/${deleteNapId}`);
+
+      const updatedNaps = selectedRoutine.naps?.filter(
+        (nap) => nap.id !== deleteNapId
+      );
+      setSelectedRoutine({ ...selectedRoutine, naps: updatedNaps });
+
+      setDeleteNapId(null);
+      setDeleteNapNumber(null);
+      console.log("✅ [Dashboard] Nap deleted");
     } catch (error) {
-      console.error("Error deleting nap:", error);
+      console.error("🔴 [Dashboard] Error deleting nap:", error);
+      setDeleteNapId(null);
+      setDeleteNapNumber(null);
     }
   };
 
   const handleUpdateNightSleep = async (field: string, value: string | null) => {
-    if (!selectedRoutine || !selectedRoutine.nightSleep) return;
+    if (!selectedRoutine?.nightSleep) return;
 
     try {
+      console.log(`🔵 [Dashboard] Updating night sleep, field: ${field}`);
       await apiPut(`/api/night-sleep/${selectedRoutine.nightSleep.id}`, {
         [field]: value,
       });
+
       setSelectedRoutine({
         ...selectedRoutine,
-        nightSleep: {
-          ...selectedRoutine.nightSleep,
-          [field]: value,
-        },
+        nightSleep: { ...selectedRoutine.nightSleep, [field]: value },
       });
+
+      console.log("✅ [Dashboard] Night sleep updated");
     } catch (error) {
-      console.error("Error updating night sleep:", error);
+      console.error("🔴 [Dashboard] Error updating night sleep:", error);
     }
   };
 
   const handleSaveNightComments = async () => {
-    if (!selectedRoutine || !selectedRoutine.nightSleep) return;
+    if (!editingField || !editingField.startsWith("night-")) return;
 
-    try {
-      await apiPut(`/api/night-sleep/${selectedRoutine.nightSleep.id}`, {
-        consultantComments: commentText,
-      });
-      setSelectedRoutine({
-        ...selectedRoutine,
-        nightSleep: {
-          ...selectedRoutine.nightSleep,
-          consultantComments: commentText,
-        },
-      });
-      setEditingComments(null);
-      setCommentText("");
-    } catch (error) {
-      console.error("Error saving night comments:", error);
-    }
+    const field = editingField.split("-")[1];
+    await handleUpdateNightSleep(field, editValue);
+    setEditingField(null);
+    setEditValue("");
   };
 
   const openTimePicker = (field: string, currentValue: string | null) => {
-    const [hours, minutes] = currentValue ? currentValue.split(":").map(Number) : [7, 0];
-    const date = new Date();
-    date.setHours(hours);
-    date.setMinutes(minutes);
-    setTimePickerValue(date);
+    console.log(`🔵 [Dashboard] Opening time picker for ${field}`);
     setTimePickerField(field);
+
+    if (currentValue) {
+      const [hours, minutes] = currentValue.split(":").map(Number);
+      const date = new Date();
+      date.setHours(hours, minutes);
+      setTimePickerValue(date);
+    } else {
+      setTimePickerValue(new Date());
+    }
+
     setShowTimePicker(true);
   };
 
@@ -387,16 +712,18 @@ export default function ConsultantDashboardScreen() {
       return;
     }
 
-    if (selectedDate && timePickerField) {
+    if (selectedDate) {
       const hours = selectedDate.getHours().toString().padStart(2, "0");
       const minutes = selectedDate.getMinutes().toString().padStart(2, "0");
       const timeString = `${hours}:${minutes}`;
+
+      console.log(`🔵 [Dashboard] Time selected: ${timeString} for ${timePickerField}`);
 
       if (timePickerField.startsWith("nap-")) {
         const [, napId, field] = timePickerField.split("-");
         handleUpdateNap(napId, field, timeString);
       } else if (timePickerField.startsWith("night-")) {
-        const field = timePickerField.replace("night-", "");
+        const field = timePickerField.split("-")[1];
         handleUpdateNightSleep(field, timeString);
       }
 
@@ -406,20 +733,9 @@ export default function ConsultantDashboardScreen() {
     }
   };
 
-  const handleRegisterBaby = useCallback(() => {
-    console.log("🔵 [Cadastrar Bebê] Button pressed - navigating to /register-baby");
-    try {
-      router.push("/register-baby");
-      console.log("🔵 [Cadastrar Bebê] Navigation command executed");
-    } catch (error) {
-      console.error("🔴 [Cadastrar Bebê] Navigation error:", error);
-    }
-  }, [router]);
-
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <Stack.Screen options={{ title: "Bebês", headerShown: true }} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
@@ -427,349 +743,322 @@ export default function ConsultantDashboardScreen() {
     );
   }
 
-  if (selectedRoutine) {
-    const dayOfWeek = getDayOfWeek(selectedRoutine.date);
-    const dateDisplay = formatDateToBR(selectedRoutine.date);
+  const displayedBabies = babies.filter((baby) =>
+    showArchived ? baby.archived : !baby.archived
+  );
 
+  if (selectedRoutine) {
     return (
       <SafeAreaView style={styles.container}>
-        <Stack.Screen
-          options={{
-            title: `Rotina - ${selectedBaby?.name}`,
-            headerShown: true,
-          }}
-        />
-        <ScrollView
-          style={styles.scrollView}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-          <TouchableOpacity style={styles.backButton} onPress={handleBackToRoutines}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleBackToRoutines}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+          >
             <IconSymbol
-              ios_icon_name="arrow.left"
-              android_material_icon_name="arrow-back"
-              size={20}
+              name="arrow-back"
+              size={24}
               color={colors.primary}
             />
-            <Text style={styles.backButtonText}>Voltar para Rotinas</Text>
+            <Text style={styles.backButtonText}>Voltar</Text>
           </TouchableOpacity>
 
-          <View style={styles.card}>
-            <Text style={styles.dayOfWeek}>{dayOfWeek}</Text>
-            <Text style={styles.dateTitle}>{dateDisplay}</Text>
+          <View style={styles.header}>
+            <Text style={styles.title}>
+              {formatDateToBR(selectedRoutine.date)} - {getDayOfWeek(selectedRoutine.date)}
+            </Text>
+            <Text style={styles.subtitle}>{selectedBaby?.name}</Text>
+          </View>
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Horário que Acordou</Text>
-              <Text style={styles.timeText}>{selectedRoutine.wakeUpTime || "Não informado"}</Text>
+          <View style={styles.routineDetailSection}>
+            <Text style={styles.sectionTitle}>Informações Gerais</Text>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Acordou às</Text>
+              <Text style={styles.infoValue}>
+                {selectedRoutine.wakeUpTime || "-"}
+              </Text>
             </View>
+          </View>
 
-            {selectedRoutine.naps && selectedRoutine.naps.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Sonecas</Text>
-                {selectedRoutine.naps.map((nap, index) => {
-                  const previousNapWakeUpTime =
-                    index > 0 && selectedRoutine.naps ? selectedRoutine.naps[index - 1].wakeUpTime : null;
-                  const windowStart = index === 0 ? selectedRoutine.wakeUpTime : previousNapWakeUpTime;
+          {selectedRoutine.naps && selectedRoutine.naps.length > 0 && (
+            <View style={styles.routineDetailSection}>
+              <Text style={styles.sectionTitle}>Sonecas</Text>
+              {selectedRoutine.naps.map((nap) => (
+                <View key={nap.id} style={styles.napCard}>
+                  <View style={styles.napHeader}>
+                    <Text style={styles.napTitle}>Soneca {nap.napNumber}</Text>
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDeleteNap(nap.id, nap.napNumber)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <IconSymbol
+                        name="delete"
+                        size={20}
+                        color={colors.error}
+                      />
+                    </TouchableOpacity>
+                  </View>
 
-                  const showResults =
-                    windowStart &&
-                    nap.startTryTime &&
-                    nap.fellAsleepTime &&
-                    nap.wakeUpTime;
-
-                  const janelaRealizada = showResults
-                    ? diffTime(windowStart, nap.startTryTime)
-                    : "";
-                  const tempoAdormecer = showResults
-                    ? diffTime(nap.startTryTime, nap.fellAsleepTime)
-                    : "";
-                  const duracaoSono = showResults
-                    ? diffTime(nap.fellAsleepTime, nap.wakeUpTime)
-                    : "";
-
-                  return (
-                    <View key={nap.id} style={styles.napCard}>
-                      <View style={styles.napHeader}>
-                        <Text style={styles.napTitle}>Soneca {nap.napNumber}</Text>
-                        <TouchableOpacity
-                          onPress={() => handleDeleteNap(nap.id, nap.napNumber)}
-                          style={styles.deleteButton}
-                        >
-                          <IconSymbol
-                            ios_icon_name="trash"
-                            android_material_icon_name="delete"
-                            size={18}
-                            color={colors.error}
-                          />
-                        </TouchableOpacity>
-                      </View>
-
+                  <View style={styles.napDetails}>
+                    <View style={styles.napDetailRow}>
+                      <Text style={styles.napDetailLabel}>Começou a tentar</Text>
                       <TouchableOpacity
-                        style={styles.timeRow}
-                        onPress={() => openTimePicker(`nap-${nap.id}-startTryTime`, nap.startTryTime)}
+                        onPress={() =>
+                          openTimePicker(`nap-${nap.id}-startTryTime`, nap.startTryTime)
+                        }
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
-                        <Text style={styles.timeLabel}>Janela início:</Text>
-                        <Text style={styles.timeValue}>{nap.startTryTime || "Não informado"}</Text>
+                        <Text style={styles.napDetailValue}>
+                          {nap.startTryTime || "-"}
+                        </Text>
                       </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.timeRow}
-                        onPress={() => openTimePicker(`nap-${nap.id}-fellAsleepTime`, nap.fellAsleepTime)}
-                      >
-                        <Text style={styles.timeLabel}>Dormiu às:</Text>
-                        <Text style={styles.timeValue}>{nap.fellAsleepTime || "Não informado"}</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.timeRow}
-                        onPress={() => openTimePicker(`nap-${nap.id}-wakeUpTime`, nap.wakeUpTime)}
-                      >
-                        <Text style={styles.timeLabel}>Acordou às:</Text>
-                        <Text style={styles.timeValue}>{nap.wakeUpTime || "Não informado"}</Text>
-                      </TouchableOpacity>
-
-                      {showResults && (
-                        <View style={styles.resultsBox}>
-                          <Text style={styles.resultsTitle}>Resultados:</Text>
-                          <Text style={styles.resultText}>Janela realizada: {janelaRealizada}</Text>
-                          <Text style={styles.resultText}>Tempo para adormecer: {tempoAdormecer}</Text>
-                          <Text style={styles.resultText}>Duração do sono: {duracaoSono}</Text>
-                        </View>
-                      )}
-
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Dormiu como:</Text>
-                        <Text style={styles.infoValue}>{nap.sleepMethod || "Não informado"}</Text>
-                      </View>
-
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Ambiente:</Text>
-                        <Text style={styles.infoValue}>{nap.environment || "Não informado"}</Text>
-                      </View>
-
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Como acordou:</Text>
-                        <Text style={styles.infoValue}>{nap.wakeUpMood || "Não informado"}</Text>
-                      </View>
-
-                      {nap.observations && (
-                        <View style={styles.observationsBox}>
-                          <Text style={styles.observationsLabel}>Observações da Mãe:</Text>
-                          <Text style={styles.observationsText}>{nap.observations}</Text>
-                        </View>
-                      )}
-
-                      <View style={styles.commentsSection}>
-                        <Text style={styles.commentsLabel}>Comentários da Consultora:</Text>
-                        {editingComments === `nap-${nap.id}` ? (
-                          <View>
-                            <TextInput
-                              style={styles.commentsInput}
-                              value={commentText}
-                              onChangeText={setCommentText}
-                              placeholder="Adicione seus comentários..."
-                              multiline
-                              numberOfLines={4}
-                            />
-                            <View style={styles.commentButtons}>
-                              <TouchableOpacity
-                                style={styles.saveButton}
-                                onPress={() => handleSaveNapComments(nap.id)}
-                              >
-                                <Text style={styles.saveButtonText}>Salvar</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={styles.cancelButton}
-                                onPress={() => {
-                                  setEditingComments(null);
-                                  setCommentText("");
-                                }}
-                              >
-                                <Text style={styles.cancelButtonText}>Cancelar</Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        ) : (
-                          <TouchableOpacity
-                            onPress={() =>
-                              handleEditComments(`nap-${nap.id}`, nap.consultantComments)
-                            }
-                          >
-                            <Text style={styles.commentsText}>
-                              {nap.consultantComments || "Toque para adicionar comentários"}
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
                     </View>
-                  );
-                })}
-              </View>
-            )}
 
-            {selectedRoutine.nightSleep && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Sono Noturno</Text>
-                <View style={styles.napCard}>
-                  <TouchableOpacity
-                    style={styles.timeRow}
-                    onPress={() =>
-                      openTimePicker(
-                        "night-startTryTime",
-                        selectedRoutine.nightSleep?.startTryTime || null
-                      )
-                    }
-                  >
-                    <Text style={styles.timeLabel}>Início tentativa:</Text>
-                    <Text style={styles.timeValue}>
-                      {selectedRoutine.nightSleep.startTryTime || "Não informado"}
-                    </Text>
-                  </TouchableOpacity>
+                    <View style={styles.napDetailRow}>
+                      <Text style={styles.napDetailLabel}>Dormiu às</Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          openTimePicker(`nap-${nap.id}-fellAsleepTime`, nap.fellAsleepTime)
+                        }
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Text style={styles.napDetailValue}>
+                          {nap.fellAsleepTime || "-"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
 
-                  <TouchableOpacity
-                    style={styles.timeRow}
-                    onPress={() =>
-                      openTimePicker(
-                        "night-fellAsleepTime",
-                        selectedRoutine.nightSleep?.fellAsleepTime || null
-                      )
-                    }
-                  >
-                    <Text style={styles.timeLabel}>Dormiu às:</Text>
-                    <Text style={styles.timeValue}>
-                      {selectedRoutine.nightSleep.fellAsleepTime || "Não informado"}
-                    </Text>
-                  </TouchableOpacity>
+                    <View style={styles.napDetailRow}>
+                      <Text style={styles.napDetailLabel}>Acordou às</Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          openTimePicker(`nap-${nap.id}-wakeUpTime`, nap.wakeUpTime)
+                        }
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Text style={styles.napDetailValue}>
+                          {nap.wakeUpTime || "-"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
 
-                  <TouchableOpacity
-                    style={styles.timeRow}
-                    onPress={() =>
-                      openTimePicker(
-                        "night-finalWakeTime",
-                        selectedRoutine.nightSleep?.finalWakeTime || null
-                      )
-                    }
-                  >
-                    <Text style={styles.timeLabel}>Acordou às:</Text>
-                    <Text style={styles.timeValue}>
-                      {selectedRoutine.nightSleep.finalWakeTime || "Não informado"}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Dormiu como:</Text>
-                    <Text style={styles.infoValue}>
-                      {selectedRoutine.nightSleep.sleepMethod || "Não informado"}
-                    </Text>
-                  </View>
-
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Ambiente:</Text>
-                    <Text style={styles.infoValue}>
-                      {selectedRoutine.nightSleep.environment || "Não informado"}
-                    </Text>
-                  </View>
-
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Como acordou:</Text>
-                    <Text style={styles.infoValue}>
-                      {selectedRoutine.nightSleep.wakeUpMood || "Não informado"}
-                    </Text>
-                  </View>
-
-                  {selectedRoutine.nightSleep.observations && (
-                    <View style={styles.observationsBox}>
-                      <Text style={styles.observationsLabel}>Observações da Mãe:</Text>
-                      <Text style={styles.observationsText}>
-                        {selectedRoutine.nightSleep.observations}
+                    <View style={styles.napDetailRow}>
+                      <Text style={styles.napDetailLabel}>Tempo para dormir</Text>
+                      <Text style={styles.napDetailValue}>
+                        {diffTime(nap.startTryTime, nap.fellAsleepTime)}
                       </Text>
+                    </View>
+
+                    <View style={styles.napDetailRow}>
+                      <Text style={styles.napDetailLabel}>Tempo dormido</Text>
+                      <Text style={styles.napDetailValue}>
+                        {diffTime(nap.fellAsleepTime, nap.wakeUpTime)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {nap.observations && (
+                    <View style={styles.commentSection}>
+                      <Text style={styles.commentLabel}>Observações da Mãe</Text>
+                      <Text style={styles.commentText}>{nap.observations}</Text>
                     </View>
                   )}
 
-                  <View style={styles.commentsSection}>
-                    <Text style={styles.commentsLabel}>Comentários da Consultora:</Text>
-                    {editingComments === "nightSleep" ? (
-                      <View>
+                  <View style={styles.commentSection}>
+                    <Text style={styles.commentLabel}>Comentários da Consultora</Text>
+                    {editingField === `nap-${nap.id}-consultantComments` ? (
+                      <React.Fragment>
                         <TextInput
-                          style={styles.commentsInput}
-                          value={commentText}
-                          onChangeText={setCommentText}
+                          style={styles.commentInput}
+                          value={editValue}
+                          onChangeText={setEditValue}
                           placeholder="Adicione seus comentários..."
+                          placeholderTextColor={colors.textSecondary}
                           multiline
-                          numberOfLines={4}
                         />
-                        <View style={styles.commentButtons}>
-                          <TouchableOpacity
-                            style={styles.saveButton}
-                            onPress={handleSaveNightComments}
-                          >
-                            <Text style={styles.saveButtonText}>Salvar</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.cancelButton}
-                            onPress={() => {
-                              setEditingComments(null);
-                              setCommentText("");
-                            }}
-                          >
-                            <Text style={styles.cancelButtonText}>Cancelar</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
+                        <TouchableOpacity
+                          style={styles.saveButton}
+                          onPress={() => handleSaveNapComments(nap.id)}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <Text style={styles.saveButtonText}>Salvar</Text>
+                        </TouchableOpacity>
+                      </React.Fragment>
                     ) : (
                       <TouchableOpacity
                         onPress={() =>
                           handleEditComments(
-                            "nightSleep",
-                            selectedRoutine.nightSleep?.consultantComments || null
+                            `nap-${nap.id}-consultantComments`,
+                            nap.consultantComments
                           )
                         }
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
-                        <Text style={styles.commentsText}>
-                          {selectedRoutine.nightSleep.consultantComments ||
-                            "Toque para adicionar comentários"}
+                        <Text style={styles.commentText}>
+                          {nap.consultantComments || "Toque para adicionar comentários"}
                         </Text>
                       </TouchableOpacity>
                     )}
                   </View>
                 </View>
-              </View>
-            )}
+              ))}
+            </View>
+          )}
 
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Comentários Gerais da Consultora</Text>
-              {editingComments === "consultantComments" ? (
-                <View>
-                  <TextInput
-                    style={styles.commentsInput}
-                    value={commentText}
-                    onChangeText={setCommentText}
-                    placeholder="Adicione comentários gerais sobre o dia..."
-                    multiline
-                    numberOfLines={4}
-                  />
-                  <View style={styles.commentButtons}>
-                    <TouchableOpacity style={styles.saveButton} onPress={handleSaveComments}>
-                      <Text style={styles.saveButtonText}>Salvar</Text>
-                    </TouchableOpacity>
+          {selectedRoutine.nightSleep && (
+            <View style={styles.routineDetailSection}>
+              <Text style={styles.sectionTitle}>Sono Noturno</Text>
+              <View style={styles.napCard}>
+                <View style={styles.napDetails}>
+                  <View style={styles.napDetailRow}>
+                    <Text style={styles.napDetailLabel}>Começou a tentar</Text>
                     <TouchableOpacity
-                      style={styles.cancelButton}
-                      onPress={() => {
-                        setEditingComments(null);
-                        setCommentText("");
-                      }}
+                      onPress={() =>
+                        openTimePicker(
+                          "night-startTryTime",
+                          selectedRoutine.nightSleep?.startTryTime || null
+                        )
+                      }
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                      <Text style={styles.cancelButtonText}>Cancelar</Text>
+                      <Text style={styles.napDetailValue}>
+                        {selectedRoutine.nightSleep.startTryTime || "-"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.napDetailRow}>
+                    <Text style={styles.napDetailLabel}>Dormiu às</Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        openTimePicker(
+                          "night-fellAsleepTime",
+                          selectedRoutine.nightSleep?.fellAsleepTime || null
+                        )
+                      }
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Text style={styles.napDetailValue}>
+                        {selectedRoutine.nightSleep.fellAsleepTime || "-"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.napDetailRow}>
+                    <Text style={styles.napDetailLabel}>Acordou às</Text>
+                    <TouchableOpacity
+                      onPress={() =>
+                        openTimePicker(
+                          "night-finalWakeTime",
+                          selectedRoutine.nightSleep?.finalWakeTime || null
+                        )
+                      }
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Text style={styles.napDetailValue}>
+                        {selectedRoutine.nightSleep.finalWakeTime || "-"}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 </View>
+
+                {selectedRoutine.nightSleep.observations && (
+                  <View style={styles.commentSection}>
+                    <Text style={styles.commentLabel}>Observações da Mãe</Text>
+                    <Text style={styles.commentText}>
+                      {selectedRoutine.nightSleep.observations}
+                    </Text>
+                  </View>
+                )}
+
+                <View style={styles.commentSection}>
+                  <Text style={styles.commentLabel}>Comentários da Consultora</Text>
+                  {editingField === "night-consultantComments" ? (
+                    <React.Fragment>
+                      <TextInput
+                        style={styles.commentInput}
+                        value={editValue}
+                        onChangeText={setEditValue}
+                        placeholder="Adicione seus comentários..."
+                        placeholderTextColor={colors.textSecondary}
+                        multiline
+                      />
+                      <TouchableOpacity
+                        style={styles.saveButton}
+                        onPress={handleSaveNightComments}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
+                        <Text style={styles.saveButtonText}>Salvar</Text>
+                      </TouchableOpacity>
+                    </React.Fragment>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() =>
+                        handleEditComments(
+                          "night-consultantComments",
+                          selectedRoutine.nightSleep?.consultantComments || null
+                        )
+                      }
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Text style={styles.commentText}>
+                        {selectedRoutine.nightSleep.consultantComments ||
+                          "Toque para adicionar comentários"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.routineDetailSection}>
+            <Text style={styles.sectionTitle}>Observações Gerais</Text>
+            {selectedRoutine.motherObservations && (
+              <View style={styles.commentSection}>
+                <Text style={styles.commentLabel}>Observações da Mãe</Text>
+                <Text style={styles.commentText}>
+                  {selectedRoutine.motherObservations}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.commentSection}>
+              <Text style={styles.commentLabel}>Comentários da Consultora</Text>
+              {editingField === "consultantComments" ? (
+                <React.Fragment>
+                  <TextInput
+                    style={styles.commentInput}
+                    value={editValue}
+                    onChangeText={setEditValue}
+                    placeholder="Adicione seus comentários..."
+                    placeholderTextColor={colors.textSecondary}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={handleSaveComments}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text style={styles.saveButtonText}>Salvar</Text>
+                  </TouchableOpacity>
+                </React.Fragment>
               ) : (
                 <TouchableOpacity
                   onPress={() =>
-                    handleEditComments("consultantComments", selectedRoutine.consultantComments)
+                    handleEditComments(
+                      "consultantComments",
+                      selectedRoutine.consultantComments
+                    )
                   }
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Text style={styles.commentsText}>
-                    {selectedRoutine.consultantComments || "Toque para adicionar comentários"}
+                  <Text style={styles.commentText}>
+                    {selectedRoutine.consultantComments ||
+                      "Toque para adicionar comentários"}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -788,11 +1077,16 @@ export default function ConsultantDashboardScreen() {
         )}
 
         <ConfirmModal
-          visible={confirmDelete.visible}
-          title="Confirmar Exclusão"
-          message={`Tem certeza que deseja excluir a Soneca ${confirmDelete.napNumber}?`}
+          visible={deleteNapId !== null}
+          title="Excluir Soneca"
+          message={`Tem certeza que deseja excluir a Soneca ${deleteNapNumber}?`}
+          confirmText="Excluir"
+          cancelText="Cancelar"
           onConfirm={confirmDeleteNap}
-          onCancel={() => setConfirmDelete({ visible: false, napId: "", napNumber: 0 })}
+          onCancel={() => {
+            setDeleteNapId(null);
+            setDeleteNapNumber(null);
+          }}
         />
       </SafeAreaView>
     );
@@ -801,142 +1095,73 @@ export default function ConsultantDashboardScreen() {
   if (selectedBaby) {
     return (
       <SafeAreaView style={styles.container}>
-        <Stack.Screen
-          options={{
-            title: `Rotinas - ${selectedBaby.name}`,
-            headerShown: true,
-          }}
-        />
-        <ScrollView
-          style={styles.scrollView}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-          <TouchableOpacity style={styles.backButton} onPress={handleBackToBabies}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleBackToBabies}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+          >
             <IconSymbol
-              ios_icon_name="arrow.left"
-              android_material_icon_name="arrow-back"
-              size={20}
+              name="arrow-back"
+              size={24}
               color={colors.primary}
             />
-            <Text style={styles.backButtonText}>Voltar para Bebês</Text>
+            <Text style={styles.backButtonText}>Voltar</Text>
           </TouchableOpacity>
 
-          <View style={styles.card}>
-            <Text style={styles.babyName}>{selectedBaby.name}</Text>
-            <Text style={styles.babyInfo}>
-              {selectedBaby.ageMonths} meses e {selectedBaby.ageDays} dias
-            </Text>
-            <Text style={styles.babyInfo}>Mãe: {selectedBaby.motherName}</Text>
-
-            {selectedBaby.activeContract && (
-              <View style={styles.contractInfo}>
-                <View style={styles.contractHeader}>
-                  <IconSymbol
-                    ios_icon_name="doc.text"
-                    android_material_icon_name="description"
-                    size={20}
-                    color={colors.primary}
-                  />
-                  <Text style={styles.contractTitle}>Contrato Ativo</Text>
-                </View>
-                <Text style={styles.contractDetail}>
-                  Início: {formatDateToBR(selectedBaby.activeContract.startDate)}
-                </Text>
-                <Text style={styles.contractDetail}>
-                  Duração: {selectedBaby.activeContract.durationDays} dias
-                </Text>
-                <View style={styles.contractStatusBadge}>
-                  <Text style={styles.contractStatusText}>
-                    {selectedBaby.activeContract.status === "active"
-                      ? "Vigente"
-                      : selectedBaby.activeContract.status === "paused"
-                      ? "Em Pausa"
-                      : "Concluído"}
-                  </Text>
-                </View>
-              </View>
-            )}
+          <View style={styles.header}>
+            <Text style={styles.title}>{selectedBaby.name}</Text>
+            <Text style={styles.subtitle}>Rotinas Diárias</Text>
           </View>
 
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() =>
-                router.push({
-                  pathname: "/contract-details",
-                  params: { babyId: selectedBaby.id, babyName: selectedBaby.name },
-                })
-              }
-            >
+          {routines.length === 0 ? (
+            <View style={styles.emptyState}>
               <IconSymbol
-                ios_icon_name="doc.text"
-                android_material_icon_name="description"
-                size={24}
-                color={colors.primary}
+                name="calendar-today"
+                size={64}
+                color={colors.textSecondary}
               />
-              <Text style={styles.actionButtonText}>Contrato</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() =>
-                router.push({
-                  pathname: "/acompanhamento",
-                  params: { babyId: selectedBaby.id, babyName: selectedBaby.name },
-                })
-              }
-            >
-              <IconSymbol
-                ios_icon_name="chart.bar"
-                android_material_icon_name="assessment"
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={styles.actionButtonText}>Acompanhamento</Text>
-            </TouchableOpacity>
-          </View>
-
-          {loadingRoutines ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-            </View>
-          ) : routines.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>Nenhuma rotina cadastrada ainda</Text>
+              <Text style={styles.emptyStateText}>
+                Nenhuma rotina registrada ainda
+              </Text>
             </View>
           ) : (
             <View style={styles.routinesList}>
-              <Text style={styles.listTitle}>Rotinas Cadastradas</Text>
-              {routines.map((routine) => {
-                const dayOfWeek = getDayOfWeek(routine.date);
-                const dateDisplay = formatDateToBR(routine.date);
-                return (
-                  <TouchableOpacity
-                    key={routine.id}
-                    style={styles.routineCard}
-                    onPress={() => handleSelectRoutine(routine)}
-                  >
-                    <View style={styles.routineHeader}>
-                      <View>
-                        <Text style={styles.routineDayOfWeek}>{dayOfWeek}</Text>
-                        <Text style={styles.routineDate}>{dateDisplay}</Text>
-                      </View>
-                      <IconSymbol
-                        ios_icon_name="chevron.right"
-                        android_material_icon_name="chevron-right"
-                        size={24}
-                        color={colors.textSecondary}
-                      />
+              {routines.map((routine) => (
+                <TouchableOpacity
+                  key={routine.id}
+                  style={styles.routineCard}
+                  onPress={() => handleSelectRoutine(routine)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <View style={styles.routineHeader}>
+                    <Text style={styles.routineDate}>
+                      {formatDateToBR(routine.date)} - {getDayOfWeek(routine.date)}
+                    </Text>
+                    <IconSymbol
+                      name="arrow-forward"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </View>
+
+                  <View style={styles.routineStats}>
+                    <View style={styles.routineStat}>
+                      <Text style={styles.routineStatLabel}>Acordou</Text>
+                      <Text style={styles.routineStatValue}>
+                        {routine.wakeUpTime || "-"}
+                      </Text>
                     </View>
-                    <Text style={styles.routineInfo}>
-                      Acordou: {routine.wakeUpTime || "Não informado"}
-                    </Text>
-                    <Text style={styles.routineInfo}>
-                      Sonecas: {routine.naps?.length || 0}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+                    <View style={styles.routineStat}>
+                      <Text style={styles.routineStatLabel}>Sonecas</Text>
+                      <Text style={styles.routineStatValue}>
+                        {routine.naps?.length || 0}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
         </ScrollView>
@@ -944,621 +1169,197 @@ export default function ConsultantDashboardScreen() {
     );
   }
 
-  const activeBabies = babies.filter((baby) => !baby.archived);
-  const archivedBabies = babies.filter((baby) => baby.archived);
-  const displayedBabies = showArchived ? archivedBabies : activeBabies;
-  const babyCount = showArchived ? archivedBabies.length : activeBabies.length;
-
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ title: "Bebês", headerShown: true }} />
+      <Stack.Screen options={{ headerShown: false }} />
       <ScrollView
-        style={styles.scrollView}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
+        <View style={styles.header}>
+          <Text style={styles.title}>Dashboard</Text>
+          <Text style={styles.subtitle}>Bem-vinda, {consultantProfile?.name}</Text>
+        </View>
+
         {consultantProfile && (
           <View style={styles.profileSection}>
-            <ConsultantProfileCard
-              name={consultantProfile.name}
-              professionalTitle={consultantProfile.professionalTitle || undefined}
-              description={consultantProfile.description || undefined}
-              photoUrl={consultantProfile.photo || undefined}
-              isConsultant={true}
-            />
+            <ConsultantProfileCard profile={consultantProfile} />
           </View>
         )}
 
-        <View style={styles.greetingSection}>
-          <Text style={styles.greetingText}>Olá, Consultora! 👋</Text>
-          <Text style={styles.babyCountText}>{babyCount} bebê cadastrado</Text>
-        </View>
+        <TouchableOpacity
+          style={styles.registerBabyButton}
+          onPress={handleRegisterBaby}
+          activeOpacity={0.7}
+          hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+        >
+          <IconSymbol name="add" size={24} color={colors.white} />
+          <Text style={styles.registerBabyButtonText}>Cadastrar Novo Bebê</Text>
+        </TouchableOpacity>
 
-        <View style={styles.filterButtons}>
+        <View style={styles.toggleContainer}>
           <TouchableOpacity
-            style={[styles.filterButton, !showArchived && styles.filterButtonActive]}
+            style={[
+              styles.toggleButton,
+              !showArchived && styles.toggleButtonActive,
+            ]}
             onPress={() => setShowArchived(false)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <IconSymbol
-              ios_icon_name="arrow.2.circlepath"
-              android_material_icon_name="sync"
-              size={20}
-              color={!showArchived ? colors.card : colors.text}
-            />
-            <Text style={[styles.filterButtonText, !showArchived && styles.filterButtonTextActive]}>
+            <Text
+              style={[
+                styles.toggleButtonText,
+                !showArchived && styles.toggleButtonTextActive,
+              ]}
+            >
               Ativos
             </Text>
           </TouchableOpacity>
-
           <TouchableOpacity
-            style={[styles.filterButton, showArchived && styles.filterButtonActive]}
+            style={[
+              styles.toggleButton,
+              showArchived && styles.toggleButtonActive,
+            ]}
             onPress={() => setShowArchived(true)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <IconSymbol
-              ios_icon_name="archivebox"
-              android_material_icon_name="archive"
-              size={20}
-              color={showArchived ? colors.card : colors.text}
-            />
-            <Text style={[styles.filterButtonText, showArchived && styles.filterButtonTextActive]}>
+            <Text
+              style={[
+                styles.toggleButtonText,
+                showArchived && styles.toggleButtonTextActive,
+              ]}
+            >
               Arquivados
             </Text>
           </TouchableOpacity>
         </View>
 
         {displayedBabies.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              {showArchived ? "Nenhum bebê arquivado" : "Nenhum bebê ativo"}
+          <View style={styles.emptyState}>
+            <IconSymbol
+              name="person"
+              size={64}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.emptyStateText}>
+              {showArchived
+                ? "Nenhum bebê arquivado"
+                : "Nenhum bebê cadastrado ainda"}
             </Text>
           </View>
         ) : (
-          <View style={styles.babiesList}>
-            {displayedBabies.map((baby) => {
-              let contractStatus = "Sem contrato";
-              let contractColor = colors.textSecondary;
+          displayedBabies.map((baby) => {
+            const contractStatusStyle = baby.activeContract
+              ? baby.activeContract.status === "active"
+                ? styles.contractStatusActive
+                : baby.activeContract.status === "paused"
+                ? styles.contractStatusPaused
+                : styles.contractStatusCompleted
+              : styles.contractStatusNone;
 
-              if (baby.activeContract) {
-                const status = baby.activeContract.status;
-                if (status === "active") {
-                  contractStatus = "Vigente";
-                  contractColor = colors.success;
-                } else if (status === "paused") {
-                  contractStatus = "Em Pausa";
-                  contractColor = colors.warning;
-                } else if (status === "completed") {
-                  contractStatus = "Concluído";
-                  contractColor = colors.textSecondary;
-                }
-              }
+            const contractStatusTextStyle = baby.activeContract
+              ? baby.activeContract.status === "active"
+                ? styles.contractStatusTextActive
+                : baby.activeContract.status === "paused"
+                ? styles.contractStatusTextPaused
+                : styles.contractStatusTextCompleted
+              : styles.contractStatusTextNone;
 
-              return (
-                <TouchableOpacity
-                  key={baby.id}
-                  style={styles.babyCard}
-                  onPress={() => handleSelectBaby(baby)}
-                >
-                  <View style={styles.babyCardContent}>
-                    <View style={styles.babyIcon}>
+            const contractStatusText = baby.activeContract
+              ? baby.activeContract.status === "active"
+                ? "Contrato Ativo"
+                : baby.activeContract.status === "paused"
+                ? "Contrato Pausado"
+                : "Contrato Concluído"
+              : "Sem Contrato";
+
+            const contractIconName = baby.activeContract
+              ? baby.activeContract.status === "active"
+                ? "check-circle"
+                : baby.activeContract.status === "paused"
+                ? "pause-circle"
+                : "cancel"
+              : "error";
+
+            const contractIconColor = baby.activeContract
+              ? baby.activeContract.status === "active"
+                ? "#2E7D32"
+                : baby.activeContract.status === "paused"
+                ? "#F57C00"
+                : "#616161"
+              : "#C62828";
+
+            return (
+              <View key={baby.id} style={styles.babyCard}>
+                <View style={styles.babyHeader}>
+                  <View style={styles.babyInfo}>
+                    <Text style={styles.babyName}>{baby.name}</Text>
+                    <Text style={styles.babyDetails}>
+                      {baby.ageMonths} meses e {baby.ageDays} dias
+                    </Text>
+                    <Text style={styles.babyDetails}>Mãe: {baby.motherName}</Text>
+                  </View>
+                  <View style={styles.babyActions}>
+                    <TouchableOpacity
+                      style={styles.iconButton}
+                      onPress={() =>
+                        router.push(`/contract-details?babyId=${baby.id}`)
+                      }
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
                       <IconSymbol
-                        ios_icon_name="person.circle"
-                        android_material_icon_name="account-circle"
-                        size={48}
+                        name="description"
+                        size={24}
                         color={colors.primary}
                       />
-                    </View>
-                    <View style={styles.babyDetails}>
-                      <Text style={styles.babyCardName}>{baby.name}</Text>
-                      <Text style={styles.babyCardInfo}>{baby.motherName}</Text>
-                      <View style={styles.babyCardFooter}>
-                        <View style={styles.ageContainer}>
-                          <IconSymbol
-                            ios_icon_name="calendar"
-                            android_material_icon_name="calendar-today"
-                            size={14}
-                            color={colors.textSecondary}
-                          />
-                          <Text style={styles.ageText}>
-                            {baby.ageMonths}m {baby.ageDays}d
-                          </Text>
-                        </View>
-                        <View style={[styles.contractBadge, { backgroundColor: contractColor + "20" }]}>
-                          <Text style={[styles.contractBadgeText, { color: contractColor }]}>
-                            {contractStatus}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                    <IconSymbol
-                      ios_icon_name="chevron.right"
-                      android_material_icon_name="chevron-right"
-                      size={24}
-                      color={colors.textSecondary}
-                    />
+                    </TouchableOpacity>
                   </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                </View>
+
+                <View style={[styles.contractStatus, contractStatusStyle]}>
+                  <IconSymbol
+                    name={contractIconName}
+                    size={16}
+                    color={contractIconColor}
+                  />
+                  <Text style={[styles.contractStatusText, contractStatusTextStyle]}>
+                    {contractStatusText}
+                  </Text>
+                </View>
+
+                <View style={styles.babyCardButtons}>
+                  <TouchableOpacity
+                    style={styles.babyCardButton}
+                    onPress={() => handleSelectBaby(baby)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text style={styles.babyCardButtonText}>Ver Rotinas</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.babyCardButton, styles.babyCardButtonSecondary]}
+                    onPress={() =>
+                      router.push(`/acompanhamento?babyId=${baby.id}&babyName=${baby.name}`)
+                    }
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text
+                      style={[
+                        styles.babyCardButtonText,
+                        styles.babyCardButtonTextSecondary,
+                      ]}
+                    >
+                      Acompanhamento
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })
         )}
-
-        <View style={styles.registerButtonContainer}>
-          <TouchableOpacity 
-            style={styles.registerButton} 
-            onPress={handleRegisterBaby}
-            activeOpacity={0.7}
-          >
-            <IconSymbol
-              ios_icon_name="plus.circle.fill"
-              android_material_icon_name="add-circle"
-              size={24}
-              color={colors.card}
-            />
-            <Text style={styles.registerButtonText}>Cadastrar Novo Bebê</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
-
-      <ConfirmModal
-        visible={confirmDelete.visible}
-        title="Confirmar Exclusão"
-        message={`Tem certeza que deseja excluir a Soneca ${confirmDelete.napNumber}?`}
-        onConfirm={confirmDeleteNap}
-        onCancel={() => setConfirmDelete({ visible: false, napId: "", napNumber: 0 })}
-      />
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.xl,
-  },
-  profileSection: {
-    padding: spacing.lg,
-    paddingBottom: 0,
-  },
-  greetingSection: {
-    padding: spacing.lg,
-    paddingTop: spacing.md,
-  },
-  greetingText: {
-    fontSize: 24,
-    fontWeight: '700' as const,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  babyCountText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  filterButtons: {
-    flexDirection: "row",
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  filterButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: spacing.sm,
-  },
-  filterButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: colors.text,
-  },
-  filterButtonTextActive: {
-    color: colors.card,
-  },
-  emptyContainer: {
-    padding: spacing.xl,
-    alignItems: "center",
-  },
-  emptyText: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    textAlign: "center" as const,
-  },
-  babiesList: {
-    paddingHorizontal: spacing.lg,
-  },
-  babyCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  babyCardContent: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  babyIcon: {
-    marginRight: spacing.md,
-  },
-  babyDetails: {
-    flex: 1,
-  },
-  babyCardName: {
-    fontSize: 18,
-    fontWeight: '600' as const,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  babyCardInfo: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  babyCardFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  ageContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  ageText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  contractBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: borderRadius.sm,
-  },
-  contractBadgeText: {
-    fontSize: 11,
-    fontWeight: '600' as const,
-  },
-  registerButtonContainer: {
-    padding: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xl,
-  },
-  registerButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.lg,
-    gap: spacing.sm,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  registerButtonText: {
-    fontSize: 16,
-    fontWeight: '600' as const,
-    color: colors.card,
-  },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.md,
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: colors.primary,
-    marginLeft: spacing.sm,
-  },
-  card: {
-    backgroundColor: colors.card,
-    margin: spacing.md,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  babyName: {
-    fontSize: 22,
-    fontWeight: '700' as const,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  babyInfo: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  contractInfo: {
-    marginTop: spacing.lg,
-    paddingTop: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  contractHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  contractTitle: {
-    fontSize: 16,
-    fontWeight: "600" as const,
-    color: colors.primary,
-  },
-  contractDetail: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  contractStatusBadge: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.success + "20",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-    marginTop: spacing.sm,
-  },
-  contractStatusText: {
-    fontSize: 12,
-    fontWeight: "600" as const,
-    color: colors.success,
-  },
-  actionButtons: {
-    flexDirection: "row",
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  actionButton: {
-    flex: 1,
-    backgroundColor: colors.card,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  actionButtonText: {
-    fontSize: 14,
-    color: colors.primary,
-    marginTop: spacing.sm,
-    fontWeight: '600' as const,
-  },
-  routinesList: {
-    padding: spacing.md,
-  },
-  listTitle: {
-    fontSize: 18,
-    fontWeight: '600' as const,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  routineCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  routineHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.sm,
-  },
-  routineDayOfWeek: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '600' as const,
-    textTransform: "uppercase" as const,
-  },
-  routineDate: {
-    fontSize: 18,
-    fontWeight: '600' as const,
-    color: colors.text,
-  },
-  routineInfo: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  dayOfWeek: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: '600' as const,
-    textTransform: "uppercase" as const,
-    marginBottom: spacing.xs,
-  },
-  dateTitle: {
-    fontSize: 22,
-    fontWeight: '700' as const,
-    color: colors.text,
-    marginBottom: spacing.lg,
-  },
-  section: {
-    marginTop: spacing.lg,
-    paddingTop: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600' as const,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  timeText: {
-    fontSize: 16,
-    color: colors.text,
-  },
-  napCard: {
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  napHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.md,
-  },
-  napTitle: {
-    fontSize: 16,
-    fontWeight: '600' as const,
-    color: colors.text,
-  },
-  deleteButton: {
-    padding: spacing.xs,
-  },
-  timeRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  timeLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  timeValue: {
-    fontSize: 16,
-    color: colors.text,
-    fontWeight: '500' as const,
-  },
-  resultsBox: {
-    backgroundColor: colors.primary + "15",
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginTop: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.primary + "30",
-  },
-  resultsTitle: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: colors.primary,
-    marginBottom: spacing.sm,
-  },
-  resultText: {
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  infoValue: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  observationsBox: {
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.sm,
-    padding: spacing.md,
-    marginTop: spacing.md,
-  },
-  observationsLabel: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  observationsText: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  commentsSection: {
-    marginTop: spacing.md,
-  },
-  commentsLabel: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: colors.primary,
-    marginBottom: spacing.sm,
-  },
-  commentsText: {
-    fontSize: 14,
-    color: colors.text,
-    fontStyle: "italic" as const,
-  },
-  commentsInput: {
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: 14,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-    minHeight: 80,
-    textAlignVertical: "top" as const,
-  },
-  commentButtons: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  saveButton: {
-    flex: 1,
-    backgroundColor: colors.primary,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: "center",
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600' as const,
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: colors.background,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cancelButtonText: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600' as const,
-  },
-});
