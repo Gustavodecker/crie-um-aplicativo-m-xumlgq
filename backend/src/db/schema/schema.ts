@@ -104,6 +104,7 @@ export const nightWakings = pgTable('night_wakings', {
   nightSleepId: uuid('night_sleep_id').notNull().references(() => nightSleep.id, { onDelete: 'cascade' }),
   startTime: text('start_time').notNull(), // HH:mm
   endTime: text('end_time').notNull(), // HH:mm
+  backToSleepMethod: text('back_to_sleep_method'), // How the baby went back to sleep
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index('night_wakings_night_sleep_id_idx').on(table.nightSleepId),

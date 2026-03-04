@@ -222,6 +222,7 @@ export function registerNightSleepRoutes(app: App) {
                   nightSleepId: { type: 'string', format: 'uuid' },
                   startTime: { type: 'string' },
                   endTime: { type: 'string' },
+                  backToSleepMethod: { type: ['string', 'null'] },
                   createdAt: { type: 'string', format: 'date-time' },
                 },
               },
@@ -315,6 +316,7 @@ export function registerNightSleepRoutes(app: App) {
           nightSleepId: { type: 'string', format: 'uuid' },
           startTime: { type: 'string' },
           endTime: { type: 'string' },
+          backToSleepMethod: { type: ['string', 'null'] },
         },
       },
       response: {
@@ -325,6 +327,7 @@ export function registerNightSleepRoutes(app: App) {
             nightSleepId: { type: 'string', format: 'uuid' },
             startTime: { type: 'string' },
             endTime: { type: 'string' },
+            backToSleepMethod: { type: ['string', 'null'] },
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
@@ -332,7 +335,7 @@ export function registerNightSleepRoutes(app: App) {
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: { nightSleepId: string; startTime: string; endTime: string } }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: { nightSleepId: string; startTime: string; endTime: string; backToSleepMethod?: string | null } }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
@@ -366,6 +369,7 @@ export function registerNightSleepRoutes(app: App) {
       nightSleepId: request.body.nightSleepId,
       startTime: request.body.startTime,
       endTime: request.body.endTime,
+      backToSleepMethod: request.body.backToSleepMethod || null,
     }).returning();
 
     app.logger.info({ wakingId: waking.id, nightSleepId: request.body.nightSleepId }, 'Night waking created successfully');
@@ -389,6 +393,7 @@ export function registerNightSleepRoutes(app: App) {
         properties: {
           startTime: { type: 'string' },
           endTime: { type: 'string' },
+          backToSleepMethod: { type: ['string', 'null'] },
         },
       },
       response: {
@@ -399,6 +404,7 @@ export function registerNightSleepRoutes(app: App) {
             nightSleepId: { type: 'string', format: 'uuid' },
             startTime: { type: 'string' },
             endTime: { type: 'string' },
+            backToSleepMethod: { type: ['string', 'null'] },
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
@@ -406,7 +412,7 @@ export function registerNightSleepRoutes(app: App) {
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Params: { id: string }; Body: Partial<{ startTime: string; endTime: string }> }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Params: { id: string }; Body: Partial<{ startTime: string; endTime: string; backToSleepMethod: string | null }> }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 

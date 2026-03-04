@@ -1,0 +1,1 @@
+ALTER TABLE "night_wakings" ADD COLUMN "back_to_sleep_method" text;
