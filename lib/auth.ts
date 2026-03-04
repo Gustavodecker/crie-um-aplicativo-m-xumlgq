@@ -33,36 +33,49 @@ export async function setBearerToken(token: string) {
   const tokenPreview = token.substring(0, 30);
   console.log("[Auth/setBearerToken] 💾 Saving token (preview):", tokenPreview + "...");
   
-  if (Platform.OS === "web") {
-    localStorage.setItem(BEARER_TOKEN_KEY, token);
-    console.log("[Auth/setBearerToken] ✅ Token saved to localStorage");
-    
-    // Verify it was saved
-    const saved = localStorage.getItem(BEARER_TOKEN_KEY);
-    if (saved === token) {
-      console.log("[Auth/setBearerToken] ✅ Verification: Token correctly saved");
+  try {
+    if (Platform.OS === "web") {
+      localStorage.setItem(BEARER_TOKEN_KEY, token);
+      console.log("[Auth/setBearerToken] ✅ Token saved to localStorage");
+      
+      // Verify it was saved
+      const saved = localStorage.getItem(BEARER_TOKEN_KEY);
+      if (saved === token) {
+        console.log("[Auth/setBearerToken] ✅ Verification: Token correctly saved");
+      } else {
+        console.error("[Auth/setBearerToken] ❌ Verification FAILED: Token mismatch!");
+      }
     } else {
-      console.error("[Auth/setBearerToken] ❌ Verification FAILED: Token mismatch!");
+      await SecureStore.setItemAsync(BEARER_TOKEN_KEY, token);
+      console.log("[Auth/setBearerToken] ✅ Token saved to SecureStore");
+      
+      // Verify it was saved
+      const saved = await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
+      if (saved === token) {
+        console.log("[Auth/setBearerToken] ✅ Verification: Token correctly saved");
+      } else {
+        console.error("[Auth/setBearerToken] ❌ Verification FAILED: Token mismatch!");
+      }
     }
-  } else {
-    await SecureStore.setItemAsync(BEARER_TOKEN_KEY, token);
-    console.log("[Auth/setBearerToken] ✅ Token saved to SecureStore");
-    
-    // Verify it was saved
-    const saved = await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
-    if (saved === token) {
-      console.log("[Auth/setBearerToken] ✅ Verification: Token correctly saved");
-    } else {
-      console.error("[Auth/setBearerToken] ❌ Verification FAILED: Token mismatch!");
-    }
+  } catch (error) {
+    console.error("[Auth/setBearerToken] ❌ Error saving token:", error);
+    throw error;
   }
 }
 
 export async function clearAuthTokens() {
-  if (Platform.OS === "web") {
-    localStorage.removeItem(BEARER_TOKEN_KEY);
-  } else {
-    await SecureStore.deleteItemAsync(BEARER_TOKEN_KEY);
+  console.log("[Auth/clearAuthTokens] 🧹 Clearing all auth tokens");
+  try {
+    if (Platform.OS === "web") {
+      localStorage.removeItem(BEARER_TOKEN_KEY);
+      console.log("[Auth/clearAuthTokens] ✅ Cleared localStorage token");
+    } else {
+      await SecureStore.deleteItemAsync(BEARER_TOKEN_KEY);
+      console.log("[Auth/clearAuthTokens] ✅ Cleared SecureStore token");
+    }
+  } catch (error) {
+    console.error("[Auth/clearAuthTokens] ⚠️ Error clearing tokens:", error);
+    // Don't throw - clearing tokens should always succeed
   }
 }
 

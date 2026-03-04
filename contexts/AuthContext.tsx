@@ -74,24 +74,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 🔥 CRITICAL FIX: Only fetch user on mount, no polling
+    // Polling was causing unnecessary API calls that could invalidate the session
+    console.log("[Auth] Initial user session check on mount");
     fetchUser();
 
     // Listen for deep links (e.g. from social auth redirects)
     const subscription = Linking.addEventListener("url", (event) => {
-      console.log("Deep link received, refreshing user session");
-      // Allow time for the client to process the token if needed
+      console.log("[Auth] Deep link received, refreshing user session");
+      fetchUser();
     });
 
-    // POLLING: Refresh session every 5 minutes to keep SecureStore token in sync
-    // This prevents 401 errors when the session token rotates
-    const intervalId = setInterval(() => {
-      console.log("Auto-refreshing user session to sync token...");
-      fetchUser();
-    }, 5 * 60 * 1000); // 5 minutes
+    // 🔥 REMOVED: Polling interval that was causing session issues
+    // Sessions should remain valid until explicitly logged out or token expires
 
     return () => {
       subscription.remove();
-      clearInterval(intervalId);
     };
   }, []);
 
@@ -99,7 +97,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       console.log("[Auth] 🔄 Fetching user session...");
-      const session = await authClient.getSession();
+      
+      // 🔥 CRITICAL FIX: Add retry logic with exponential backoff
+      let retries = 0;
+      const maxRetries = 3;
+      let session = null;
+      
+      while (retries < maxRetries) {
+        try {
+          session = await authClient.getSession();
+          break; // Success, exit retry loop
+        } catch (error: any) {
+          retries++;
+          if (retries < maxRetries) {
+            const delay = Math.min(1000 * Math.pow(2, retries - 1), 5000); // Exponential backoff: 1s, 2s, 4s
+            console.log(`[Auth] ⚠️ Session fetch failed (attempt ${retries}/${maxRetries}), retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            console.error("[Auth] ❌ Failed to fetch session after", maxRetries, "attempts:", error);
+            throw error;
+          }
+        }
+      }
+      
       console.log("[Auth] 📦 Session response:", JSON.stringify(session, null, 2));
       
       if (session?.data?.user) {
@@ -124,7 +144,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error("[Auth] ❌ Failed to fetch user:", error);
-      setUser(null);
+      // 🔥 CRITICAL FIX: Don't clear user on fetch error
+      // Only clear if we explicitly know the session is invalid
+      // This prevents logout on temporary network issues
+      if (error && typeof error === 'object' && 'message' in error) {
+        const errorMessage = (error as any).message?.toLowerCase() || '';
+        if (errorMessage.includes('unauthorized') || errorMessage.includes('401')) {
+          console.log("[Auth] Session is invalid (401), clearing user");
+          setUser(null);
+          await clearAuthTokens();
+        } else {
+          console.log("[Auth] Network/temporary error, keeping user logged in");
+          // Keep user logged in on network errors
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -178,11 +211,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           provider,
           callbackURL,
         });
-        // Note: The redirect will reload the app or be handled by deep linking.
-        // fetchUser will be called on mount or via event listener if needed.
-        // But better-auth expo client handles the redirect and session storage?
-        // We typically need to wait or rely on fetchUser on next app load.
-        // For now, call fetchUser just in case.
         await fetchUser();
       }
     } catch (error) {
@@ -197,24 +225,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
-      console.log("[Auth] Signing out...");
-      await authClient.signOut();
+      console.log("[Auth] 🚪 Signing out...");
+      
+      // 🔥 CRITICAL FIX: Always clear local state first
+      // This ensures the user is logged out locally even if the API call fails
+      console.log("[Auth] Clearing local state and tokens");
+      setUser(null);
+      await clearAuthTokens();
+      
+      // 🔥 CRITICAL: Clear stored user role and baby ID on logout
+      try {
+        await AsyncStorage.removeItem("userRole");
+        await AsyncStorage.removeItem("motherBabyId");
+        console.log("[Auth] ✅ Cleared stored user role and baby ID");
+      } catch (storageError) {
+        console.error("[Auth] Error clearing AsyncStorage:", storageError);
+      }
+      
+      // Try to call backend logout, but don't fail if it errors
+      try {
+        await authClient.signOut();
+        console.log("[Auth] ✅ Backend sign out successful");
+      } catch (error) {
+        console.error("[Auth] ⚠️ Backend sign out failed (non-critical):", error);
+        // Continue anyway - local logout is what matters
+      }
+      
+      console.log("[Auth] ✅ Sign out complete");
     } catch (error) {
-      console.error("[Auth] Sign out failed (API):", error);
-    } finally {
-       // Always clear local state
-       console.log("[Auth] Clearing local state and tokens");
-       setUser(null);
-       await clearAuthTokens();
-       
-       // 🔥 CRITICAL: Clear stored user role and baby ID on logout
-       try {
-         await AsyncStorage.removeItem("userRole");
-         await AsyncStorage.removeItem("motherBabyId");
-         console.log("[Auth] Cleared stored user role and baby ID");
-       } catch (storageError) {
-         console.error("[Auth] Error clearing AsyncStorage:", storageError);
-       }
+      console.error("[Auth] ❌ Sign out error:", error);
+      // Even if there's an error, ensure local state is cleared
+      setUser(null);
+      await clearAuthTokens();
+      try {
+        await AsyncStorage.removeItem("userRole");
+        await AsyncStorage.removeItem("motherBabyId");
+      } catch {}
     }
   };
 

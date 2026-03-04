@@ -42,7 +42,7 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "crie-um-aplicativo-m",
+    "scheme": "crieumaplicativom",
     "experiments": {
       "typedRoutes": true
     },

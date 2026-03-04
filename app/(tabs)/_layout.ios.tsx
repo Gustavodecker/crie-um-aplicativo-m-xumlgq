@@ -5,7 +5,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { View, ActivityIndicator } from "react-native";
 import FloatingTabBar, { TabBarItem } from "@/components/FloatingTabBar";
 import { colors } from "@/styles/commonStyles";
-import { apiGet } from "@/utils/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function TabLayout() {
@@ -15,14 +14,12 @@ export default function TabLayout() {
   const [checkingRole, setCheckingRole] = useState(true);
   const [userRole, setUserRole] = useState<"consultant" | "mother" | null>(null);
   const hasRedirectedRef = useRef(false);
-  const roleCheckAttempts = useRef(0);
 
   useEffect(() => {
     // Reset redirect flag when user changes
     hasRedirectedRef.current = false;
     setUserRole(null);
     setCheckingRole(true);
-    roleCheckAttempts.current = 0;
 
     const checkRole = async () => {
       if (!user) {
@@ -30,85 +27,45 @@ export default function TabLayout() {
         return;
       }
 
-      console.log("[Tab Layout] Checking user role");
+      console.log("[Tab Layout] 🔍 Checking user role from AsyncStorage");
 
-      // 🔥 CRITICAL FIX: Use stored role from AsyncStorage instead of API call
-      // This prevents calling /api/consultant/profile for mothers
+      // 🔥 CRITICAL FIX: Only use AsyncStorage, never call API
+      // The role is set during login in auth.tsx
       try {
         const storedRole = await AsyncStorage.getItem("userRole");
         
         if (storedRole === "consultant" || storedRole === "mother") {
-          console.log("[Tab Layout] User role from AsyncStorage:", storedRole);
+          console.log("[Tab Layout] ✅ User role from AsyncStorage:", storedRole);
           setUserRole(storedRole);
-          setCheckingRole(false);
-          return;
-        }
-        
-        // Fallback: If no stored role, check via API (only for legacy users)
-        console.log("[Tab Layout] No stored role, checking via API (fallback)");
-        
-        // Add a small delay to ensure token is available
-        if (roleCheckAttempts.current === 0) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-        
-        try {
-          await apiGet("/api/consultant/profile", { suppressErrorLog: true });
-          console.log("[Tab Layout] User is a CONSULTANT");
-          setUserRole("consultant");
-          // Store for future use
-          await AsyncStorage.setItem("userRole", "consultant");
-        } catch (error: any) {
-          // 404 means user is not a consultant, so they must be a mother
-          if (
-            error.message?.includes("404") ||
-            error.message?.includes("Consultant profile not found")
-          ) {
-            console.log("[Tab Layout] User is a MOTHER");
-            setUserRole("mother");
-            // Store for future use
-            await AsyncStorage.setItem("userRole", "mother");
-          } else if (error.message?.includes("Authentication token not found")) {
-            // Token not ready yet, retry once
-            roleCheckAttempts.current++;
-            if (roleCheckAttempts.current < 3) {
-              console.log("[Tab Layout] Token not ready, retrying in 500ms...");
-              await new Promise(resolve => setTimeout(resolve, 500));
-              return checkRole(); // Retry
-            } else {
-              console.log("[Tab Layout] Token not available after retries, assuming mother");
-              setUserRole("mother");
-            }
-          } else {
-            console.error("[Tab Layout] Unexpected error checking role:", error);
-            setUserRole("mother");
-          }
+        } else {
+          // No stored role - this shouldn't happen after login
+          // Default to mother to be safe
+          console.warn("[Tab Layout] ⚠️ No stored role found, defaulting to mother");
+          setUserRole("mother");
+          await AsyncStorage.setItem("userRole", "mother");
         }
       } catch (storageError) {
-        console.error("[Tab Layout] Error reading AsyncStorage:", storageError);
+        console.error("[Tab Layout] ❌ Error reading AsyncStorage:", storageError);
         setUserRole("mother");
       } finally {
         setCheckingRole(false);
       }
     };
 
-    // Only check role once when user ID changes
     checkRole();
-  }, [user?.id]); // Only re-run when user ID changes, not on every render
+  }, [user?.id]);
 
   // Navigate mothers to their dashboard exactly once using router.replace
-  // This avoids the infinite redirect loop caused by <Redirect> in layout components
   useEffect(() => {
     if (userRole === "mother" && !hasRedirectedRef.current) {
       const currentPath = segments.join("/");
       const isAlreadyOnMotherDashboard = currentPath.includes("mother-dashboard");
 
       if (!isAlreadyOnMotherDashboard) {
-        console.log("[Tab Layout] Navigating mother to dashboard");
+        console.log("[Tab Layout] 🔄 Navigating mother to dashboard");
         hasRedirectedRef.current = true;
         router.replace("/(tabs)/(home)/mother-dashboard");
       } else {
-        // Already on mother dashboard, mark as redirected to prevent future redirects
         hasRedirectedRef.current = true;
       }
     }
@@ -134,7 +91,6 @@ export default function TabLayout() {
   }
 
   // For mothers: render Slot without consultant tab bar
-  // Navigation to mother-dashboard is handled by the useEffect above
   if (userRole === "mother") {
     return (
       <View style={{ flex: 1 }}>

@@ -42,11 +42,19 @@ export const getBearerToken = async (): Promise<string | null> => {
   try {
     if (Platform.OS === "web") {
       const token = localStorage.getItem(BEARER_TOKEN_KEY);
-      console.log("[API] 🔑 Token from localStorage:", token ? `EXISTS (length: ${token.length}, preview: ${token.substring(0, 20)}...)` : "❌ NULL");
+      if (token) {
+        console.log("[API] 🔑 Token from localStorage: EXISTS (length:", token.length, ")");
+      } else {
+        console.log("[API] ⚠️ No token in localStorage");
+      }
       return token;
     } else {
       const token = await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
-      console.log("[API] 🔑 Token from SecureStore:", token ? `EXISTS (length: ${token.length}, preview: ${token.substring(0, 20)}...)` : "❌ NULL");
+      if (token) {
+        console.log("[API] 🔑 Token from SecureStore: EXISTS (length:", token.length, ")");
+      } else {
+        console.log("[API] ⚠️ No token in SecureStore");
+      }
       return token;
     }
   } catch (error) {
@@ -80,7 +88,7 @@ export const apiCall = async <T = any>(
   
   // Don't log the call if we're suppressing errors (reduces noise for role checks)
   if (!suppressErrorLog) {
-    console.log("[API] Calling:", url, options?.method || "GET");
+    console.log("[API] 📡 Calling:", url, options?.method || "GET");
   }
 
   try {
@@ -93,7 +101,7 @@ export const apiCall = async <T = any>(
 
     // 🔥 CRITICAL: Always get the token and add to headers
     const token = await getBearerToken();
-    
+
     // Only add Content-Type header if there's a body
     // DELETE requests without body should NOT have Content-Type header
     if (options?.body) {
@@ -109,20 +117,17 @@ export const apiCall = async <T = any>(
 
     // Add Authorization header if we have a token
     if (token) {
-      console.log("[API] ✅ Adding Authorization header with token (preview:", token.substring(0, 20) + "...)");
+      if (!suppressErrorLog) {
+        console.log("[API] ✅ Adding Authorization header with token");
+      }
       fetchOptions.headers = {
         ...fetchOptions.headers,
         Authorization: `Bearer ${token}`,
       };
     } else {
-      console.warn("[API] ⚠️ No token available - request will be unauthenticated");
-    }
-
-    if (!suppressErrorLog) {
-      console.log("[API] Fetch options:", {
-        method: fetchOptions.method || "GET",
-        headers: fetchOptions.headers,
-      });
+      if (!suppressErrorLog) {
+        console.warn("[API] ⚠️ No token available - request will be unauthenticated");
+      }
     }
 
     const response = await fetch(url, fetchOptions);
@@ -132,7 +137,7 @@ export const apiCall = async <T = any>(
       
       // Only log errors if not suppressed
       if (!suppressErrorLog) {
-        console.error("[API] Error response:", response.status, text);
+        console.error("[API] ❌ Error response:", response.status, text);
       }
       
       let errorMsg = `API error: ${response.status}`;
@@ -146,20 +151,20 @@ export const apiCall = async <T = any>(
     // Handle 204 No Content
     if (response.status === 204) {
       if (!suppressErrorLog) {
-        console.log("[API] Success: 204 No Content");
+        console.log("[API] ✅ Success: 204 No Content");
       }
       return {} as T;
     }
 
     const data = await response.json();
     if (!suppressErrorLog) {
-      console.log("[API] Success:", data);
+      console.log("[API] ✅ Success:", data);
     }
     return data;
   } catch (error) {
     // Only log errors if not suppressed
     if (!suppressErrorLog) {
-      console.error("[API] Request failed:", error);
+      console.error("[API] ❌ Request failed:", error);
     }
     throw error;
   }
