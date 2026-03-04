@@ -136,14 +136,15 @@ export default function HomeScreen() {
     try {
       setLoading(true);
       setError("");
-      const data = await apiGet<Baby[]>("/api/babies");
-      console.log("Babies carregados:", data);
+      console.log("[Consultant Home] 📡 Fetching babies from /api/consultant/babies");
+      const data = await apiGet<Baby[]>("/api/consultant/babies");
+      console.log("[Consultant Home] ✅ Babies loaded:", data);
       setBabies(data);
       if (data.length > 0) {
         setSelectedBaby(data[0]);
       }
     } catch (err: any) {
-      console.error("Erro ao carregar bebês:", err);
+      console.error("[Consultant Home] ❌ Error loading babies:", err);
       setError(err.message || "Erro ao carregar dados");
     } finally {
       setLoading(false);
@@ -164,10 +165,11 @@ export default function HomeScreen() {
     if (!selectedBaby) return;
     try {
       setLoading(true);
+      console.log("[Consultant Home] 📡 Fetching routines for baby:", selectedBaby.id);
       const data = await apiGet<Routine[]>(
-        `/api/routines?babyId=${selectedBaby.id}`
+        `/api/routines/baby/${selectedBaby.id}`
       );
-      console.log("Rotinas carregadas:", data);
+      console.log("[Consultant Home] ✅ Routines loaded:", data);
       setRoutines(data);
       if (data.length > 0) {
         setSelectedRoutine(data[0]);
@@ -175,7 +177,7 @@ export default function HomeScreen() {
         setSelectedRoutine(null);
       }
     } catch (err: any) {
-      console.error("Erro ao carregar rotinas:", err);
+      console.error("[Consultant Home] ❌ Error loading routines:", err);
       setError(err.message || "Erro ao carregar rotinas");
     } finally {
       setLoading(false);
