@@ -72,7 +72,7 @@ function openOAuthPopup(provider: string): Promise<string> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  // Use refs to avoid stale closures in AppState listener
+  // Use refs to prevent stale closures in AppState listener
   const isRefreshingRef = useRef(false);
   const userRef = useRef<User | null>(null);
   // Track last validation time to avoid too-frequent checks
@@ -250,10 +250,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session.data.user as User);
         userRef.current = session.data.user as User;
         
-        // 🔥 CRITICAL: Ensure token is synced to SecureStore
+        // 🔥 CRITICAL: Ensure token is synced to storage
         if (session.data.session?.token) {
           const tokenPreview = session.data.session.token.substring(0, 20);
-          console.log("[Auth] 🔑 Syncing token to SecureStore (preview):", tokenPreview + "...");
+          console.log("[Auth] 🔑 Syncing token to storage (preview):", tokenPreview + "...");
           await setBearerToken(session.data.session.token);
           console.log("[Auth] ✅ Token synced successfully");
         } else {
@@ -319,19 +319,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("[Auth] ✅ Sign in response received");
       
-      // 🔥 CRITICAL: Try to extract and save token directly from sign-in response
-      // This avoids a second round-trip to getSession
+      // 🔥 CRITICAL DEBUG: Log the ENTIRE response structure to see where the token is
+      console.log("[Auth] 🔍 FULL Response:", JSON.stringify(signInResponse, null, 2));
+      
+      // 🔥 CRITICAL FIX: Extract token from multiple possible locations in the response
       const responseData = signInResponse as any;
+      let extractedToken: string | null = null;
+      let extractedUser: User | null = null;
+      
+      // Try different possible token locations
       if (responseData?.data?.session?.token) {
-        console.log("[Auth] 🔑 Token found directly in sign-in response, saving...");
-        await setBearerToken(responseData.data.session.token);
-        if (responseData.data.user) {
-          setUser(responseData.data.user as User);
-          userRef.current = responseData.data.user as User;
+        extractedToken = responseData.data.session.token;
+        console.log("[Auth] 🔑 Token found at data.session.token");
+      } else if (responseData?.session?.token) {
+        extractedToken = responseData.session.token;
+        console.log("[Auth] 🔑 Token found at session.token");
+      } else if (responseData?.token) {
+        extractedToken = responseData.token;
+        console.log("[Auth] 🔑 Token found at token");
+      } else if (responseData?.data?.token) {
+        extractedToken = responseData.data.token;
+        console.log("[Auth] 🔑 Token found at data.token");
+      }
+      
+      // Try to extract user
+      if (responseData?.data?.user) {
+        extractedUser = responseData.data.user as User;
+        console.log("[Auth] 👤 User found at data.user");
+      } else if (responseData?.user) {
+        extractedUser = responseData.user as User;
+        console.log("[Auth] 👤 User found at user");
+      }
+      
+      // If we found a token, save it immediately
+      if (extractedToken) {
+        console.log("[Auth] 💾 Saving extracted token (length:", extractedToken.length, ")...");
+        await setBearerToken(extractedToken);
+        console.log("[Auth] ✅ Token saved successfully");
+        
+        // Also set user if available
+        if (extractedUser) {
+          setUser(extractedUser);
+          userRef.current = extractedUser;
+          console.log("[Auth] ✅ User set from response:", extractedUser.email);
+        }
+      } else {
+        console.warn("[Auth] ⚠️ No token found in sign-in response!");
+        console.warn("[Auth] 🔍 Response keys:", Object.keys(responseData || {}));
+        if (responseData?.data) {
+          console.warn("[Auth] 🔍 data keys:", Object.keys(responseData.data || {}));
         }
       }
       
       // Always fetch user to ensure everything is in sync
+      console.log("[Auth] 🔄 Fetching user to verify session...");
       await fetchUser();
       
       // Verify token was synced
@@ -341,7 +382,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Authentication failed - token not saved");
       }
       
-      console.log("[Auth] ✅ Login complete, token verified");
+      console.log("[Auth] ✅ Login complete, token verified (length:", token.length, ")");
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign in failed:", error?.message || error);
       throw error;
@@ -360,18 +401,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("[Auth] ✅ Sign up response received");
       
-      // 🔥 CRITICAL: Try to extract and save token directly from sign-up response
+      // 🔥 CRITICAL DEBUG: Log the ENTIRE response structure
+      console.log("[Auth] 🔍 FULL Response:", JSON.stringify(signUpResponse, null, 2));
+      
+      // 🔥 CRITICAL FIX: Extract token from multiple possible locations in the response
       const responseData = signUpResponse as any;
+      let extractedToken: string | null = null;
+      let extractedUser: User | null = null;
+      
+      // Try different possible token locations
       if (responseData?.data?.session?.token) {
-        console.log("[Auth] 🔑 Token found directly in sign-up response, saving...");
-        await setBearerToken(responseData.data.session.token);
-        if (responseData.data.user) {
-          setUser(responseData.data.user as User);
-          userRef.current = responseData.data.user as User;
+        extractedToken = responseData.data.session.token;
+        console.log("[Auth] 🔑 Token found at data.session.token");
+      } else if (responseData?.session?.token) {
+        extractedToken = responseData.session.token;
+        console.log("[Auth] 🔑 Token found at session.token");
+      } else if (responseData?.token) {
+        extractedToken = responseData.token;
+        console.log("[Auth] 🔑 Token found at token");
+      } else if (responseData?.data?.token) {
+        extractedToken = responseData.data.token;
+        console.log("[Auth] 🔑 Token found at data.token");
+      }
+      
+      // Try to extract user
+      if (responseData?.data?.user) {
+        extractedUser = responseData.data.user as User;
+        console.log("[Auth] 👤 User found at data.user");
+      } else if (responseData?.user) {
+        extractedUser = responseData.user as User;
+        console.log("[Auth] 👤 User found at user");
+      }
+      
+      // If we found a token, save it immediately
+      if (extractedToken) {
+        console.log("[Auth] 💾 Saving extracted token (length:", extractedToken.length, ")...");
+        await setBearerToken(extractedToken);
+        console.log("[Auth] ✅ Token saved successfully");
+        
+        // Also set user if available
+        if (extractedUser) {
+          setUser(extractedUser);
+          userRef.current = extractedUser;
+          console.log("[Auth] ✅ User set from response:", extractedUser.email);
+        }
+      } else {
+        console.warn("[Auth] ⚠️ No token found in sign-up response!");
+        console.warn("[Auth] 🔍 Response keys:", Object.keys(responseData || {}));
+        if (responseData?.data) {
+          console.warn("[Auth] 🔍 data keys:", Object.keys(responseData.data || {}));
         }
       }
       
       // Always fetch user to ensure everything is in sync
+      console.log("[Auth] 🔄 Fetching user to verify session...");
       await fetchUser();
       
       // Verify token was synced
@@ -381,7 +464,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Registration failed - token not saved");
       }
       
-      console.log("[Auth] ✅ Signup complete, token verified");
+      console.log("[Auth] ✅ Signup complete, token verified (length:", token.length, ")");
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign up failed:", error?.message || error);
       throw error;

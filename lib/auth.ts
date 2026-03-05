@@ -1,64 +1,63 @@
 
 import { createAuthClient } from "better-auth/react";
 import { expoClient } from "@better-auth/expo/client";
-import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 
 const API_URL = Constants.expoConfig?.extra?.backendUrl || "";
 
 export const BEARER_TOKEN_KEY = "sleep-consultant_bearer_token";
+export const BETTER_AUTH_SESSION_KEY = "sleep-consultant.session.token";
 
-// Platform-specific storage: localStorage for web, SecureStore for native
-const storage = Platform.OS === "web"
-  ? {
-      getItem: (key: string) => {
-        try {
-          return localStorage.getItem(key);
-        } catch (error) {
-          console.error("[Auth/Storage] Error reading from localStorage:", error);
-          return null;
-        }
-      },
-      setItem: (key: string, value: string) => {
-        try {
-          localStorage.setItem(key, value);
-        } catch (error) {
-          console.error("[Auth/Storage] Error writing to localStorage:", error);
-        }
-      },
-      deleteItem: (key: string) => {
-        try {
-          localStorage.removeItem(key);
-        } catch (error) {
-          console.error("[Auth/Storage] Error deleting from localStorage:", error);
-        }
-      },
+// 🔥 CRITICAL FIX: Use AsyncStorage for ALL platforms (web and mobile)
+// This ensures consistent behavior and proper token persistence
+const storage = {
+  getItem: async (key: string) => {
+    try {
+      if (Platform.OS === "web") {
+        // On web, use localStorage synchronously
+        const value = localStorage.getItem(key);
+        console.log(`[Auth/Storage] getItem(${key}):`, value ? "EXISTS" : "NULL");
+        return value;
+      } else {
+        // On mobile, use AsyncStorage
+        const value = await AsyncStorage.getItemAsync(key);
+        console.log(`[Auth/Storage] getItem(${key}):`, value ? "EXISTS" : "NULL");
+        return value;
+      }
+    } catch (error) {
+      console.error(`[Auth/Storage] Error reading ${key}:`, error);
+      return null;
     }
-  : {
-      getItem: async (key: string) => {
-        try {
-          return await SecureStore.getItemAsync(key);
-        } catch (error) {
-          console.error("[Auth/Storage] Error reading from SecureStore:", error);
-          return null;
-        }
-      },
-      setItem: async (key: string, value: string) => {
-        try {
-          await SecureStore.setItemAsync(key, value);
-        } catch (error) {
-          console.error("[Auth/Storage] Error writing to SecureStore:", error);
-        }
-      },
-      deleteItem: async (key: string) => {
-        try {
-          await SecureStore.deleteItemAsync(key);
-        } catch (error) {
-          console.error("[Auth/Storage] Error deleting from SecureStore:", error);
-        }
-      },
-    };
+  },
+  setItem: async (key: string, value: string) => {
+    try {
+      if (Platform.OS === "web") {
+        localStorage.setItem(key, value);
+        console.log(`[Auth/Storage] setItem(${key}): SUCCESS`);
+      } else {
+        await AsyncStorage.setItem(key, value);
+        console.log(`[Auth/Storage] setItem(${key}): SUCCESS`);
+      }
+    } catch (error) {
+      console.error(`[Auth/Storage] Error writing ${key}:`, error);
+    }
+  },
+  removeItem: async (key: string) => {
+    try {
+      if (Platform.OS === "web") {
+        localStorage.removeItem(key);
+        console.log(`[Auth/Storage] removeItem(${key}): SUCCESS`);
+      } else {
+        await AsyncStorage.removeItem(key);
+        console.log(`[Auth/Storage] removeItem(${key}): SUCCESS`);
+      }
+    } catch (error) {
+      console.error(`[Auth/Storage] Error deleting ${key}:`, error);
+    }
+  },
+};
 
 export const authClient = createAuthClient({
   baseURL: API_URL,
@@ -82,26 +81,36 @@ export async function setBearerToken(token: string) {
   
   try {
     if (Platform.OS === "web") {
+      // Save to both our key and Better Auth's key for redundancy
       localStorage.setItem(BEARER_TOKEN_KEY, token);
-      console.log("[Auth/setBearerToken] ✅ Token saved to localStorage");
+      localStorage.setItem(BETTER_AUTH_SESSION_KEY, token);
+      console.log("[Auth/setBearerToken] ✅ Token saved to localStorage (both keys)");
       
       // Verify it was saved
       const saved = localStorage.getItem(BEARER_TOKEN_KEY);
-      if (saved === token) {
-        console.log("[Auth/setBearerToken] ✅ Verification: Token correctly saved");
+      const savedBetterAuth = localStorage.getItem(BETTER_AUTH_SESSION_KEY);
+      if (saved === token && savedBetterAuth === token) {
+        console.log("[Auth/setBearerToken] ✅ Verification: Token correctly saved to both keys");
       } else {
         console.error("[Auth/setBearerToken] ❌ Verification FAILED: Token mismatch!");
+        console.error("[Auth/setBearerToken] Our key:", saved === token);
+        console.error("[Auth/setBearerToken] Better Auth key:", savedBetterAuth === token);
       }
     } else {
-      await SecureStore.setItemAsync(BEARER_TOKEN_KEY, token);
-      console.log("[Auth/setBearerToken] ✅ Token saved to SecureStore");
+      // Save to both keys on mobile using AsyncStorage
+      await AsyncStorage.setItem(BEARER_TOKEN_KEY, token);
+      await AsyncStorage.setItem(BETTER_AUTH_SESSION_KEY, token);
+      console.log("[Auth/setBearerToken] ✅ Token saved to AsyncStorage (both keys)");
       
       // Verify it was saved
-      const saved = await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
-      if (saved === token) {
-        console.log("[Auth/setBearerToken] ✅ Verification: Token correctly saved");
+      const saved = await AsyncStorage.getItem(BEARER_TOKEN_KEY);
+      const savedBetterAuth = await AsyncStorage.getItem(BETTER_AUTH_SESSION_KEY);
+      if (saved === token && savedBetterAuth === token) {
+        console.log("[Auth/setBearerToken] ✅ Verification: Token correctly saved to both keys");
       } else {
         console.error("[Auth/setBearerToken] ❌ Verification FAILED: Token mismatch!");
+        console.error("[Auth/setBearerToken] Our key:", saved === token);
+        console.error("[Auth/setBearerToken] Better Auth key:", savedBetterAuth === token);
       }
     }
   } catch (error) {
@@ -113,19 +122,43 @@ export async function setBearerToken(token: string) {
 export async function getBearerToken(): Promise<string | null> {
   try {
     if (Platform.OS === "web") {
-      const token = localStorage.getItem(BEARER_TOKEN_KEY);
+      // Try our key first, then Better Auth's key
+      let token = localStorage.getItem(BEARER_TOKEN_KEY);
+      if (!token) {
+        console.log("[Auth/getBearerToken] ⚠️ No token in our key, trying Better Auth key...");
+        token = localStorage.getItem(BETTER_AUTH_SESSION_KEY);
+        
+        // If found in Better Auth key, sync it to our key
+        if (token) {
+          console.log("[Auth/getBearerToken] ✅ Found token in Better Auth key, syncing to our key");
+          localStorage.setItem(BEARER_TOKEN_KEY, token);
+        }
+      }
+      
       if (token) {
         console.log("[Auth/getBearerToken] 🔑 Token from localStorage: EXISTS (length:", token.length, ")");
       } else {
-        console.log("[Auth/getBearerToken] ⚠️ No token in localStorage");
+        console.log("[Auth/getBearerToken] ⚠️ No token in localStorage (checked both keys)");
       }
       return token;
     } else {
-      const token = await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
+      // Try our key first, then Better Auth's key
+      let token = await AsyncStorage.getItem(BEARER_TOKEN_KEY);
+      if (!token) {
+        console.log("[Auth/getBearerToken] ⚠️ No token in our key, trying Better Auth key...");
+        token = await AsyncStorage.getItem(BETTER_AUTH_SESSION_KEY);
+        
+        // If found in Better Auth key, sync it to our key
+        if (token) {
+          console.log("[Auth/getBearerToken] ✅ Found token in Better Auth key, syncing to our key");
+          await AsyncStorage.setItem(BEARER_TOKEN_KEY, token);
+        }
+      }
+      
       if (token) {
-        console.log("[Auth/getBearerToken] 🔑 Token from SecureStore: EXISTS (length:", token.length, ")");
+        console.log("[Auth/getBearerToken] 🔑 Token from AsyncStorage: EXISTS (length:", token.length, ")");
       } else {
-        console.log("[Auth/getBearerToken] ⚠️ No token in SecureStore");
+        console.log("[Auth/getBearerToken] ⚠️ No token in AsyncStorage (checked both keys)");
       }
       return token;
     }
@@ -141,6 +174,7 @@ export async function clearAuthTokens() {
     if (Platform.OS === "web") {
       // Clear both our token and Better Auth's tokens
       localStorage.removeItem(BEARER_TOKEN_KEY);
+      localStorage.removeItem(BETTER_AUTH_SESSION_KEY);
       
       // Clear all Better Auth related keys
       const keysToRemove: string[] = [];
@@ -152,20 +186,20 @@ export async function clearAuthTokens() {
       }
       keysToRemove.forEach(key => localStorage.removeItem(key));
       
-      console.log("[Auth/clearAuthTokens] ✅ Cleared localStorage tokens");
+      console.log("[Auth/clearAuthTokens] ✅ Cleared localStorage tokens (", keysToRemove.length, "keys)");
     } else {
-      // Clear our token
-      await SecureStore.deleteItemAsync(BEARER_TOKEN_KEY);
+      // Clear both our token and Better Auth's token
+      await AsyncStorage.removeItem(BEARER_TOKEN_KEY);
+      await AsyncStorage.removeItem(BETTER_AUTH_SESSION_KEY);
       
-      // Clear Better Auth tokens
+      // Clear other Better Auth tokens
       try {
-        await SecureStore.deleteItemAsync("sleep-consultant.session.token");
-        await SecureStore.deleteItemAsync("sleep-consultant.session");
+        await AsyncStorage.removeItem("sleep-consultant.session");
       } catch (e) {
         // These might not exist, that's ok
       }
       
-      console.log("[Auth/clearAuthTokens] ✅ Cleared SecureStore tokens");
+      console.log("[Auth/clearAuthTokens] ✅ Cleared AsyncStorage tokens");
     }
   } catch (error) {
     console.error("[Auth/clearAuthTokens] ⚠️ Error clearing tokens:", error);
