@@ -512,7 +512,7 @@ export default function ConsultantDashboardScreen() {
                         style={styles.timeRow}
                         onPress={() => openTimePicker(`nap-${nap.id}-startTryTime`, nap.startTryTime)}
                       >
-                        <Text style={styles.timeLabel}>Janela início:</Text>
+                        <Text style={styles.timeLabel}>Início tentativa::</Text>
                         <Text style={styles.timeValue}>{nap.startTryTime || "Não informado"}</Text>
                       </TouchableOpacity>
 
