@@ -8,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Platform, Dimensions } from "react-native";
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import {
   View,
   Text,
@@ -1113,15 +1114,23 @@ export default function AcompanhamentoScreen() {
   }, [babyId, normalizeNightSleep]);
 
   useEffect(() => {
+    console.log('[Acompanhamento] Unlocking all screen orientations');
+    
+    ScreenOrientation.unlockAsync();
+
     const updateOrientation = () => {
       const { width, height } = Dimensions.get('window');
-      setIsLandscape(width > height);
+      const landscape = width > height;
+      console.log('[Acompanhamento] Orientation changed:', { width, height, landscape });
+      setIsLandscape(landscape);
     };
 
     updateOrientation();
     const subscription = Dimensions.addEventListener('change', updateOrientation);
 
     return () => {
+      console.log('[Acompanhamento] Locking screen to portrait on unmount');
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
       subscription?.remove();
     };
   }, []);
