@@ -874,7 +874,7 @@ export default function MotherRoutineScreen() {
 
                 {isExpanded && (
                   <View style={styles.expandableContent}>
-                    <Text style={styles.fieldLabel}>Início</Text>
+                    <Text style={styles.fieldLabel}>Começou a tentar dormir às</Text>
                     <TouchableOpacity
                       style={styles.timePickerButton}
                       onPress={() => openTimePicker("nap_startTryTime", nap.id)}
