@@ -1143,46 +1143,6 @@ export default function ConsultantDashboardScreen() {
               );
             })}
           </View>
-        ) : (
-          Object.keys(routinesByDay).map((dayKey) => {
-            const dayNumber = parseInt(dayKey);
-            const routine = routinesByDay[dayNumber];
-            const routineStatus = routine?.consultantComments ? "Concluído" : routine ? "Em Preenchimento" : "Pendente";
-            const statusColor = routine?.consultantComments ? colors.statusGood : routine ? colors.statusMedium : colors.statusPoor;
-
-            return (
-              <TouchableOpacity 
-                key={dayNumber} 
-                style={styles.routineCard} 
-                onPress={() => {
-                  console.log("Tapped day:", dayNumber);
-                  if (routine) {
-                    console.log("Opening existing routine:", routine.id);
-                    onOpenRoutine(routine, dayNumber);
-                  } else {
-                    console.log("Creating new routine for day:", dayNumber);
-                    createRoutineForDay(dayNumber);
-                  }
-                }}
-              >
-                <View style={styles.routineCardHeader}>
-                  <View>
-                    <Text style={styles.routineDayNumber}>Dia {dayNumber}</Text>
-                    {routine && <Text style={styles.routineDate}>{formatDateToBR(routine.date)}</Text>}
-                  </View>
-                  <View style={[styles.routineStatusBadge, { backgroundColor: statusColor }]}>
-                    <Text style={styles.routineStatusText}>{routineStatus}</Text>
-                  </View>
-                </View>
-                {routine?.consultantComments && (
-                  <Text style={styles.routineComment} numberOfLines={2}>💬 {routine.consultantComments}</Text>
-                )}
-                <View style={{ alignItems: "flex-end", marginTop: 4 }}>
-                  <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={18} color={colors.textSecondary} />
-                </View>
-              </TouchableOpacity>
-            );
-          })
         )}
       </ScrollView>
 
