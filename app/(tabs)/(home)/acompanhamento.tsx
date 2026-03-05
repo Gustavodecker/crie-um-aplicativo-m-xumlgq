@@ -1,10 +1,9 @@
 
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { IconSymbol } from "@/components/IconSymbol";
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { apiGet } from "@/utils/api";
 import { colors } from "@/styles/commonStyles";
-import * as ScreenOrientation from 'expo-screen-orientation';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Platform, Dimensions } from "react-native";
 import * as Print from 'expo-print';
@@ -532,7 +531,16 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
 }
 
 function generatePDFHTML(reports: DailyReport[], babyName: string): string {
+  console.log('[Acompanhamento] Generating PDF HTML for data export');
+  
   const primaryColor = colors.primary || '#6366F1';
+  const currentDate = new Date().toLocaleDateString('pt-BR', { 
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
   
   const leftColumnReports = [];
   const rightColumnReports = [];
@@ -545,195 +553,202 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
     }
   });
 
+  const escapeHtml = (text: string | null) => {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
   const generateReportCard = (report: DailyReport) => {
     const dayNumberText = `DIA ${report.dayNumber}`;
     const wakeUpText = report.wakeUpTime || "Não registrado";
-    const firstNapWindowText = report.firstNapWindow || "N/A";
-
-    let napsHTML = '';
-    if (report.naps.length > 0) {
-      napsHTML = report.naps.map(nap => {
-        const napTitle = `Soneca ${nap.napNumber}`;
-        const napDurationText = formatTimeDuration(nap.durationMinutes);
-        
-        let badgesHTML = '';
-        if (nap.sleepMethod || nap.environment || nap.wakeUpMood) {
-          const badges = [];
-          if (nap.sleepMethod) badges.push(`<span class="badge" style="background: ${primaryColor};">Dormiu: ${nap.sleepMethod}</span>`);
-          if (nap.environment) badges.push(`<span class="badge" style="background: ${getEnvironmentColor(nap.environment)};">Ambiente: ${nap.environment}</span>`);
-          if (nap.wakeUpMood) badges.push(`<span class="badge" style="background: ${getMoodColor(nap.wakeUpMood)};">Acordou: ${nap.wakeUpMood}</span>`);
-          badgesHTML = `<div class="badges-row">${badges.join('')}</div>`;
-        }
-
-        let observationsHTML = '';
-        if (nap.observations) {
-          observationsHTML = `<div class="observation-box">
-            <div class="observation-label">OBSERVAÇÕES DA MÃE:</div>
-            <div class="observation-text">${nap.observations}</div>
-          </div>`;
-        }
-
-        let commentsHTML = '';
-        if (nap.consultantComments) {
-          commentsHTML = `<div class="observation-box" style="border-left-color: ${primaryColor};">
-            <div class="observation-label" style="color: ${primaryColor};">COMENTÁRIOS DA CONSULTORA:</div>
-            <div class="observation-text">${nap.consultantComments}</div>
-          </div>`;
-        }
-
-        return `
-          <div class="nap-card">
-            <div class="nap-header">${napTitle}</div>
-            <div class="info-line"><strong>Horário:</strong> ${nap.displayText}</div>
-            <div class="info-line"><strong>Duração:</strong> ${napDurationText}</div>
-            <div class="info-line">${nap.windowText}</div>
-            ${badgesHTML}
-            ${observationsHTML}
-            ${commentsHTML}
-          </div>
-        `;
-      }).join('');
-    }
-
-    let wakingsHTML = '';
-    if (report.wakings.length > 0) {
-      wakingsHTML = report.wakings.map(waking => {
-        const wakingIndexText = `${waking.index}º Despertar`;
-        const wakingDurationText = formatTimeDuration(waking.durationMinutes);
-        
-        let backToSleepHTML = '';
-        if (waking.backToSleepMethod) {
-          backToSleepHTML = `<div class="badges-row"><span class="badge" style="background: ${primaryColor};">Voltou a dormir: ${waking.backToSleepMethod}</span></div>`;
-        }
-
-        return `
-          <div class="waking-card">
-            <div class="waking-header">${wakingIndexText}</div>
-            <div class="info-line"><strong>Horário:</strong> ${waking.displayText}</div>
-            <div class="info-line"><strong>Duração:</strong> ${wakingDurationText}</div>
-            ${backToSleepHTML}
-          </div>
-        `;
-      }).join('');
-    }
-
-    let nightSleepHTML = '';
-    if (report.nightSleepStart && report.nightSleepEnd) {
-      let nightBadgesHTML = '';
-      if (report.nightSleepMethod || report.nightEnvironment || report.nightWakeUpMood) {
-        const badges = [];
-        if (report.nightSleepMethod) badges.push(`<span class="badge" style="background: ${primaryColor};">Dormiu: ${report.nightSleepMethod}</span>`);
-        if (report.nightEnvironment) badges.push(`<span class="badge" style="background: ${getEnvironmentColor(report.nightEnvironment)};">Ambiente: ${report.nightEnvironment}</span>`);
-        if (report.nightWakeUpMood) badges.push(`<span class="badge" style="background: ${getMoodColor(report.nightWakeUpMood)};">Acordou: ${report.nightWakeUpMood}</span>`);
-        nightBadgesHTML = `<div class="badges-row">${badges.join('')}</div>`;
-      }
-
-      let nightObservationsHTML = '';
-      if (report.nightObservations) {
-        nightObservationsHTML = `<div class="observation-box">
-          <div class="observation-label">OBSERVAÇÕES DA MÃE:</div>
-          <div class="observation-text">${report.nightObservations}</div>
-        </div>`;
-      }
-
-      let nightCommentsHTML = '';
-      if (report.nightConsultantComments) {
-        nightCommentsHTML = `<div class="observation-box" style="border-left-color: ${primaryColor};">
-          <div class="observation-label" style="color: ${primaryColor};">COMENTÁRIOS DA CONSULTORA:</div>
-          <div class="observation-text">${report.nightConsultantComments}</div>
-        </div>`;
-      }
-
-      nightSleepHTML = `
-        <div class="section">
-          <div class="section-title">SONO NOTURNO</div>
-          <div class="info-line"><strong>Início:</strong> ${report.nightSleepStart}</div>
-          <div class="info-line"><strong>Fim:</strong> ${report.nightSleepEnd}</div>
-          ${report.nightSleepBrute ? `<div class="info-line"><strong>Total bruto:</strong> ${report.nightSleepBrute}</div>` : ''}
-          ${report.nightSleepLiquidTotal ? `<div class="info-line"><strong>Total líquido:</strong> <span style="font-weight: bold; color: ${primaryColor};">${report.nightSleepLiquidTotal}</span></div>` : ''}
-          ${nightBadgesHTML}
-          ${nightObservationsHTML}
-          ${nightCommentsHTML}
-        </div>
-      `;
-    }
 
     let summaryHTML = '';
     if (report.total24h) {
       summaryHTML = `
         <div class="summary-box">
-          <div class="summary-row">
-            <span>Sono Diurno:</span>
-            <span class="summary-value">${report.daytimeSleepTotal || '0h'}</span>
-          </div>
-          <div class="summary-row">
-            <span>Sono Noturno:</span>
-            <span class="summary-value">${report.nightSleepLiquidTotal || '0h'}</span>
-          </div>
-          <div class="summary-row summary-total">
-            <span>Total 24h:</span>
-            <span class="summary-value">${report.total24h}</span>
-          </div>
+          <table class="summary-table">
+            <tr>
+              <td class="summary-label">Sono Diurno:</td>
+              <td class="summary-value">${report.daytimeSleepTotal || '0h'}</td>
+            </tr>
+            <tr>
+              <td class="summary-label">Sono Noturno:</td>
+              <td class="summary-value">${report.nightSleepLiquidTotal || '0h'}</td>
+            </tr>
+            <tr class="summary-total">
+              <td class="summary-label"><strong>Total 24h:</strong></td>
+              <td class="summary-value"><strong>${report.total24h}</strong></td>
+            </tr>
+          </table>
         </div>
       `;
+    }
+
+    let napsHTML = '';
+    if (report.naps.length > 0) {
+      const napsRows = report.naps.map(nap => {
+        const napDurationText = formatTimeDuration(nap.durationMinutes);
+        
+        let detailsHTML = '';
+        if (nap.sleepMethod) detailsHTML += `<div class="detail-item"><strong>Dormiu:</strong> ${escapeHtml(nap.sleepMethod)}</div>`;
+        if (nap.environment) detailsHTML += `<div class="detail-item"><strong>Ambiente:</strong> ${escapeHtml(nap.environment)}</div>`;
+        if (nap.wakeUpMood) detailsHTML += `<div class="detail-item"><strong>Acordou:</strong> ${escapeHtml(nap.wakeUpMood)}</div>`;
+        if (nap.observations) detailsHTML += `<div class="detail-item"><strong>Obs. Mãe:</strong> ${escapeHtml(nap.observations)}</div>`;
+        if (nap.consultantComments) detailsHTML += `<div class="detail-item"><strong>Comentário Consultora:</strong> ${escapeHtml(nap.consultantComments)}</div>`;
+
+        return `
+          <tr>
+            <td>Soneca ${nap.napNumber}</td>
+            <td>${nap.displayText}</td>
+            <td>${napDurationText}</td>
+            <td>${nap.windowText}</td>
+            <td>${detailsHTML || '-'}</td>
+          </tr>
+        `;
+      }).join('');
+
+      napsHTML = `
+        <div class="section">
+          <h3 class="section-title">SONECAS (${report.naps.length})</h3>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Soneca</th>
+                <th>Horário</th>
+                <th>Duração</th>
+                <th>Janela</th>
+                <th>Detalhes</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${napsRows}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    let nightSleepHTML = '';
+    if (report.nightSleepStart && report.nightSleepEnd) {
+      let detailsHTML = '';
+      if (report.nightSleepMethod) detailsHTML += `<div class="detail-item"><strong>Dormiu:</strong> ${escapeHtml(report.nightSleepMethod)}</div>`;
+      if (report.nightEnvironment) detailsHTML += `<div class="detail-item"><strong>Ambiente:</strong> ${escapeHtml(report.nightEnvironment)}</div>`;
+      if (report.nightWakeUpMood) detailsHTML += `<div class="detail-item"><strong>Acordou:</strong> ${escapeHtml(report.nightWakeUpMood)}</div>`;
+      if (report.nightObservations) detailsHTML += `<div class="detail-item"><strong>Obs. Mãe:</strong> ${escapeHtml(report.nightObservations)}</div>`;
+      if (report.nightConsultantComments) detailsHTML += `<div class="detail-item"><strong>Comentário Consultora:</strong> ${escapeHtml(report.nightConsultantComments)}</div>`;
+
+      nightSleepHTML = `
+        <div class="section">
+          <h3 class="section-title">SONO NOTURNO</h3>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Início</th>
+                <th>Fim</th>
+                <th>Total Bruto</th>
+                <th>Total Líquido</th>
+                <th>Detalhes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${report.nightSleepStart}</td>
+                <td>${report.nightSleepEnd}</td>
+                <td>${report.nightSleepBrute || '-'}</td>
+                <td><strong>${report.nightSleepLiquidTotal || '-'}</strong></td>
+                <td>${detailsHTML || '-'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    let wakingsHTML = '';
+    if (report.wakings.length > 0) {
+      const wakingsRows = report.wakings.map(waking => {
+        const wakingDurationText = formatTimeDuration(waking.durationMinutes);
+        const backToSleepText = waking.backToSleepMethod ? escapeHtml(waking.backToSleepMethod) : '-';
+        
+        return `
+          <tr>
+            <td>${waking.index}º Despertar</td>
+            <td>${waking.displayText}</td>
+            <td>${wakingDurationText}</td>
+            <td>${backToSleepText}</td>
+          </tr>
+        `;
+      }).join('');
+
+      wakingsHTML = `
+        <div class="section">
+          <h3 class="section-title">DESPERTARES NOTURNOS (${report.wakings.length})</h3>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Despertar</th>
+                <th>Horário</th>
+                <th>Duração</th>
+                <th>Voltou a Dormir</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${wakingsRows}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    let observationsHTML = '';
+    if (report.motherObservations || report.consultantComments) {
+      observationsHTML = '<div class="section"><h3 class="section-title">OBSERVAÇÕES DO DIA</h3>';
+      if (report.motherObservations) {
+        observationsHTML += `<div class="observation-box"><strong>Mãe:</strong> ${escapeHtml(report.motherObservations)}</div>`;
+      }
+      if (report.consultantComments) {
+        observationsHTML += `<div class="observation-box consultant"><strong>Consultora:</strong> ${escapeHtml(report.consultantComments)}</div>`;
+      }
+      observationsHTML += '</div>';
     }
 
     return `
       <div class="card">
         <div class="card-header">
-          <div class="day-title">${dayNumberText}</div>
-          <div class="date-text">${report.dateDisplay}</div>
+          <h2 class="day-title">${dayNumberText}</h2>
+          <span class="date-text">${report.dateDisplay}</span>
         </div>
 
         ${summaryHTML}
 
         <div class="section">
-          <div class="section-title">ACORDOU</div>
-          <div class="info-line"><strong>Horário:</strong> ${wakeUpText}</div>
-          ${report.firstNapWindow ? `<div class="info-line"><strong>1ª Janela:</strong> ${firstNapWindowText}</div>` : ''}
+          <h3 class="section-title">ACORDOU</h3>
+          <table class="data-table">
+            <tbody>
+              <tr>
+                <td><strong>Horário:</strong></td>
+                <td>${wakeUpText}</td>
+                ${report.firstNapWindow ? `<td><strong>1ª Janela:</strong></td><td>${report.firstNapWindow}</td>` : '<td colspan="2"></td>'}
+              </tr>
+            </tbody>
+          </table>
         </div>
 
-        ${report.naps.length > 0 ? `
-          <div class="section">
-            <div class="section-title">SONECAS (${report.naps.length})</div>
-            ${napsHTML}
-          </div>
-        ` : ''}
-
+        ${napsHTML}
         ${nightSleepHTML}
-
-        ${report.wakings.length > 0 ? `
-          <div class="section">
-            <div class="section-title">DESPERTARES NOTURNOS (${report.wakings.length})</div>
-            ${wakingsHTML}
-          </div>
-        ` : ''}
-
-        ${report.motherObservations ? `
-          <div class="section">
-            <div class="observation-box">
-              <div class="observation-label">OBSERVAÇÕES DA MÃE (DIA):</div>
-              <div class="observation-text">${report.motherObservations}</div>
-            </div>
-          </div>
-        ` : ''}
-
-        ${report.consultantComments ? `
-          <div class="section">
-            <div class="observation-box" style="border-left-color: ${primaryColor};">
-              <div class="observation-label" style="color: ${primaryColor};">COMENTÁRIOS DA CONSULTORA (DIA):</div>
-              <div class="observation-text">${report.consultantComments}</div>
-            </div>
-          </div>
-        ` : ''}
+        ${wakingsHTML}
+        ${observationsHTML}
       </div>
     `;
   };
 
   const leftColumnHTML = leftColumnReports.map(generateReportCard).join('');
   const rightColumnHTML = rightColumnReports.map(generateReportCard).join('');
-
-  const currentDate = new Date().toLocaleDateString('pt-BR');
 
   return `
     <!DOCTYPE html>
@@ -744,7 +759,7 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
         <style>
           @page {
             size: landscape;
-            margin: 10mm;
+            margin: 8mm;
           }
           
           * {
@@ -754,50 +769,52 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
           }
           
           body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background: #f5f5f5;
-            padding: 10px;
-            font-size: 9px;
-            line-height: 1.3;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #ffffff;
+            padding: 8px;
+            font-size: 8px;
+            line-height: 1.2;
+            color: #333;
           }
           
           .header {
             text-align: center;
-            margin-bottom: 12px;
-            padding-bottom: 10px;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
             border-bottom: 2px solid ${primaryColor};
           }
           
           .header h1 {
             color: ${primaryColor};
-            font-size: 18px;
-            margin-bottom: 4px;
+            font-size: 16px;
+            margin-bottom: 3px;
+            font-weight: 700;
           }
           
           .header p {
             color: #666;
-            font-size: 10px;
+            font-size: 9px;
             margin: 2px 0;
           }
           
           .columns-container {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             justify-content: space-between;
           }
           
           .column {
-            width: 49%;
+            width: 49.5%;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
           }
           
           .card {
-            background: white;
-            border-radius: 8px;
-            padding: 10px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 8px;
             border-left: 3px solid ${primaryColor};
             page-break-inside: avoid;
             break-inside: avoid;
@@ -807,54 +824,60 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
-            padding-bottom: 6px;
+            margin-bottom: 6px;
+            padding-bottom: 4px;
             border-bottom: 1px solid #e0e0e0;
           }
           
           .day-title {
-            font-size: 13px;
+            font-size: 11px;
             font-weight: bold;
             color: ${primaryColor};
+            margin: 0;
           }
           
           .date-text {
-            font-size: 9px;
+            font-size: 8px;
             color: #666;
             font-weight: 600;
           }
           
           .summary-box {
-            background: ${primaryColor}15;
-            border-radius: 6px;
-            padding: 6px;
-            margin-bottom: 8px;
+            background: ${primaryColor}10;
             border: 1px solid ${primaryColor}30;
+            border-radius: 4px;
+            padding: 5px;
+            margin-bottom: 6px;
           }
           
-          .summary-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 3px;
-            font-size: 9px;
+          .summary-table {
+            width: 100%;
+            border-collapse: collapse;
           }
           
-          .summary-total {
-            border-top: 1px solid ${primaryColor}30;
-            padding-top: 3px;
-            margin-top: 3px;
-            font-weight: bold;
+          .summary-table td {
+            padding: 2px 4px;
+            font-size: 8px;
+          }
+          
+          .summary-label {
+            color: #555;
           }
           
           .summary-value {
+            text-align: right;
             font-weight: bold;
             color: ${primaryColor};
           }
           
+          .summary-total td {
+            border-top: 1px solid ${primaryColor}30;
+            padding-top: 3px;
+            margin-top: 2px;
+          }
+          
           .section {
-            margin-top: 8px;
-            padding-top: 6px;
-            border-top: 1px solid #e0e0e050;
+            margin-top: 6px;
           }
           
           .section-title {
@@ -866,66 +889,51 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
             letter-spacing: 0.3px;
           }
           
-          .info-line {
-            font-size: 9px;
+          .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 3px;
+            font-size: 7px;
+          }
+          
+          .data-table th {
+            background: ${primaryColor}15;
+            color: ${primaryColor};
+            font-weight: bold;
+            padding: 3px 4px;
+            text-align: left;
+            border: 1px solid ${primaryColor}30;
+            font-size: 7px;
+          }
+          
+          .data-table td {
+            padding: 3px 4px;
+            border: 1px solid #e0e0e0;
+            vertical-align: top;
+          }
+          
+          .data-table tbody tr:nth-child(even) {
+            background: #f9f9f9;
+          }
+          
+          .detail-item {
             margin-bottom: 2px;
             line-height: 1.3;
           }
           
-          .nap-card, .waking-card {
-            background: #fafafa;
-            border-radius: 6px;
-            padding: 6px;
-            margin-bottom: 6px;
-            border-left: 2px solid ${primaryColor};
-          }
-          
-          .waking-card {
-            border-left-color: #FF9800;
-          }
-          
-          .nap-header, .waking-header {
-            font-weight: bold;
-            font-size: 10px;
-            margin-bottom: 3px;
-          }
-          
-          .badges-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 3px;
-            margin-top: 4px;
-          }
-          
-          .badge {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 8px;
-            font-weight: 600;
-            color: white;
-          }
-          
           .observation-box {
             background: #f5f5f5;
-            border-radius: 4px;
-            padding: 6px;
-            margin-top: 4px;
             border-left: 2px solid #999;
+            border-radius: 3px;
+            padding: 4px;
+            margin-top: 3px;
+            font-size: 7px;
+            line-height: 1.3;
           }
           
-          .observation-label {
-            font-size: 8px;
-            font-weight: bold;
-            color: #666;
-            margin-bottom: 2px;
-            text-transform: uppercase;
-          }
-          
-          .observation-text {
-            font-size: 8px;
-            color: #333;
-            line-height: 1.4;
+          .observation-box.consultant {
+            border-left-color: ${primaryColor};
+            background: ${primaryColor}08;
           }
           
           @media print {
@@ -942,7 +950,7 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
       </head>
       <body>
         <div class="header">
-          <h1>Relatório de Acompanhamento - ${babyName}</h1>
+          <h1>Relatório de Acompanhamento - ${escapeHtml(babyName)}</h1>
           <p>Gerado em: ${currentDate} | Total de dias: ${reports.length}</p>
         </div>
         
@@ -1105,12 +1113,6 @@ export default function AcompanhamentoScreen() {
   }, [babyId, normalizeNightSleep]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
-      ScreenOrientation.unlockAsync().catch((err) => {
-        console.log("[Acompanhamento] Screen orientation unlock not supported:", err.message);
-      });
-    }
-
     const updateOrientation = () => {
       const { width, height } = Dimensions.get('window');
       setIsLandscape(width > height);
@@ -1135,7 +1137,7 @@ export default function AcompanhamentoScreen() {
   }, [router]);
 
   const handleExportPDF = useCallback(async () => {
-    console.log('[Acompanhamento] Starting PDF export');
+    console.log('[Acompanhamento] Starting PDF data export');
     
     if (reports.length === 0) {
       Alert.alert('Aviso', 'Não há dados para exportar');
@@ -1148,7 +1150,7 @@ export default function AcompanhamentoScreen() {
       const babyNameForPDF = babyName || 'Bebê';
       const html = generatePDFHTML(reports, babyNameForPDF);
       
-      console.log('[Acompanhamento] Generating PDF with expo-print');
+      console.log('[Acompanhamento] Generating PDF with structured data');
       const { uri } = await Print.printToFileAsync({
         html,
         base64: false,
