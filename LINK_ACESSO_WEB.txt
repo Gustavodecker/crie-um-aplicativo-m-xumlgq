@@ -1,0 +1,142 @@
+
+═══════════════════════════════════════════════════════════════
+🌐 LINK DE ACESSO WEB - CONSULTORIA DE SONO INFANTIL
+═══════════════════════════════════════════════════════════════
+
+✅ SEU APP JÁ ESTÁ DISPONÍVEL NA WEB!
+
+═══════════════════════════════════════════════════════════════
+📱 LINK PRINCIPAL (Natively)
+═══════════════════════════════════════════════════════════════
+
+https://app.natively.ai/preview/[SEU_PROJECT_ID]
+
+👆 Substitua [SEU_PROJECT_ID] pelo ID do seu projeto no Natively
+
+Como encontrar o ID:
+1. Acesse o painel do Natively
+2. Vá em "Projects"
+3. Clique no seu projeto
+4. Copie o link que aparece
+
+═══════════════════════════════════════════════════════════════
+🚀 COMO USAR
+═══════════════════════════════════════════════════════════════
+
+1. Abra o link no navegador (Chrome, Safari, Firefox, Edge)
+2. Faça login com as mesmas credenciais do app mobile
+3. Todas as funcionalidades estão disponíveis:
+   ✅ Cadastro de bebês
+   ✅ Rotina diária
+   ✅ Acompanhamento
+   ✅ Relatórios
+   ✅ Upload de fotos e PDFs
+   ✅ Orientações
+
+═══════════════════════════════════════════════════════════════
+👥 COMPARTILHANDO COM CLIENTES
+═══════════════════════════════════════════════════════════════
+
+Mensagem sugerida:
+
+"Olá! 👋
+
+Você pode acessar o app de consultoria de sono também pelo 
+computador/navegador:
+
+🔗 [COLE SEU LINK AQUI]
+
+Use o mesmo login e senha do aplicativo do celular.
+
+Vantagens:
+✅ Tela maior para preencher as rotinas
+✅ Não precisa instalar nada
+✅ Funciona em qualquer computador
+✅ Dados sincronizados com o app mobile
+
+Qualquer dúvida, estou à disposição!"
+
+═══════════════════════════════════════════════════════════════
+🌍 OPÇÕES DE DOMÍNIO PERSONALIZADO
+═══════════════════════════════════════════════════════════════
+
+Se você quiser um domínio próprio (ex: consultoriasono.com.br):
+
+Opção 1 - Vercel (Recomendado)
+• Gratuito
+• HTTPS automático
+• Deploy em minutos
+• Link: https://vercel.com
+
+Opção 2 - Netlify
+• Gratuito
+• HTTPS automático
+• Fácil de usar
+• Link: https://netlify.com
+
+═══════════════════════════════════════════════════════════════
+📊 COMPATIBILIDADE
+═══════════════════════════════════════════════════════════════
+
+Navegadores suportados:
+✅ Chrome (Desktop e Mobile)
+✅ Safari (Desktop e Mobile)
+✅ Firefox (Desktop e Mobile)
+✅ Edge (Desktop)
+✅ Opera (Desktop)
+
+Dispositivos:
+✅ Computadores (Windows, Mac, Linux)
+✅ Tablets (iPad, Android)
+✅ Smartphones (via navegador)
+
+═══════════════════════════════════════════════════════════════
+🔐 SEGURANÇA
+═══════════════════════════════════════════════════════════════
+
+✅ Conexão HTTPS segura
+✅ Mesma autenticação do app mobile
+✅ Dados criptografados
+✅ Tokens de segurança
+
+═══════════════════════════════════════════════════════════════
+💡 DICAS
+═══════════════════════════════════════════════════════════════
+
+1. Salve o link nos favoritos do navegador
+2. No celular, adicione à tela inicial (funciona como app)
+3. Use o mesmo login em todos os dispositivos
+4. Os dados são sincronizados automaticamente
+
+═══════════════════════════════════════════════════════════════
+📱 PUBLICAÇÃO NAS LOJAS
+═══════════════════════════════════════════════════════════════
+
+Seu app também está pronto para:
+
+✅ Google Play Store (Android)
+   • Configurado: com.todanoite.baby
+   • Versão: 1.0.1 (versionCode: 2)
+
+✅ Apple App Store (iOS)
+   • Configurado: com.todanoite.baby
+   • Versão: 1.0.1
+
+O Natively pode ajudar com o processo de publicação!
+
+═══════════════════════════════════════════════════════════════
+🆘 SUPORTE
+═══════════════════════════════════════════════════════════════
+
+Dúvidas sobre:
+• Acesso web: Verifique o link no painel do Natively
+• Domínio próprio: Consulte a documentação da Vercel/Netlify
+• Publicação nas lojas: Entre em contato com o suporte Natively
+
+═══════════════════════════════════════════════════════════════
+
+🎉 PRONTO! SEU APP JÁ ESTÁ ACESSÍVEL VIA WEB!
+
+Copie o link do Natively e comece a usar agora mesmo!
+
+═══════════════════════════════════════════════════════════════

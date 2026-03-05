@@ -1,7 +1,8 @@
+
 {
   "expo": {
-    "name": "crie-um-aplicativo-m",
-    "slug": "crie-um-aplicativo-m",
+    "name": "Consultoria de Sono Infantil",
+    "slug": "consultoria-sono-infantil",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-afq.png",
@@ -35,14 +36,22 @@
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "static",
+      "build": {
+        "babel": {
+          "include": [
+            "react-native-web"
+          ]
+        }
+      }
     },
     "plugins": [
       "expo-font",
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "crieumaplicativom",
+    "scheme": "consultoriasono",
     "experiments": {
       "typedRoutes": true
     },
