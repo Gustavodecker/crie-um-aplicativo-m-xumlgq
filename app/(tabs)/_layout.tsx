@@ -6,6 +6,7 @@ import { View, ActivityIndicator } from "react-native";
 import FloatingTabBar, { TabBarItem } from "@/components/FloatingTabBar";
 import { colors } from "@/styles/commonStyles";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { apiGet } from "@/utils/api";
 
 export default function TabLayout() {
   const { user, loading } = useAuth();
@@ -27,22 +28,35 @@ export default function TabLayout() {
         return;
       }
 
-      console.log("[Tab Layout] 🔍 Checking user role from AsyncStorage");
+      console.log("[Tab Layout] 🔍 Checking user role");
 
-      // 🔥 CRITICAL FIX: Only use AsyncStorage, never call API
-      // The role is set during login in auth.tsx
       try {
+        // First try AsyncStorage (fast path - set during login)
         const storedRole = await AsyncStorage.getItem("userRole");
         
         if (storedRole === "consultant" || storedRole === "mother") {
           console.log("[Tab Layout] ✅ User role from AsyncStorage:", storedRole);
           setUserRole(storedRole);
-        } else {
-          // No stored role - this shouldn't happen after login
-          // Default to mother to be safe
-          console.warn("[Tab Layout] ⚠️ No stored role found, defaulting to mother");
-          setUserRole("mother");
+          setCheckingRole(false);
+          return;
+        }
+        
+        // 🔥 CRITICAL FIX: If no stored role (e.g. after app reinstall with valid token),
+        // determine role by calling the API instead of defaulting to "mother"
+        // This handles the case where SecureStore token survives reinstall but AsyncStorage is cleared
+        console.log("[Tab Layout] ⚠️ No stored role found, determining from API...");
+        
+        try {
+          await apiGet("/api/consultant/profile", { suppressErrorLog: true });
+          console.log("[Tab Layout] ✅ User is a CONSULTANT (determined from API)");
+          await AsyncStorage.setItem("userRole", "consultant");
+          setUserRole("consultant");
+        } catch (apiError: any) {
+          // 404 means no consultant profile = user is a mother
+          // Any other error, default to mother
+          console.log("[Tab Layout] ✅ User is a MOTHER (determined from API)");
           await AsyncStorage.setItem("userRole", "mother");
+          setUserRole("mother");
         }
       } catch (storageError) {
         console.error("[Tab Layout] ❌ Error reading AsyncStorage:", storageError);

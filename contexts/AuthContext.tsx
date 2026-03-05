@@ -1,8 +1,8 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Platform } from "react-native";
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import { Platform, AppState, AppStateStatus } from "react-native";
 import * as Linking from "expo-linking";
-import { authClient, setBearerToken, clearAuthTokens } from "@/lib/auth";
+import { authClient, setBearerToken, clearAuthTokens, getBearerToken } from "@/lib/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface User {
@@ -72,91 +72,234 @@ function openOAuthPopup(provider: string): Promise<string> {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // Use refs to avoid stale closures in AppState listener
+  const isRefreshingRef = useRef(false);
+  const userRef = useRef<User | null>(null);
+  // Track last validation time to avoid too-frequent checks
+  const lastValidationRef = useRef<number>(0);
+  // Minimum interval between background validations: 5 minutes
+  const VALIDATION_INTERVAL_MS = 5 * 60 * 1000;
+
+  // Keep userRef in sync with user state
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   useEffect(() => {
-    // 🔥 CRITICAL FIX: Only fetch user on mount, no polling
-    // Polling was causing unnecessary API calls that could invalidate the session
-    console.log("[Auth] Initial user session check on mount");
+    console.log("[Auth] 🚀 AuthProvider mounted - initializing session");
+    
+    // Initial session check on mount
     fetchUser();
 
     // Listen for deep links (e.g. from social auth redirects)
     const subscription = Linking.addEventListener("url", (event) => {
-      console.log("[Auth] Deep link received, refreshing user session");
+      console.log("[Auth] 🔗 Deep link received:", event.url);
       fetchUser();
     });
 
-    // 🔥 REMOVED: Polling interval that was causing session issues
-    // Sessions should remain valid until explicitly logged out or token expires
+    // 🔥 CRITICAL FIX: Use refs to avoid stale closure bug in AppState listener
+    // Previously, `user` and `isRefreshing` were captured at mount time (always null/false)
+    // Now we use refs which always reflect the current value
+    const appStateSubscription = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
+      if (nextAppState === "active") {
+        const now = Date.now();
+        const timeSinceLastValidation = now - lastValidationRef.current;
+        
+        console.log("[Auth] 📱 App became active");
+        
+        // Only validate if:
+        // 1. We have a user (using ref to avoid stale closure)
+        // 2. We're not already refreshing
+        // 3. Enough time has passed since last validation (5 min throttle)
+        if (userRef.current && !isRefreshingRef.current && timeSinceLastValidation > VALIDATION_INTERVAL_MS) {
+          console.log("[Auth] 🔍 Triggering background session validation");
+          validateSessionSilently();
+        } else {
+          console.log("[Auth] ⏭️ Skipping validation - user:", !!userRef.current, "refreshing:", isRefreshingRef.current, "timeSince:", Math.round(timeSinceLastValidation / 1000) + "s");
+        }
+      }
+    });
 
     return () => {
       subscription.remove();
+      appStateSubscription.remove();
     };
   }, []);
+
+  // 🔥 CRITICAL FIX: Silent session validation that NEVER clears user on network errors
+  // Only clears on explicit 401/403 responses (truly invalid sessions)
+  const validateSessionSilently = async () => {
+    if (isRefreshingRef.current) {
+      console.log("[Auth] ⏭️ Already refreshing, skipping validation");
+      return;
+    }
+
+    isRefreshingRef.current = true;
+    lastValidationRef.current = Date.now();
+
+    try {
+      console.log("[Auth] 🔍 Validating session silently...");
+      
+      // Check if we have a token first
+      const token = await getBearerToken();
+      if (!token) {
+        console.log("[Auth] ⚠️ No token found during silent validation - user must re-login");
+        setUser(null);
+        userRef.current = null;
+        return;
+      }
+
+      // Try to get session from Better Auth with a timeout
+      const sessionPromise = authClient.getSession();
+      const timeoutPromise = new Promise<null>((_, reject) => 
+        setTimeout(() => reject(new Error("Session check timeout")), 10000)
+      );
+      
+      const session = await Promise.race([sessionPromise, timeoutPromise]) as any;
+      
+      if (session?.data?.user) {
+        console.log("[Auth] ✅ Silent validation: session still valid for", session.data.user.email);
+        setUser(session.data.user as User);
+        userRef.current = session.data.user as User;
+        
+        // Sync token if available
+        if (session.data.session?.token) {
+          await setBearerToken(session.data.session.token);
+        }
+      } else if (session?.data === null || session?.error) {
+        // Explicit null data or error from server means session is truly invalid
+        console.log("[Auth] ⚠️ Silent validation: session explicitly invalid, clearing user");
+        setUser(null);
+        userRef.current = null;
+        await clearAuthTokens();
+      }
+      // If session is undefined/unexpected, keep user logged in (network issue)
+    } catch (error: any) {
+      const errorMessage = error?.message?.toLowerCase() || '';
+      console.error("[Auth] ⚠️ Silent validation error:", error?.message || error);
+      
+      // 🔥 CRITICAL: Only clear user on explicit auth errors (401/403)
+      // NEVER clear on network errors, timeouts, or other transient failures
+      if (errorMessage.includes('unauthorized') || errorMessage.includes('401') || errorMessage.includes('403')) {
+        console.log("[Auth] 🚪 Session explicitly rejected (401/403), clearing user");
+        setUser(null);
+        userRef.current = null;
+        await clearAuthTokens();
+      } else {
+        // Network error, timeout, server error - keep user logged in
+        console.log("[Auth] 🌐 Transient error during validation, keeping user logged in");
+      }
+    } finally {
+      isRefreshingRef.current = false;
+    }
+  };
 
   const fetchUser = async () => {
     try {
       setLoading(true);
       console.log("[Auth] 🔄 Fetching user session...");
       
-      // 🔥 CRITICAL FIX: Add retry logic with exponential backoff
+      // Check if we have a token first
+      const existingToken = await getBearerToken();
+      if (!existingToken) {
+        console.log("[Auth] ⚠️ No token found in storage");
+        setUser(null);
+        userRef.current = null;
+        setLoading(false);
+        return;
+      }
+
+      console.log("[Auth] 🔑 Token exists in storage, fetching session...");
+      
+      // 🔥 CRITICAL FIX: Add retry logic with exponential backoff for network resilience
       let retries = 0;
       const maxRetries = 3;
       let session = null;
+      let lastError: any = null;
       
       while (retries < maxRetries) {
         try {
           session = await authClient.getSession();
+          console.log("[Auth] ✅ Session fetched successfully");
+          lastError = null;
           break; // Success, exit retry loop
         } catch (error: any) {
           retries++;
+          lastError = error;
+          const errorMessage = error?.message || String(error);
+          console.error(`[Auth] ⚠️ Session fetch attempt ${retries}/${maxRetries} failed:`, errorMessage);
+          
+          // Don't retry on explicit auth errors
+          if (errorMessage.toLowerCase().includes('unauthorized') || 
+              errorMessage.includes('401') || 
+              errorMessage.includes('403')) {
+            console.log("[Auth] 🚪 Auth error - not retrying");
+            break;
+          }
+          
           if (retries < maxRetries) {
             const delay = Math.min(1000 * Math.pow(2, retries - 1), 5000); // Exponential backoff: 1s, 2s, 4s
-            console.log(`[Auth] ⚠️ Session fetch failed (attempt ${retries}/${maxRetries}), retrying in ${delay}ms...`);
+            console.log(`[Auth] ⏳ Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
-          } else {
-            console.error("[Auth] ❌ Failed to fetch session after", maxRetries, "attempts:", error);
-            throw error;
           }
         }
       }
       
-      console.log("[Auth] 📦 Session response:", JSON.stringify(session, null, 2));
-      
       if (session?.data?.user) {
         console.log("[Auth] ✅ User found in session:", session.data.user.email);
         setUser(session.data.user as User);
+        userRef.current = session.data.user as User;
         
-        // 🔥 CRITICAL: Sync token to SecureStore for utils/api.ts
+        // 🔥 CRITICAL: Ensure token is synced to SecureStore
         if (session.data.session?.token) {
-          const tokenPreview = session.data.session.token.substring(0, 30);
-          console.log("[Auth] 🔑 Token found in session (preview):", tokenPreview + "...");
-          console.log("[Auth] 💾 Syncing token to SecureStore...");
+          const tokenPreview = session.data.session.token.substring(0, 20);
+          console.log("[Auth] 🔑 Syncing token to SecureStore (preview):", tokenPreview + "...");
           await setBearerToken(session.data.session.token);
-          console.log("[Auth] ✅ Token synced successfully to SecureStore");
+          console.log("[Auth] ✅ Token synced successfully");
         } else {
-          console.warn("[Auth] ⚠️ No token found in session.data.session");
-          console.log("[Auth] 🔍 Full session.data structure:", JSON.stringify(session.data, null, 2));
+          console.warn("[Auth] ⚠️ No token in session.data.session, using existing token");
+          // Keep using the existing token - it's already in storage
         }
-      } else {
-        console.log("[Auth] ❌ No user in session, clearing tokens");
-        setUser(null);
-        await clearAuthTokens();
-      }
-    } catch (error) {
-      console.error("[Auth] ❌ Failed to fetch user:", error);
-      // 🔥 CRITICAL FIX: Don't clear user on fetch error
-      // Only clear if we explicitly know the session is invalid
-      // This prevents logout on temporary network issues
-      if (error && typeof error === 'object' && 'message' in error) {
-        const errorMessage = (error as any).message?.toLowerCase() || '';
-        if (errorMessage.includes('unauthorized') || errorMessage.includes('401')) {
-          console.log("[Auth] Session is invalid (401), clearing user");
+      } else if (lastError) {
+        // We had errors during all retries
+        const errorMessage = lastError?.message?.toLowerCase() || '';
+        if (errorMessage.includes('unauthorized') || errorMessage.includes('401') || errorMessage.includes('403')) {
+          console.log("[Auth] 🚪 Session invalid (401/403), clearing user");
           setUser(null);
+          userRef.current = null;
           await clearAuthTokens();
         } else {
-          console.log("[Auth] Network/temporary error, keeping user logged in");
-          // Keep user logged in on network errors
+          // Network/transient error - keep user logged in with existing token
+          console.log("[Auth] 🌐 Network/temporary error, keeping user logged in (token exists)");
+          // Don't clear user - they have a valid token, just can't reach server right now
         }
+      } else {
+        // Session returned but no user data - session is truly expired
+        console.log("[Auth] ❌ No user in session response - session expired");
+        setUser(null);
+        userRef.current = null;
+        await clearAuthTokens();
+      }
+    } catch (error: any) {
+      console.error("[Auth] ❌ Failed to fetch user:", error?.message || error);
+      
+      // 🔥 CRITICAL FIX: Only clear user on explicit auth errors, not network errors
+      const errorMessage = error?.message?.toLowerCase() || '';
+      if (errorMessage.includes('unauthorized') || errorMessage.includes('401') || errorMessage.includes('403')) {
+        console.log("[Auth] 🚪 Session invalid (401/403), clearing user");
+        setUser(null);
+        userRef.current = null;
+        await clearAuthTokens();
+      } else {
+        console.log("[Auth] 🌐 Network/temporary error, keeping user logged in if token exists");
+        // Keep user logged in if we have a token - they can retry
+        const token = await getBearerToken();
+        if (!token) {
+          console.log("[Auth] ⚠️ No token found, clearing user");
+          setUser(null);
+          userRef.current = null;
+        }
+        // If token exists, keep user state as-is (don't clear)
       }
     } finally {
       setLoading(false);
@@ -166,40 +309,89 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithEmail = async (email: string, password: string) => {
     try {
       console.log("[Auth] 🔐 Signing in with email:", email);
-      const signInResponse = await authClient.signIn.email({ email, password });
-      console.log("[Auth] 📬 Sign in response:", JSON.stringify(signInResponse, null, 2));
-      console.log("[Auth] ✅ Sign in successful, fetching user and syncing token...");
       
-      // 🔥 CRITICAL: Fetch user immediately to sync token
+      const signInResponse = await authClient.signIn.email({ 
+        email, 
+        password,
+        // 🔥 CRITICAL: Request a long-lived session
+        rememberMe: true
+      });
+      
+      console.log("[Auth] ✅ Sign in response received");
+      
+      // 🔥 CRITICAL: Try to extract and save token directly from sign-in response
+      // This avoids a second round-trip to getSession
+      const responseData = signInResponse as any;
+      if (responseData?.data?.session?.token) {
+        console.log("[Auth] 🔑 Token found directly in sign-in response, saving...");
+        await setBearerToken(responseData.data.session.token);
+        if (responseData.data.user) {
+          setUser(responseData.data.user as User);
+          userRef.current = responseData.data.user as User;
+        }
+      }
+      
+      // Always fetch user to ensure everything is in sync
       await fetchUser();
-      console.log("[Auth] ✅ User fetched and token synced");
-    } catch (error) {
-      console.error("[Auth] ❌ Email sign in failed:", error);
+      
+      // Verify token was synced
+      const token = await getBearerToken();
+      if (!token) {
+        console.error("[Auth] ❌ CRITICAL: Token not synced after login!");
+        throw new Error("Authentication failed - token not saved");
+      }
+      
+      console.log("[Auth] ✅ Login complete, token verified");
+    } catch (error: any) {
+      console.error("[Auth] ❌ Email sign in failed:", error?.message || error);
       throw error;
     }
   };
 
   const signUpWithEmail = async (email: string, password: string, name?: string) => {
     try {
-      console.log("[Auth] Signing up with email:", email);
-      await authClient.signUp.email({
+      console.log("[Auth] 📝 Signing up with email:", email);
+      
+      const signUpResponse = await authClient.signUp.email({
         email,
         password,
         name,
       });
-      console.log("[Auth] Sign up successful, fetching user and syncing token...");
       
-      // 🔥 CRITICAL: Fetch user immediately to sync token
+      console.log("[Auth] ✅ Sign up response received");
+      
+      // 🔥 CRITICAL: Try to extract and save token directly from sign-up response
+      const responseData = signUpResponse as any;
+      if (responseData?.data?.session?.token) {
+        console.log("[Auth] 🔑 Token found directly in sign-up response, saving...");
+        await setBearerToken(responseData.data.session.token);
+        if (responseData.data.user) {
+          setUser(responseData.data.user as User);
+          userRef.current = responseData.data.user as User;
+        }
+      }
+      
+      // Always fetch user to ensure everything is in sync
       await fetchUser();
-      console.log("[Auth] User fetched and token synced");
-    } catch (error) {
-      console.error("[Auth] Email sign up failed:", error);
+      
+      // Verify token was synced
+      const token = await getBearerToken();
+      if (!token) {
+        console.error("[Auth] ❌ CRITICAL: Token not synced after signup!");
+        throw new Error("Registration failed - token not saved");
+      }
+      
+      console.log("[Auth] ✅ Signup complete, token verified");
+    } catch (error: any) {
+      console.error("[Auth] ❌ Email sign up failed:", error?.message || error);
       throw error;
     }
   };
 
   const signInWithSocial = async (provider: "google" | "apple" | "github") => {
     try {
+      console.log("[Auth] 🔗 Signing in with", provider);
+      
       if (Platform.OS === "web") {
         const token = await openOAuthPopup(provider);
         await setBearerToken(token);
@@ -207,14 +399,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         // Native: Use expo-linking to generate a proper deep link
         const callbackURL = Linking.createURL("/");
+        console.log("[Auth] 📱 Using callback URL:", callbackURL);
+        
         await authClient.signIn.social({
           provider,
           callbackURL,
         });
+        
         await fetchUser();
       }
-    } catch (error) {
-      console.error(`${provider} sign in failed:`, error);
+      
+      console.log("[Auth] ✅ Social sign in complete");
+    } catch (error: any) {
+      console.error(`[Auth] ❌ ${provider} sign in failed:`, error?.message || error);
       throw error;
     }
   };
@@ -224,44 +421,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGitHub = () => signInWithSocial("github");
 
   const signOut = async () => {
+    // 🔥 CRITICAL FIX: Clear local state IMMEDIATELY before any async operations
+    // This ensures the UI responds instantly and the user is never stuck
+    console.log("[Auth] 🚪 Signing out - clearing local state immediately");
+    setUser(null);
+    userRef.current = null;
+    
     try {
-      console.log("[Auth] 🚪 Signing out...");
+      // Clear tokens and storage in parallel
+      await Promise.all([
+        clearAuthTokens(),
+        AsyncStorage.removeItem("userRole").catch(() => {}),
+        AsyncStorage.removeItem("motherBabyId").catch(() => {}),
+      ]);
+      console.log("[Auth] ✅ Local state and tokens cleared");
       
-      // 🔥 CRITICAL FIX: Always clear local state first
-      // This ensures the user is logged out locally even if the API call fails
-      console.log("[Auth] Clearing local state and tokens");
-      setUser(null);
-      await clearAuthTokens();
-      
-      // 🔥 CRITICAL: Clear stored user role and baby ID on logout
-      try {
-        await AsyncStorage.removeItem("userRole");
-        await AsyncStorage.removeItem("motherBabyId");
-        console.log("[Auth] ✅ Cleared stored user role and baby ID");
-      } catch (storageError) {
-        console.error("[Auth] Error clearing AsyncStorage:", storageError);
-      }
-      
-      // Try to call backend logout, but don't fail if it errors
-      try {
-        await authClient.signOut();
+      // Try to call backend logout (non-critical - don't block on it)
+      authClient.signOut().then(() => {
         console.log("[Auth] ✅ Backend sign out successful");
-      } catch (error) {
-        console.error("[Auth] ⚠️ Backend sign out failed (non-critical):", error);
-        // Continue anyway - local logout is what matters
-      }
+      }).catch((error: any) => {
+        console.error("[Auth] ⚠️ Backend sign out failed (non-critical):", error?.message || error);
+      });
       
-      console.log("[Auth] ✅ Sign out complete");
-    } catch (error) {
-      console.error("[Auth] ❌ Sign out error:", error);
-      // Even if there's an error, ensure local state is cleared
-      setUser(null);
-      await clearAuthTokens();
-      try {
-        await AsyncStorage.removeItem("userRole");
-        await AsyncStorage.removeItem("motherBabyId");
-      } catch {}
+    } catch (error: any) {
+      console.error("[Auth] ⚠️ Error during sign out cleanup:", error?.message || error);
+      // Even if cleanup fails, user is already cleared from state
     }
+    
+    console.log("[Auth] ✅ Sign out complete");
   };
 
   return (
