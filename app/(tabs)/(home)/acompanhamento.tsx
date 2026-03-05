@@ -1,12 +1,14 @@
 
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { IconSymbol } from "@/components/IconSymbol";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { apiGet } from "@/utils/api";
 import { colors } from "@/styles/commonStyles";
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Platform, Dimensions } from "react-native";
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import {
   View,
   Text,
@@ -14,6 +16,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 
 interface Nap {
@@ -310,6 +313,18 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 4,
   },
+  exportButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  exportButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });
 
 function timeToMinutes(time: string): number {
@@ -516,13 +531,267 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
   return report;
 }
 
+function generatePDFHTML(reports: DailyReport[], babyName: string): string {
+  const primaryColor = colors.primary || '#6366F1';
+  
+  const reportsHTML = reports.map(report => {
+    const dayNumberText = `DIA ${report.dayNumber}`;
+    const wakeUpText = report.wakeUpTime || "Não registrado";
+    const firstNapWindowText = report.firstNapWindow || "N/A";
+
+    let napsHTML = '';
+    if (report.naps.length > 0) {
+      napsHTML = report.naps.map(nap => {
+        const napTitle = `Soneca ${nap.napNumber}`;
+        const napDurationText = formatTimeDuration(nap.durationMinutes);
+        
+        let badgesHTML = '';
+        if (nap.sleepMethod || nap.environment || nap.wakeUpMood) {
+          const badges = [];
+          if (nap.sleepMethod) badges.push(`<span style="background: ${primaryColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Dormiu: ${nap.sleepMethod}</span>`);
+          if (nap.environment) badges.push(`<span style="background: ${getEnvironmentColor(nap.environment)}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Ambiente: ${nap.environment}</span>`);
+          if (nap.wakeUpMood) badges.push(`<span style="background: ${getMoodColor(nap.wakeUpMood)}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Acordou: ${nap.wakeUpMood}</span>`);
+          badgesHTML = `<div style="margin-top: 6px;">${badges.join('')}</div>`;
+        }
+
+        let observationsHTML = '';
+        if (nap.observations) {
+          observationsHTML = `<div style="background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; border-left: 3px solid #999;">
+            <div style="font-size: 9px; font-weight: bold; color: #666; margin-bottom: 4px;">OBSERVAÇÕES DA MÃE:</div>
+            <div style="font-size: 10px; color: #333;">${nap.observations}</div>
+          </div>`;
+        }
+
+        let commentsHTML = '';
+        if (nap.consultantComments) {
+          commentsHTML = `<div style="background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; border-left: 3px solid ${primaryColor};">
+            <div style="font-size: 9px; font-weight: bold; color: ${primaryColor}; margin-bottom: 4px;">COMENTÁRIOS DA CONSULTORA:</div>
+            <div style="font-size: 10px; color: #333;">${nap.consultantComments}</div>
+          </div>`;
+        }
+
+        return `
+          <div style="background: #fafafa; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid ${primaryColor};">
+            <div style="font-weight: bold; font-size: 12px; margin-bottom: 4px;">${napTitle}</div>
+            <div style="font-size: 11px; margin-bottom: 2px;"><strong>Horário:</strong> ${nap.displayText}</div>
+            <div style="font-size: 11px; margin-bottom: 2px;"><strong>Duração:</strong> ${napDurationText}</div>
+            <div style="font-size: 11px;">${nap.windowText}</div>
+            ${badgesHTML}
+            ${observationsHTML}
+            ${commentsHTML}
+          </div>
+        `;
+      }).join('');
+    }
+
+    let wakingsHTML = '';
+    if (report.wakings.length > 0) {
+      wakingsHTML = report.wakings.map(waking => {
+        const wakingIndexText = `${waking.index}º Despertar`;
+        const wakingDurationText = formatTimeDuration(waking.durationMinutes);
+        
+        let backToSleepHTML = '';
+        if (waking.backToSleepMethod) {
+          backToSleepHTML = `<div style="margin-top: 4px;"><span style="background: ${primaryColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px;">Voltou a dormir: ${waking.backToSleepMethod}</span></div>`;
+        }
+
+        return `
+          <div style="background: #fafafa; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #FF9800;">
+            <div style="font-weight: bold; font-size: 11px; margin-bottom: 4px;">${wakingIndexText}</div>
+            <div style="font-size: 11px; margin-bottom: 2px;"><strong>Horário:</strong> ${waking.displayText}</div>
+            <div style="font-size: 11px;"><strong>Duração:</strong> ${wakingDurationText}</div>
+            ${backToSleepHTML}
+          </div>
+        `;
+      }).join('');
+    }
+
+    let nightSleepHTML = '';
+    if (report.nightSleepStart && report.nightSleepEnd) {
+      let nightBadgesHTML = '';
+      if (report.nightSleepMethod || report.nightEnvironment || report.nightWakeUpMood) {
+        const badges = [];
+        if (report.nightSleepMethod) badges.push(`<span style="background: ${primaryColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Dormiu: ${report.nightSleepMethod}</span>`);
+        if (report.nightEnvironment) badges.push(`<span style="background: ${getEnvironmentColor(report.nightEnvironment)}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Ambiente: ${report.nightEnvironment}</span>`);
+        if (report.nightWakeUpMood) badges.push(`<span style="background: ${getMoodColor(report.nightWakeUpMood)}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Acordou: ${report.nightWakeUpMood}</span>`);
+        nightBadgesHTML = `<div style="margin-top: 6px;">${badges.join('')}</div>`;
+      }
+
+      let nightObservationsHTML = '';
+      if (report.nightObservations) {
+        nightObservationsHTML = `<div style="background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; border-left: 3px solid #999;">
+          <div style="font-size: 9px; font-weight: bold; color: #666; margin-bottom: 4px;">OBSERVAÇÕES DA MÃE:</div>
+          <div style="font-size: 10px; color: #333;">${report.nightObservations}</div>
+        </div>`;
+      }
+
+      let nightCommentsHTML = '';
+      if (report.nightConsultantComments) {
+        nightCommentsHTML = `<div style="background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; border-left: 3px solid ${primaryColor};">
+          <div style="font-size: 9px; font-weight: bold; color: ${primaryColor}; margin-bottom: 4px;">COMENTÁRIOS DA CONSULTORA:</div>
+          <div style="font-size: 10px; color: #333;">${report.nightConsultantComments}</div>
+        </div>`;
+      }
+
+      nightSleepHTML = `
+        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+          <div style="font-size: 11px; font-weight: bold; color: ${primaryColor}; margin-bottom: 6px; text-transform: uppercase;">SONO NOTURNO</div>
+          <div style="font-size: 11px; margin-bottom: 2px;"><strong>Início:</strong> ${report.nightSleepStart}</div>
+          <div style="font-size: 11px; margin-bottom: 2px;"><strong>Fim:</strong> ${report.nightSleepEnd}</div>
+          ${report.nightSleepBrute ? `<div style="font-size: 11px; margin-bottom: 2px;"><strong>Total bruto:</strong> ${report.nightSleepBrute}</div>` : ''}
+          ${report.nightSleepLiquidTotal ? `<div style="font-size: 11px; margin-bottom: 2px;"><strong>Total líquido:</strong> <span style="font-weight: bold; color: ${primaryColor};">${report.nightSleepLiquidTotal}</span></div>` : ''}
+          ${nightBadgesHTML}
+          ${nightObservationsHTML}
+          ${nightCommentsHTML}
+        </div>
+      `;
+    }
+
+    let summaryHTML = '';
+    if (report.total24h) {
+      summaryHTML = `
+        <div style="background: ${primaryColor}15; padding: 10px; border-radius: 8px; margin-bottom: 12px; border: 1px solid ${primaryColor}30;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span style="font-size: 11px; font-weight: 600;">Sono Diurno:</span>
+            <span style="font-size: 11px; font-weight: bold; color: ${primaryColor};">${report.daytimeSleepTotal || '0h'}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+            <span style="font-size: 11px; font-weight: 600;">Sono Noturno:</span>
+            <span style="font-size: 11px; font-weight: bold; color: ${primaryColor};">${report.nightSleepLiquidTotal || '0h'}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-top: 1px solid ${primaryColor}30; padding-top: 4px; margin-top: 4px;">
+            <span style="font-size: 11px; font-weight: bold;">Total 24h:</span>
+            <span style="font-size: 12px; font-weight: bold; color: ${primaryColor};">${report.total24h}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid ${primaryColor}; page-break-inside: avoid;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid #e0e0e0;">
+          <div style="font-size: 16px; font-weight: bold; color: ${primaryColor};">${dayNumberText}</div>
+          <div style="font-size: 12px; color: #666; font-weight: 600;">${report.dateDisplay}</div>
+        </div>
+
+        ${summaryHTML}
+
+        <div style="margin-top: 12px;">
+          <div style="font-size: 11px; font-weight: bold; color: ${primaryColor}; margin-bottom: 6px; text-transform: uppercase;">ACORDOU</div>
+          <div style="font-size: 11px; margin-bottom: 2px;"><strong>Horário:</strong> ${wakeUpText}</div>
+          ${report.firstNapWindow ? `<div style="font-size: 11px;"><strong>1ª Janela:</strong> ${firstNapWindowText}</div>` : ''}
+        </div>
+
+        ${report.naps.length > 0 ? `
+          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+            <div style="font-size: 11px; font-weight: bold; color: ${primaryColor}; margin-bottom: 6px; text-transform: uppercase;">SONECAS (${report.naps.length})</div>
+            ${napsHTML}
+          </div>
+        ` : ''}
+
+        ${nightSleepHTML}
+
+        ${report.wakings.length > 0 ? `
+          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+            <div style="font-size: 11px; font-weight: bold; color: ${primaryColor}; margin-bottom: 6px; text-transform: uppercase;">DESPERTARES NOTURNOS (${report.wakings.length})</div>
+            ${wakingsHTML}
+          </div>
+        ` : ''}
+
+        ${report.motherObservations ? `
+          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+            <div style="background: #f5f5f5; padding: 8px; border-radius: 6px; border-left: 3px solid #999;">
+              <div style="font-size: 9px; font-weight: bold; color: #666; margin-bottom: 4px;">OBSERVAÇÕES DA MÃE (DIA):</div>
+              <div style="font-size: 10px; color: #333;">${report.motherObservations}</div>
+            </div>
+          </div>
+        ` : ''}
+
+        ${report.consultantComments ? `
+          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+            <div style="background: #f5f5f5; padding: 8px; border-radius: 6px; border-left: 3px solid ${primaryColor};">
+              <div style="font-size: 9px; font-weight: bold; color: ${primaryColor}; margin-bottom: 4px;">COMENTÁRIOS DA CONSULTORA (DIA):</div>
+              <div style="font-size: 10px; color: #333;">${report.consultantComments}</div>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
+  const currentDate = new Date().toLocaleDateString('pt-BR');
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          @page {
+            size: landscape;
+            margin: 15mm;
+          }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 0;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid ${primaryColor};
+          }
+          .header h1 {
+            color: ${primaryColor};
+            font-size: 24px;
+            margin: 0 0 8px 0;
+          }
+          .header p {
+            color: #666;
+            font-size: 14px;
+            margin: 4px 0;
+          }
+          .content {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+          }
+          @media print {
+            body {
+              background: white;
+              padding: 0;
+            }
+            .content {
+              gap: 12px;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Relatório de Acompanhamento - ${babyName}</h1>
+          <p>Gerado em: ${currentDate}</p>
+          <p>Total de dias: ${reports.length}</p>
+        </div>
+        <div class="content">
+          ${reportsHTML}
+        </div>
+      </body>
+    </html>
+  `;
+}
+
 export default function AcompanhamentoScreen() {
-  const { babyId } = useLocalSearchParams<{ babyId: string }>();
+  const { babyId, babyName } = useLocalSearchParams<{ babyId: string; babyName?: string }>();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [isLandscape, setIsLandscape] = useState(false);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   const normalizeNightSleep = useCallback((raw: any): NightSleep | null => {
     if (!raw) {
@@ -690,6 +959,48 @@ export default function AcompanhamentoScreen() {
     router.back();
   }, [router]);
 
+  const handleExportPDF = useCallback(async () => {
+    console.log('[Acompanhamento] Starting PDF export');
+    
+    if (reports.length === 0) {
+      Alert.alert('Aviso', 'Não há dados para exportar');
+      return;
+    }
+
+    try {
+      setExportingPDF(true);
+      
+      const babyNameForPDF = babyName || 'Bebê';
+      const html = generatePDFHTML(reports, babyNameForPDF);
+      
+      console.log('[Acompanhamento] Generating PDF with expo-print');
+      const { uri } = await Print.printToFileAsync({
+        html,
+        base64: false,
+      });
+      
+      console.log('[Acompanhamento] PDF generated at:', uri);
+      
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        console.log('[Acompanhamento] Sharing PDF');
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `Acompanhamento - ${babyNameForPDF}`,
+          UTI: 'com.adobe.pdf',
+        });
+        console.log('[Acompanhamento] PDF shared successfully');
+      } else {
+        Alert.alert('Sucesso', `PDF gerado em: ${uri}`);
+      }
+    } catch (err) {
+      console.error('[Acompanhamento] Error exporting PDF:', err);
+      Alert.alert('Erro', 'Não foi possível exportar o PDF');
+    } finally {
+      setExportingPDF(false);
+    }
+  }, [reports, babyName]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -751,6 +1062,19 @@ export default function AcompanhamentoScreen() {
                 size={24}
                 color={colors.text}
               />
+            </TouchableOpacity>
+          ),
+          headerRight: () => (
+            <TouchableOpacity 
+              style={styles.exportButton} 
+              onPress={handleExportPDF}
+              disabled={exportingPDF}
+            >
+              {exportingPDF ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.exportButtonText}>Exportar PDF</Text>
+              )}
             </TouchableOpacity>
           ),
         }}

@@ -1,2 +1,2 @@
 
-export { default } from "./acompanhamento";
+export { default } from './acompanhamento';
