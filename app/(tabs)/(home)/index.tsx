@@ -53,6 +53,7 @@ interface NightWaking {
   nightSleepId: string;
   startTime: string;
   endTime: string;
+  backToSleepMethod?: string | null;
 }
 
 interface NightSleep {
@@ -736,6 +737,39 @@ export default function ConsultantDashboardScreen() {
                     )}
                   </View>
                 </View>
+
+                {selectedRoutine.nightSleep.wakings && selectedRoutine.nightSleep.wakings.length > 0 && (
+                  <View style={styles.wakingsSection}>
+                    <Text style={styles.wakingsTitle}>Despertares Noturnos</Text>
+                    {selectedRoutine.nightSleep.wakings.map((waking, index) => {
+                      const wakingDuration = calcTimeDiff(waking.startTime, waking.endTime);
+                      const wakingDurationText = minutesToHM(wakingDuration);
+                      const wakingIndexText = `${index + 1}º Despertar`;
+
+                      return (
+                        <View key={waking.id} style={styles.wakingCard}>
+                          <Text style={styles.wakingTitle}>{wakingIndexText}</Text>
+                          <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>Horário:</Text>
+                            <Text style={styles.infoValue}>
+                              {waking.startTime} - {waking.endTime}
+                            </Text>
+                          </View>
+                          <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>Duração:</Text>
+                            <Text style={styles.infoValue}>{wakingDurationText}</Text>
+                          </View>
+                          {waking.backToSleepMethod && (
+                            <View style={styles.infoRow}>
+                              <Text style={styles.infoLabel}>Voltou a dormir:</Text>
+                              <Text style={styles.infoValue}>{waking.backToSleepMethod}</Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             )}
 
@@ -1579,5 +1613,33 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     minHeight: 80,
+  },
+  wakingsSection: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  wakingsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  wakingCard: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderLeftWidth: 4,
+    borderLeftColor: '#FF9800',
+  },
+  wakingTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.sm,
   },
 });
