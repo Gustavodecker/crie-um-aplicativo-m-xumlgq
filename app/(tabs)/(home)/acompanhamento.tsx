@@ -534,7 +534,18 @@ function calculateDailyReport(routine: Routine, dayIndex: number): DailyReport {
 function generatePDFHTML(reports: DailyReport[], babyName: string): string {
   const primaryColor = colors.primary || '#6366F1';
   
-  const reportsHTML = reports.map(report => {
+  const leftColumnReports = [];
+  const rightColumnReports = [];
+  
+  reports.forEach((report, index) => {
+    if (index % 2 === 0) {
+      leftColumnReports.push(report);
+    } else {
+      rightColumnReports.push(report);
+    }
+  });
+
+  const generateReportCard = (report: DailyReport) => {
     const dayNumberText = `DIA ${report.dayNumber}`;
     const wakeUpText = report.wakeUpTime || "Não registrado";
     const firstNapWindowText = report.firstNapWindow || "N/A";
@@ -548,34 +559,34 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
         let badgesHTML = '';
         if (nap.sleepMethod || nap.environment || nap.wakeUpMood) {
           const badges = [];
-          if (nap.sleepMethod) badges.push(`<span style="background: ${primaryColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Dormiu: ${nap.sleepMethod}</span>`);
-          if (nap.environment) badges.push(`<span style="background: ${getEnvironmentColor(nap.environment)}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Ambiente: ${nap.environment}</span>`);
-          if (nap.wakeUpMood) badges.push(`<span style="background: ${getMoodColor(nap.wakeUpMood)}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Acordou: ${nap.wakeUpMood}</span>`);
-          badgesHTML = `<div style="margin-top: 6px;">${badges.join('')}</div>`;
+          if (nap.sleepMethod) badges.push(`<span class="badge" style="background: ${primaryColor};">Dormiu: ${nap.sleepMethod}</span>`);
+          if (nap.environment) badges.push(`<span class="badge" style="background: ${getEnvironmentColor(nap.environment)};">Ambiente: ${nap.environment}</span>`);
+          if (nap.wakeUpMood) badges.push(`<span class="badge" style="background: ${getMoodColor(nap.wakeUpMood)};">Acordou: ${nap.wakeUpMood}</span>`);
+          badgesHTML = `<div class="badges-row">${badges.join('')}</div>`;
         }
 
         let observationsHTML = '';
         if (nap.observations) {
-          observationsHTML = `<div style="background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; border-left: 3px solid #999;">
-            <div style="font-size: 9px; font-weight: bold; color: #666; margin-bottom: 4px;">OBSERVAÇÕES DA MÃE:</div>
-            <div style="font-size: 10px; color: #333;">${nap.observations}</div>
+          observationsHTML = `<div class="observation-box">
+            <div class="observation-label">OBSERVAÇÕES DA MÃE:</div>
+            <div class="observation-text">${nap.observations}</div>
           </div>`;
         }
 
         let commentsHTML = '';
         if (nap.consultantComments) {
-          commentsHTML = `<div style="background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; border-left: 3px solid ${primaryColor};">
-            <div style="font-size: 9px; font-weight: bold; color: ${primaryColor}; margin-bottom: 4px;">COMENTÁRIOS DA CONSULTORA:</div>
-            <div style="font-size: 10px; color: #333;">${nap.consultantComments}</div>
+          commentsHTML = `<div class="observation-box" style="border-left-color: ${primaryColor};">
+            <div class="observation-label" style="color: ${primaryColor};">COMENTÁRIOS DA CONSULTORA:</div>
+            <div class="observation-text">${nap.consultantComments}</div>
           </div>`;
         }
 
         return `
-          <div style="background: #fafafa; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid ${primaryColor};">
-            <div style="font-weight: bold; font-size: 12px; margin-bottom: 4px;">${napTitle}</div>
-            <div style="font-size: 11px; margin-bottom: 2px;"><strong>Horário:</strong> ${nap.displayText}</div>
-            <div style="font-size: 11px; margin-bottom: 2px;"><strong>Duração:</strong> ${napDurationText}</div>
-            <div style="font-size: 11px;">${nap.windowText}</div>
+          <div class="nap-card">
+            <div class="nap-header">${napTitle}</div>
+            <div class="info-line"><strong>Horário:</strong> ${nap.displayText}</div>
+            <div class="info-line"><strong>Duração:</strong> ${napDurationText}</div>
+            <div class="info-line">${nap.windowText}</div>
             ${badgesHTML}
             ${observationsHTML}
             ${commentsHTML}
@@ -592,14 +603,14 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
         
         let backToSleepHTML = '';
         if (waking.backToSleepMethod) {
-          backToSleepHTML = `<div style="margin-top: 4px;"><span style="background: ${primaryColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px;">Voltou a dormir: ${waking.backToSleepMethod}</span></div>`;
+          backToSleepHTML = `<div class="badges-row"><span class="badge" style="background: ${primaryColor};">Voltou a dormir: ${waking.backToSleepMethod}</span></div>`;
         }
 
         return `
-          <div style="background: #fafafa; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 3px solid #FF9800;">
-            <div style="font-weight: bold; font-size: 11px; margin-bottom: 4px;">${wakingIndexText}</div>
-            <div style="font-size: 11px; margin-bottom: 2px;"><strong>Horário:</strong> ${waking.displayText}</div>
-            <div style="font-size: 11px;"><strong>Duração:</strong> ${wakingDurationText}</div>
+          <div class="waking-card">
+            <div class="waking-header">${wakingIndexText}</div>
+            <div class="info-line"><strong>Horário:</strong> ${waking.displayText}</div>
+            <div class="info-line"><strong>Duração:</strong> ${wakingDurationText}</div>
             ${backToSleepHTML}
           </div>
         `;
@@ -611,35 +622,35 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
       let nightBadgesHTML = '';
       if (report.nightSleepMethod || report.nightEnvironment || report.nightWakeUpMood) {
         const badges = [];
-        if (report.nightSleepMethod) badges.push(`<span style="background: ${primaryColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Dormiu: ${report.nightSleepMethod}</span>`);
-        if (report.nightEnvironment) badges.push(`<span style="background: ${getEnvironmentColor(report.nightEnvironment)}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Ambiente: ${report.nightEnvironment}</span>`);
-        if (report.nightWakeUpMood) badges.push(`<span style="background: ${getMoodColor(report.nightWakeUpMood)}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 10px; margin-right: 4px;">Acordou: ${report.nightWakeUpMood}</span>`);
-        nightBadgesHTML = `<div style="margin-top: 6px;">${badges.join('')}</div>`;
+        if (report.nightSleepMethod) badges.push(`<span class="badge" style="background: ${primaryColor};">Dormiu: ${report.nightSleepMethod}</span>`);
+        if (report.nightEnvironment) badges.push(`<span class="badge" style="background: ${getEnvironmentColor(report.nightEnvironment)};">Ambiente: ${report.nightEnvironment}</span>`);
+        if (report.nightWakeUpMood) badges.push(`<span class="badge" style="background: ${getMoodColor(report.nightWakeUpMood)};">Acordou: ${report.nightWakeUpMood}</span>`);
+        nightBadgesHTML = `<div class="badges-row">${badges.join('')}</div>`;
       }
 
       let nightObservationsHTML = '';
       if (report.nightObservations) {
-        nightObservationsHTML = `<div style="background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; border-left: 3px solid #999;">
-          <div style="font-size: 9px; font-weight: bold; color: #666; margin-bottom: 4px;">OBSERVAÇÕES DA MÃE:</div>
-          <div style="font-size: 10px; color: #333;">${report.nightObservations}</div>
+        nightObservationsHTML = `<div class="observation-box">
+          <div class="observation-label">OBSERVAÇÕES DA MÃE:</div>
+          <div class="observation-text">${report.nightObservations}</div>
         </div>`;
       }
 
       let nightCommentsHTML = '';
       if (report.nightConsultantComments) {
-        nightCommentsHTML = `<div style="background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; border-left: 3px solid ${primaryColor};">
-          <div style="font-size: 9px; font-weight: bold; color: ${primaryColor}; margin-bottom: 4px;">COMENTÁRIOS DA CONSULTORA:</div>
-          <div style="font-size: 10px; color: #333;">${report.nightConsultantComments}</div>
+        nightCommentsHTML = `<div class="observation-box" style="border-left-color: ${primaryColor};">
+          <div class="observation-label" style="color: ${primaryColor};">COMENTÁRIOS DA CONSULTORA:</div>
+          <div class="observation-text">${report.nightConsultantComments}</div>
         </div>`;
       }
 
       nightSleepHTML = `
-        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
-          <div style="font-size: 11px; font-weight: bold; color: ${primaryColor}; margin-bottom: 6px; text-transform: uppercase;">SONO NOTURNO</div>
-          <div style="font-size: 11px; margin-bottom: 2px;"><strong>Início:</strong> ${report.nightSleepStart}</div>
-          <div style="font-size: 11px; margin-bottom: 2px;"><strong>Fim:</strong> ${report.nightSleepEnd}</div>
-          ${report.nightSleepBrute ? `<div style="font-size: 11px; margin-bottom: 2px;"><strong>Total bruto:</strong> ${report.nightSleepBrute}</div>` : ''}
-          ${report.nightSleepLiquidTotal ? `<div style="font-size: 11px; margin-bottom: 2px;"><strong>Total líquido:</strong> <span style="font-weight: bold; color: ${primaryColor};">${report.nightSleepLiquidTotal}</span></div>` : ''}
+        <div class="section">
+          <div class="section-title">SONO NOTURNO</div>
+          <div class="info-line"><strong>Início:</strong> ${report.nightSleepStart}</div>
+          <div class="info-line"><strong>Fim:</strong> ${report.nightSleepEnd}</div>
+          ${report.nightSleepBrute ? `<div class="info-line"><strong>Total bruto:</strong> ${report.nightSleepBrute}</div>` : ''}
+          ${report.nightSleepLiquidTotal ? `<div class="info-line"><strong>Total líquido:</strong> <span style="font-weight: bold; color: ${primaryColor};">${report.nightSleepLiquidTotal}</span></div>` : ''}
           ${nightBadgesHTML}
           ${nightObservationsHTML}
           ${nightCommentsHTML}
@@ -650,41 +661,41 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
     let summaryHTML = '';
     if (report.total24h) {
       summaryHTML = `
-        <div style="background: ${primaryColor}15; padding: 10px; border-radius: 8px; margin-bottom: 12px; border: 1px solid ${primaryColor}30;">
-          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-            <span style="font-size: 11px; font-weight: 600;">Sono Diurno:</span>
-            <span style="font-size: 11px; font-weight: bold; color: ${primaryColor};">${report.daytimeSleepTotal || '0h'}</span>
+        <div class="summary-box">
+          <div class="summary-row">
+            <span>Sono Diurno:</span>
+            <span class="summary-value">${report.daytimeSleepTotal || '0h'}</span>
           </div>
-          <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-            <span style="font-size: 11px; font-weight: 600;">Sono Noturno:</span>
-            <span style="font-size: 11px; font-weight: bold; color: ${primaryColor};">${report.nightSleepLiquidTotal || '0h'}</span>
+          <div class="summary-row">
+            <span>Sono Noturno:</span>
+            <span class="summary-value">${report.nightSleepLiquidTotal || '0h'}</span>
           </div>
-          <div style="display: flex; justify-content: space-between; border-top: 1px solid ${primaryColor}30; padding-top: 4px; margin-top: 4px;">
-            <span style="font-size: 11px; font-weight: bold;">Total 24h:</span>
-            <span style="font-size: 12px; font-weight: bold; color: ${primaryColor};">${report.total24h}</span>
+          <div class="summary-row summary-total">
+            <span>Total 24h:</span>
+            <span class="summary-value">${report.total24h}</span>
           </div>
         </div>
       `;
     }
 
     return `
-      <div style="background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-left: 4px solid ${primaryColor}; page-break-inside: avoid;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid #e0e0e0;">
-          <div style="font-size: 16px; font-weight: bold; color: ${primaryColor};">${dayNumberText}</div>
-          <div style="font-size: 12px; color: #666; font-weight: 600;">${report.dateDisplay}</div>
+      <div class="card">
+        <div class="card-header">
+          <div class="day-title">${dayNumberText}</div>
+          <div class="date-text">${report.dateDisplay}</div>
         </div>
 
         ${summaryHTML}
 
-        <div style="margin-top: 12px;">
-          <div style="font-size: 11px; font-weight: bold; color: ${primaryColor}; margin-bottom: 6px; text-transform: uppercase;">ACORDOU</div>
-          <div style="font-size: 11px; margin-bottom: 2px;"><strong>Horário:</strong> ${wakeUpText}</div>
-          ${report.firstNapWindow ? `<div style="font-size: 11px;"><strong>1ª Janela:</strong> ${firstNapWindowText}</div>` : ''}
+        <div class="section">
+          <div class="section-title">ACORDOU</div>
+          <div class="info-line"><strong>Horário:</strong> ${wakeUpText}</div>
+          ${report.firstNapWindow ? `<div class="info-line"><strong>1ª Janela:</strong> ${firstNapWindowText}</div>` : ''}
         </div>
 
         ${report.naps.length > 0 ? `
-          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
-            <div style="font-size: 11px; font-weight: bold; color: ${primaryColor}; margin-bottom: 6px; text-transform: uppercase;">SONECAS (${report.naps.length})</div>
+          <div class="section">
+            <div class="section-title">SONECAS (${report.naps.length})</div>
             ${napsHTML}
           </div>
         ` : ''}
@@ -692,32 +703,35 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
         ${nightSleepHTML}
 
         ${report.wakings.length > 0 ? `
-          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
-            <div style="font-size: 11px; font-weight: bold; color: ${primaryColor}; margin-bottom: 6px; text-transform: uppercase;">DESPERTARES NOTURNOS (${report.wakings.length})</div>
+          <div class="section">
+            <div class="section-title">DESPERTARES NOTURNOS (${report.wakings.length})</div>
             ${wakingsHTML}
           </div>
         ` : ''}
 
         ${report.motherObservations ? `
-          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
-            <div style="background: #f5f5f5; padding: 8px; border-radius: 6px; border-left: 3px solid #999;">
-              <div style="font-size: 9px; font-weight: bold; color: #666; margin-bottom: 4px;">OBSERVAÇÕES DA MÃE (DIA):</div>
-              <div style="font-size: 10px; color: #333;">${report.motherObservations}</div>
+          <div class="section">
+            <div class="observation-box">
+              <div class="observation-label">OBSERVAÇÕES DA MÃE (DIA):</div>
+              <div class="observation-text">${report.motherObservations}</div>
             </div>
           </div>
         ` : ''}
 
         ${report.consultantComments ? `
-          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
-            <div style="background: #f5f5f5; padding: 8px; border-radius: 6px; border-left: 3px solid ${primaryColor};">
-              <div style="font-size: 9px; font-weight: bold; color: ${primaryColor}; margin-bottom: 4px;">COMENTÁRIOS DA CONSULTORA (DIA):</div>
-              <div style="font-size: 10px; color: #333;">${report.consultantComments}</div>
+          <div class="section">
+            <div class="observation-box" style="border-left-color: ${primaryColor};">
+              <div class="observation-label" style="color: ${primaryColor};">COMENTÁRIOS DA CONSULTORA (DIA):</div>
+              <div class="observation-text">${report.consultantComments}</div>
             </div>
           </div>
         ` : ''}
       </div>
     `;
-  }).join('');
+  };
+
+  const leftColumnHTML = leftColumnReports.map(generateReportCard).join('');
+  const rightColumnHTML = rightColumnReports.map(generateReportCard).join('');
 
   const currentDate = new Date().toLocaleDateString('pt-BR');
 
@@ -730,42 +744,198 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
         <style>
           @page {
             size: landscape;
-            margin: 15mm;
+            margin: 10mm;
           }
+          
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+          }
+          
           body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background: #f5f5f5;
-            padding: 20px;
-            margin: 0;
+            padding: 10px;
+            font-size: 9px;
+            line-height: 1.3;
           }
+          
           .header {
             text-align: center;
-            margin-bottom: 20px;
-            padding-bottom: 15px;
-            border-bottom: 3px solid ${primaryColor};
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid ${primaryColor};
           }
+          
           .header h1 {
             color: ${primaryColor};
-            font-size: 24px;
-            margin: 0 0 8px 0;
+            font-size: 18px;
+            margin-bottom: 4px;
           }
+          
           .header p {
             color: #666;
-            font-size: 14px;
-            margin: 4px 0;
+            font-size: 10px;
+            margin: 2px 0;
           }
-          .content {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 16px;
+          
+          .columns-container {
+            display: flex;
+            gap: 10px;
+            justify-content: space-between;
           }
+          
+          .column {
+            width: 49%;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+          }
+          
+          .card {
+            background: white;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-left: 3px solid ${primaryColor};
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          
+          .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e0e0e0;
+          }
+          
+          .day-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: ${primaryColor};
+          }
+          
+          .date-text {
+            font-size: 9px;
+            color: #666;
+            font-weight: 600;
+          }
+          
+          .summary-box {
+            background: ${primaryColor}15;
+            border-radius: 6px;
+            padding: 6px;
+            margin-bottom: 8px;
+            border: 1px solid ${primaryColor}30;
+          }
+          
+          .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+            font-size: 9px;
+          }
+          
+          .summary-total {
+            border-top: 1px solid ${primaryColor}30;
+            padding-top: 3px;
+            margin-top: 3px;
+            font-weight: bold;
+          }
+          
+          .summary-value {
+            font-weight: bold;
+            color: ${primaryColor};
+          }
+          
+          .section {
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px solid #e0e0e050;
+          }
+          
+          .section-title {
+            font-size: 9px;
+            font-weight: bold;
+            color: ${primaryColor};
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+          }
+          
+          .info-line {
+            font-size: 9px;
+            margin-bottom: 2px;
+            line-height: 1.3;
+          }
+          
+          .nap-card, .waking-card {
+            background: #fafafa;
+            border-radius: 6px;
+            padding: 6px;
+            margin-bottom: 6px;
+            border-left: 2px solid ${primaryColor};
+          }
+          
+          .waking-card {
+            border-left-color: #FF9800;
+          }
+          
+          .nap-header, .waking-header {
+            font-weight: bold;
+            font-size: 10px;
+            margin-bottom: 3px;
+          }
+          
+          .badges-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            margin-top: 4px;
+          }
+          
+          .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 8px;
+            font-weight: 600;
+            color: white;
+          }
+          
+          .observation-box {
+            background: #f5f5f5;
+            border-radius: 4px;
+            padding: 6px;
+            margin-top: 4px;
+            border-left: 2px solid #999;
+          }
+          
+          .observation-label {
+            font-size: 8px;
+            font-weight: bold;
+            color: #666;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+          }
+          
+          .observation-text {
+            font-size: 8px;
+            color: #333;
+            line-height: 1.4;
+          }
+          
           @media print {
             body {
               background: white;
               padding: 0;
             }
-            .content {
-              gap: 12px;
+            
+            .card {
+              box-shadow: none;
             }
           }
         </style>
@@ -773,11 +943,16 @@ function generatePDFHTML(reports: DailyReport[], babyName: string): string {
       <body>
         <div class="header">
           <h1>Relatório de Acompanhamento - ${babyName}</h1>
-          <p>Gerado em: ${currentDate}</p>
-          <p>Total de dias: ${reports.length}</p>
+          <p>Gerado em: ${currentDate} | Total de dias: ${reports.length}</p>
         </div>
-        <div class="content">
-          ${reportsHTML}
+        
+        <div class="columns-container">
+          <div class="column">
+            ${leftColumnHTML}
+          </div>
+          <div class="column">
+            ${rightColumnHTML}
+          </div>
         </div>
       </body>
     </html>
