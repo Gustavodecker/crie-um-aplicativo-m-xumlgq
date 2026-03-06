@@ -275,8 +275,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log("[Auth] 🔐 Signing in with email:", email);
       
-      // 🔥 CRITICAL FIX FOR PLAY STORE: Use fetch directly to get the raw response
-      // Better Auth client may not work correctly on Android production builds
       const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
       
       console.log("[Auth] 📡 Calling backend directly:", `${BACKEND_URL}/api/auth/sign-in/email`);
@@ -303,7 +301,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[Auth] ✅ Login response received");
       console.log("[Auth] 🔍 Response keys:", Object.keys(responseData));
       
-      // 🔥 CRITICAL: Extract token from response
+      // Extract token from response
       let token: string | null = null;
       let user: User | null = null;
       
@@ -337,7 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("No token received from server");
       }
       
-      // 🔥 CRITICAL: Save token IMMEDIATELY
+      // Save token IMMEDIATELY
       console.log("[Auth] 💾 Saving token to storage (length:", token.length, ")...");
       await setBearerToken(token);
       
@@ -350,18 +348,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("[Auth] ✅ Token saved and verified");
       
-      // Set user if available
+      // 🔥 CRITICAL FIX: Set user directly from login response
+      // Do NOT call fetchUser() immediately after login
+      // The backend session needs time to propagate
       if (user) {
         setUser(user);
         userRef.current = user;
-        console.log("[Auth] ✅ User set:", user.email);
+        console.log("[Auth] ✅ User set from login response:", user.email);
+        console.log("[Auth] ✅ Login complete - user is now authenticated");
+      } else {
+        console.warn("[Auth] ⚠️ No user in login response, will fetch from session");
+        // Only fetch if we didn't get user in response
+        await fetchUser();
       }
       
-      // Fetch user to ensure everything is in sync
-      console.log("[Auth] 🔄 Fetching user to verify session...");
-      await fetchUser();
-      
-      console.log("[Auth] ✅ Login complete");
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign in failed:", error?.message || error);
       throw error;
@@ -372,7 +372,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log("[Auth] 📝 Signing up with email:", email);
       
-      // 🔥 CRITICAL FIX FOR PLAY STORE: Use fetch directly
       const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
       
       console.log("[Auth] 📡 Calling backend directly:", `${BACKEND_URL}/api/auth/sign-up/email`);
@@ -399,7 +398,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[Auth] ✅ Signup response received");
       console.log("[Auth] 🔍 Response keys:", Object.keys(responseData));
       
-      // 🔥 CRITICAL: Extract token from response
+      // Extract token from response
       let token: string | null = null;
       let user: User | null = null;
       
@@ -433,7 +432,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("No token received from server");
       }
       
-      // 🔥 CRITICAL: Save token IMMEDIATELY
+      // Save token IMMEDIATELY
       console.log("[Auth] 💾 Saving token to storage (length:", token.length, ")...");
       await setBearerToken(token);
       
@@ -446,18 +445,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("[Auth] ✅ Token saved and verified");
       
-      // Set user if available
+      // 🔥 CRITICAL FIX: Set user directly from signup response
+      // Do NOT call fetchUser() immediately after signup
       if (user) {
         setUser(user);
         userRef.current = user;
-        console.log("[Auth] ✅ User set:", user.email);
+        console.log("[Auth] ✅ User set from signup response:", user.email);
+        console.log("[Auth] ✅ Signup complete - user is now authenticated");
+      } else {
+        console.warn("[Auth] ⚠️ No user in signup response, will fetch from session");
+        // Only fetch if we didn't get user in response
+        await fetchUser();
       }
       
-      // Fetch user to ensure everything is in sync
-      console.log("[Auth] 🔄 Fetching user to verify session...");
-      await fetchUser();
-      
-      console.log("[Auth] ✅ Signup complete");
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign up failed:", error?.message || error);
       throw error;
