@@ -21,8 +21,9 @@ const storage = {
         console.log(`[Auth/Storage] getItem(${key}):`, value ? "EXISTS" : "NULL");
         return value;
       } else {
-        // On mobile, use AsyncStorage
-        const value = await AsyncStorage.getItemAsync(key);
+        // 🔥 CRITICAL FIX: Use AsyncStorage.getItem() NOT getItemAsync()
+        // AsyncStorage does NOT have a getItemAsync method
+        const value = await AsyncStorage.getItem(key);
         console.log(`[Auth/Storage] getItem(${key}):`, value ? "EXISTS" : "NULL");
         return value;
       }
@@ -37,11 +38,14 @@ const storage = {
         localStorage.setItem(key, value);
         console.log(`[Auth/Storage] setItem(${key}): SUCCESS`);
       } else {
+        // 🔥 CRITICAL FIX: Use AsyncStorage.setItem() NOT setItemAsync()
+        // AsyncStorage does NOT have a setItemAsync method
         await AsyncStorage.setItem(key, value);
         console.log(`[Auth/Storage] setItem(${key}): SUCCESS`);
       }
     } catch (error) {
       console.error(`[Auth/Storage] Error writing ${key}:`, error);
+      throw error; // Re-throw so caller knows it failed
     }
   },
   removeItem: async (key: string) => {
@@ -50,6 +54,7 @@ const storage = {
         localStorage.removeItem(key);
         console.log(`[Auth/Storage] removeItem(${key}): SUCCESS`);
       } else {
+        // 🔥 CRITICAL FIX: Use AsyncStorage.removeItem() NOT removeItemAsync()
         await AsyncStorage.removeItem(key);
         console.log(`[Auth/Storage] removeItem(${key}): SUCCESS`);
       }
@@ -97,6 +102,7 @@ export async function setBearerToken(token: string) {
         console.error("[Auth/setBearerToken] Better Auth key:", savedBetterAuth === token);
       }
     } else {
+      // 🔥 CRITICAL FIX: Use AsyncStorage.setItem() NOT setItemAsync()
       // Save to both keys on mobile using AsyncStorage
       await AsyncStorage.setItem(BEARER_TOKEN_KEY, token);
       await AsyncStorage.setItem(BETTER_AUTH_SESSION_KEY, token);
@@ -111,6 +117,7 @@ export async function setBearerToken(token: string) {
         console.error("[Auth/setBearerToken] ❌ Verification FAILED: Token mismatch!");
         console.error("[Auth/setBearerToken] Our key:", saved === token);
         console.error("[Auth/setBearerToken] Better Auth key:", savedBetterAuth === token);
+        throw new Error("Token verification failed - storage may be corrupted");
       }
     }
   } catch (error) {
@@ -142,6 +149,7 @@ export async function getBearerToken(): Promise<string | null> {
       }
       return token;
     } else {
+      // 🔥 CRITICAL FIX: Use AsyncStorage.getItem() NOT getItemAsync()
       // Try our key first, then Better Auth's key
       let token = await AsyncStorage.getItem(BEARER_TOKEN_KEY);
       if (!token) {
@@ -188,6 +196,7 @@ export async function clearAuthTokens() {
       
       console.log("[Auth/clearAuthTokens] ✅ Cleared localStorage tokens (", keysToRemove.length, "keys)");
     } else {
+      // 🔥 CRITICAL FIX: Use AsyncStorage.removeItem() NOT removeItemAsync()
       // Clear both our token and Better Auth's token
       await AsyncStorage.removeItem(BEARER_TOKEN_KEY);
       await AsyncStorage.removeItem(BETTER_AUTH_SESSION_KEY);

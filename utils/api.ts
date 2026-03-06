@@ -1,7 +1,7 @@
 
 import Constants from "expo-constants";
 import { Platform } from "react-native";
-import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BEARER_TOKEN_KEY, setBearerToken as libSetBearerToken } from "@/lib/auth";
 
 // Re-export for convenience
@@ -23,7 +23,7 @@ export const isBackendConfigured = (): boolean => {
 /**
  * Set bearer token to platform-specific storage
  * Web: localStorage
- * Native: SecureStore
+ * Native: AsyncStorage
  *
  * @param token - JWT token to store
  */
@@ -34,7 +34,7 @@ export const setBearerToken = async (token: string | null): Promise<void> => {
 /**
  * Get bearer token from platform-specific storage
  * Web: localStorage
- * Native: SecureStore
+ * Native: AsyncStorage
  *
  * @returns Bearer token or null if not found
  */
@@ -49,11 +49,13 @@ export const getBearerToken = async (): Promise<string | null> => {
       }
       return token;
     } else {
-      const token = await SecureStore.getItemAsync(BEARER_TOKEN_KEY);
+      // 🔥 CRITICAL FIX: Use AsyncStorage.getItem() NOT getItemAsync()
+      // AsyncStorage does NOT have a getItemAsync method
+      const token = await AsyncStorage.getItem(BEARER_TOKEN_KEY);
       if (token) {
-        console.log("[API] 🔑 Token from SecureStore: EXISTS (length:", token.length, ")");
+        console.log("[API] 🔑 Token from AsyncStorage: EXISTS (length:", token.length, ")");
       } else {
-        console.log("[API] ⚠️ No token in SecureStore");
+        console.log("[API] ⚠️ No token in AsyncStorage");
       }
       return token;
     }
