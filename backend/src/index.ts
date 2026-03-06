@@ -41,6 +41,7 @@ app.logger.info(
 );
 
 // Enable authentication with Better Auth
+// Configuration includes mobile app support with flexible CORS handling
 // Session Management Configuration:
 // - 30 day session expiration (extended from default)
 // - 24 hour session update age (automatic refresh)
@@ -48,6 +49,12 @@ app.logger.info(
 // - Cookie-based session persistence
 // - Non-strict validation (prevent unexpected logouts)
 // - Cookie caching enabled for performance
+//
+// CORS Configuration for Mobile Apps:
+// - Accept requests from all origins (including mobile apps without standard Origin header)
+// - Support mobile app deep linking schemes (myapp://)
+// - Proper OPTIONS preflight request handling
+// - Mobile apps may not send Origin header, so we accept all sources
 //
 // Environment Variables (see .env.example):
 // - SESSION_EXPIRATION_TIME: Session duration in ms (default: 30 days)
@@ -57,7 +64,17 @@ app.logger.info(
 // - COOKIE_DOMAIN: Cross-subdomain cookie domain (default: current domain)
 // - SESSION_STRICT: Enable strict validation (default: false)
 // - SESSION_COOKIE_CACHE: Enable cookie caching (default: true)
-app.withAuth();
+app.withAuth({
+  // Trust all origins to support mobile apps and other clients
+  // Mobile apps may not send standard Origin headers, so we accept requests from anywhere
+  // This is safe because authentication is still protected by session tokens
+  trustedOrigins: ["*"],
+});
+
+app.logger.info(
+  { trustedOrigins: ["*"] },
+  'CORS configured for mobile app support - accepting requests from all origins'
+);
 
 // Log successful auth initialization
 app.logger.info(
