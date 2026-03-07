@@ -83,6 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     console.log("[Auth] 🚀 AuthProvider mounted - initializing session");
+    console.log("[Auth] 📱 Platform:", Platform.OS);
+    console.log("[Auth] 🔧 Environment:", __DEV__ ? "development" : "production");
     
     fetchUser();
 
@@ -274,27 +276,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithEmail = async (email: string, password: string) => {
     try {
       console.log("[Auth] 🔐 Signing in with email:", email);
+      console.log("[Auth] 📱 Platform:", Platform.OS);
+      console.log("[Auth] 🔧 Environment:", __DEV__ ? "development" : "production");
       
       const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
       
-      console.log("[Auth] 📡 Calling backend directly:", `${BACKEND_URL}/api/auth/sign-in/email`);
+      console.log("[Auth] 📡 Backend URL:", BACKEND_URL);
+      console.log("[Auth] 📡 Calling:", `${BACKEND_URL}/api/auth/sign-in/email`);
+      
+      const requestBody = {
+        email,
+        password,
+        rememberMe: true,
+      };
+      
+      console.log("[Auth] 📤 Request body:", JSON.stringify({ email, password: "***", rememberMe: true }));
       
       const response = await fetch(`${BACKEND_URL}/api/auth/sign-in/email`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          email,
-          password,
-          rememberMe: true,
-        }),
+        body: JSON.stringify(requestBody),
       });
+      
+      console.log("[Auth] 📥 Response status:", response.status);
+      console.log("[Auth] 📥 Response headers:", JSON.stringify(Object.fromEntries(response.headers.entries())));
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("[Auth] ❌ Login failed:", response.status, errorText);
-        throw new Error(`Login failed: ${response.status}`);
+        console.error("[Auth] ❌ Login failed - Status:", response.status);
+        console.error("[Auth] ❌ Login failed - Response:", errorText);
+        
+        let errorMessage = `Login falhou (${response.status})`;
+        
+        try {
+          const errJson = JSON.parse(errorText);
+          if (errJson.error) {
+            errorMessage = errJson.error;
+          } else if (errJson.message) {
+            errorMessage = errJson.message;
+          }
+        } catch (e) {
+          // If not JSON, use the text as is
+          if (errorText && errorText.length < 200) {
+            errorMessage = errorText;
+          }
+        }
+        
+        // Provide more specific error messages
+        if (response.status === 403) {
+          errorMessage = "Credenciais inválidas. Verifique seu email e senha.";
+        } else if (response.status === 401) {
+          errorMessage = "Email ou senha incorretos.";
+        } else if (response.status === 429) {
+          errorMessage = "Muitas tentativas. Aguarde alguns minutos.";
+        } else if (response.status >= 500) {
+          errorMessage = "Erro no servidor. Tente novamente mais tarde.";
+        }
+        
+        throw new Error(errorMessage);
       }
       
       const responseData = await response.json();
@@ -332,7 +373,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!token) {
         console.error("[Auth] ❌ CRITICAL: No token in response!");
         console.error("[Auth] 🔍 Full response:", JSON.stringify(responseData, null, 2));
-        throw new Error("No token received from server");
+        throw new Error("Nenhum token recebido do servidor");
       }
       
       // Save token IMMEDIATELY
@@ -343,7 +384,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const savedToken = await getBearerToken();
       if (!savedToken || savedToken !== token) {
         console.error("[Auth] ❌ CRITICAL: Token not saved correctly!");
-        throw new Error("Failed to save authentication token");
+        throw new Error("Falha ao salvar token de autenticação");
       }
       
       console.log("[Auth] ✅ Token saved and verified");
@@ -364,6 +405,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign in failed:", error?.message || error);
+      console.error("[Auth] ❌ Error stack:", error?.stack);
       throw error;
     }
   };
@@ -371,27 +413,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUpWithEmail = async (email: string, password: string, name?: string) => {
     try {
       console.log("[Auth] 📝 Signing up with email:", email);
+      console.log("[Auth] 📱 Platform:", Platform.OS);
+      console.log("[Auth] 🔧 Environment:", __DEV__ ? "development" : "production");
       
       const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
       
-      console.log("[Auth] 📡 Calling backend directly:", `${BACKEND_URL}/api/auth/sign-up/email`);
+      console.log("[Auth] 📡 Backend URL:", BACKEND_URL);
+      console.log("[Auth] 📡 Calling:", `${BACKEND_URL}/api/auth/sign-up/email`);
+      
+      const requestBody = {
+        email,
+        password,
+        name,
+      };
+      
+      console.log("[Auth] 📤 Request body:", JSON.stringify({ email, password: "***", name }));
       
       const response = await fetch(`${BACKEND_URL}/api/auth/sign-up/email`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          email,
-          password,
-          name,
-        }),
+        body: JSON.stringify(requestBody),
       });
+      
+      console.log("[Auth] 📥 Response status:", response.status);
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("[Auth] ❌ Signup failed:", response.status, errorText);
-        throw new Error(`Signup failed: ${response.status}`);
+        console.error("[Auth] ❌ Signup failed - Status:", response.status);
+        console.error("[Auth] ❌ Signup failed - Response:", errorText);
+        
+        let errorMessage = `Cadastro falhou (${response.status})`;
+        
+        try {
+          const errJson = JSON.parse(errorText);
+          if (errJson.error) {
+            errorMessage = errJson.error;
+          } else if (errJson.message) {
+            errorMessage = errJson.message;
+          }
+        } catch (e) {
+          if (errorText && errorText.length < 200) {
+            errorMessage = errorText;
+          }
+        }
+        
+        // Provide more specific error messages
+        if (response.status === 403) {
+          errorMessage = "Este email já está cadastrado.";
+        } else if (response.status === 400) {
+          errorMessage = "Dados inválidos. Verifique os campos.";
+        } else if (response.status >= 500) {
+          errorMessage = "Erro no servidor. Tente novamente mais tarde.";
+        }
+        
+        throw new Error(errorMessage);
       }
       
       const responseData = await response.json();
@@ -429,7 +506,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!token) {
         console.error("[Auth] ❌ CRITICAL: No token in response!");
         console.error("[Auth] 🔍 Full response:", JSON.stringify(responseData, null, 2));
-        throw new Error("No token received from server");
+        throw new Error("Nenhum token recebido do servidor");
       }
       
       // Save token IMMEDIATELY
@@ -440,7 +517,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const savedToken = await getBearerToken();
       if (!savedToken || savedToken !== token) {
         console.error("[Auth] ❌ CRITICAL: Token not saved correctly!");
-        throw new Error("Failed to save authentication token");
+        throw new Error("Falha ao salvar token de autenticação");
       }
       
       console.log("[Auth] ✅ Token saved and verified");
@@ -460,6 +537,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign up failed:", error?.message || error);
+      console.error("[Auth] ❌ Error stack:", error?.stack);
       throw error;
     }
   };
