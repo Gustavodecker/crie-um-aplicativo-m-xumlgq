@@ -301,12 +301,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       
       console.log("[Auth] 📥 Response status:", response.status);
+      console.log("[Auth] 📥 Response statusText:", response.statusText);
       console.log("[Auth] 📥 Response headers:", JSON.stringify(Object.fromEntries(response.headers.entries())));
+      console.log("[Auth] 📥 Response ok:", response.ok);
+      console.log("[Auth] 📥 Response type:", response.type);
+      console.log("[Auth] 📥 Response url:", response.url);
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("[Auth] ❌ Login failed - Status:", response.status);
-        console.error("[Auth] ❌ Login failed - Response:", errorText);
+        let errorText = "";
+        try {
+          errorText = await response.text();
+          console.error("[Auth] ❌ Login failed - Status:", response.status);
+          console.error("[Auth] ❌ Login failed - Response body:", errorText);
+          console.error("[Auth] ❌ Login failed - Response length:", errorText.length);
+        } catch (readError) {
+          console.error("[Auth] ❌ Could not read error response:", readError);
+          errorText = "Could not read error response";
+        }
         
         let errorMessage = `Login falhou (${response.status})`;
         

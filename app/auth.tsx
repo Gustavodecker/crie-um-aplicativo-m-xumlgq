@@ -54,31 +54,50 @@ export default function AuthScreen() {
     }
 
     setLoading(true);
-    console.log("[Auth Screen] Starting authentication...");
-    console.log("[Auth Screen] Mode:", isSignUp ? "Sign Up" : "Sign In");
-    console.log("[Auth Screen] Email:", email);
+    console.log("[Auth Screen] 🚀 Starting authentication...");
+    console.log("[Auth Screen] 📱 Platform:", Platform.OS);
+    console.log("[Auth Screen] 🔧 Environment:", __DEV__ ? "Development" : "Production");
+    console.log("[Auth Screen] 📝 Mode:", isSignUp ? "Sign Up" : "Sign In");
+    console.log("[Auth Screen] 📧 Email:", email);
+    console.log("[Auth Screen] 🔑 Password length:", password.length);
 
     try {
       if (isSignUp) {
-        console.log("[Auth Screen] Signing up user:", email);
+        console.log("[Auth Screen] 📝 Signing up user:", email);
         await signUpWithEmail(email, password, name);
         console.log("[Auth Screen] ✅ Sign up successful");
       } else {
-        console.log("[Auth Screen] Signing in user:", email);
+        console.log("[Auth Screen] 🔐 Signing in user:", email);
         await signInWithEmail(email, password);
         console.log("[Auth Screen] ✅ Sign in successful");
       }
       
       console.log("[Auth Screen] ✅ Authentication successful");
     } catch (error: any) {
-      console.error("[Auth Screen] ❌ Authentication failed:", error);
+      console.error("[Auth Screen] ❌ Authentication failed");
+      console.error("[Auth Screen] ❌ Error type:", typeof error);
       console.error("[Auth Screen] ❌ Error message:", error?.message);
-      console.error("[Auth Screen] ❌ Error stack:", error?.stack);
+      console.error("[Auth Screen] ❌ Error name:", error?.name);
+      console.error("[Auth Screen] ❌ Full error:", JSON.stringify(error, null, 2));
       
-      const errorMsg = error?.message || "Erro ao autenticar. Tente novamente.";
+      let errorMsg = error?.message || "Erro ao autenticar. Tente novamente.";
+      
+      // Provide more user-friendly error messages
+      if (errorMsg.includes("403") || errorMsg.includes("Credenciais inválidas")) {
+        errorMsg = "Email ou senha incorretos. Verifique suas credenciais e tente novamente.";
+      } else if (errorMsg.includes("401")) {
+        errorMsg = "Email ou senha incorretos.";
+      } else if (errorMsg.includes("429")) {
+        errorMsg = "Muitas tentativas de login. Aguarde alguns minutos e tente novamente.";
+      } else if (errorMsg.includes("500") || errorMsg.includes("servidor")) {
+        errorMsg = "Erro no servidor. Por favor, tente novamente em alguns instantes.";
+      } else if (errorMsg.includes("network") || errorMsg.includes("fetch")) {
+        errorMsg = "Erro de conexão. Verifique sua internet e tente novamente.";
+      }
+      
       setErrorMessage(errorMsg);
       
-      // Show alert for critical errors
+      // Show alert for critical errors on mobile
       if (Platform.OS !== "web") {
         Alert.alert(
           "Erro de Autenticação",
