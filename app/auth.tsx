@@ -1,309 +1,369 @@
 
-import React, { useState, useEffect } from "react";
+import { LoadingButton } from "@/components/LoadingButton";
+import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/contexts/AuthContext";
+import { apiPost, apiGet } from "@/utils/api";
+import { LinearGradient } from "expo-linear-gradient";
+import { colors, typography, spacing, shadows } from "@/styles/commonStyles";
 import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
+  Modal,
+  TouchableOpacity,
+  ImageBackground,
+  Dimensions,
 } from "react-native";
-import { useAuth } from "@/contexts/AuthContext";
-import { useRouter } from "expo-router";
-import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
 import { SafeAreaView } from "react-native-safe-area-context";
+import React, { useState } from "react";
+
+type UserRole = "consultant" | "mother";
+
+const styles = StyleSheet.create({
+  backgroundImage: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+  },
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl,
+  },
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: spacing.xxl,
+  },
+  appName: {
+    fontSize: 42,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 2,
+    textShadowColor: "rgba(0, 0, 0, 0.3)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  tagline: {
+    fontSize: 16,
+    color: "#E5E7EB",
+    marginTop: spacing.sm,
+    textAlign: "center",
+    fontWeight: "300",
+    letterSpacing: 0.5,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderRadius: 24,
+    padding: spacing.xl,
+    ...shadows.large,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: colors.text,
+    marginBottom: spacing.md,
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: spacing.xl,
+    textAlign: "center",
+  },
+  inputContainer: {
+    marginBottom: spacing.lg,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  input: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: spacing.md,
+    fontSize: 16,
+    color: colors.text,
+  },
+  inputFocused: {
+    borderColor: colors.primary,
+    backgroundColor: "#FFFFFF",
+  },
+  button: {
+    backgroundColor: "#2F4F6F",
+    borderRadius: 18,
+    padding: spacing.lg,
+    alignItems: "center",
+    marginTop: spacing.md,
+    ...shadows.medium,
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  switchText: {
+    textAlign: "center",
+    marginTop: spacing.lg,
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  switchLink: {
+    color: colors.primary,
+    fontWeight: "600",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: spacing.xl,
+    width: "100%",
+    maxWidth: 400,
+    ...shadows.large,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: colors.error,
+    marginBottom: spacing.md,
+    textAlign: "center",
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: spacing.xl,
+    textAlign: "center",
+    lineHeight: 24,
+  },
+  modalButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  modalButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+});
 
 export default function AuthScreen() {
+  const { signInWithEmail, signUpWithEmail } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  
-  const { signInWithEmail, signUpWithEmail, user } = useAuth();
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [nameFocused, setNameFocused] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    if (user) {
-      console.log("[Auth Screen] ✅ User authenticated, redirecting...");
-      router.replace("/(tabs)/(home)");
-    }
-  }, [user]);
+  const showErrorModal = (msg: string) => {
+    setErrorMessage(msg);
+    setErrorModalVisible(true);
+  };
 
   const handleAuth = async () => {
-    setErrorMessage("");
-    
     if (!email || !password) {
-      setErrorMessage("Por favor, preencha todos os campos");
+      showErrorModal("Por favor, preencha todos os campos.");
       return;
     }
 
     if (isSignUp && !name) {
-      setErrorMessage("Por favor, informe seu nome");
-      return;
-    }
-
-    if (password.length < 6) {
-      setErrorMessage("A senha deve ter pelo menos 6 caracteres");
+      showErrorModal("Por favor, informe seu nome.");
       return;
     }
 
     setLoading(true);
-    console.log("[Auth Screen] 🚀 Starting authentication...");
-    console.log("[Auth Screen] 📱 Platform:", Platform.OS);
-    console.log("[Auth Screen] 🔧 Environment:", __DEV__ ? "Development" : "Production");
-    console.log("[Auth Screen] 📝 Mode:", isSignUp ? "Sign Up" : "Sign In");
-    console.log("[Auth Screen] 📧 Email:", email);
-    console.log("[Auth Screen] 🔑 Password length:", password.length);
-
     try {
+      console.log("[Auth Screen] Starting authentication...");
+      
       if (isSignUp) {
-        console.log("[Auth Screen] 📝 Signing up user:", email);
+        console.log("[Auth Screen] Signing up user:", email);
         await signUpWithEmail(email, password, name);
-        console.log("[Auth Screen] ✅ Sign up successful");
       } else {
-        console.log("[Auth Screen] 🔐 Signing in user:", email);
+        console.log("[Auth Screen] Signing in user:", email);
         await signInWithEmail(email, password);
-        console.log("[Auth Screen] ✅ Sign in successful");
       }
-      
+
       console.log("[Auth Screen] ✅ Authentication successful");
+
+      // 🔥 CRITICAL FIX: Determine and store user role immediately after login
+      // This prevents the need to call /api/consultant/profile on every app load
+      console.log("[Auth Screen] 🔍 Determining user role...");
+      
+      try {
+        // Try to fetch consultant profile
+        await apiGet("/api/consultant/profile", { suppressErrorLog: true });
+        console.log("[Auth Screen] ✅ User is a CONSULTANT");
+        await AsyncStorage.setItem("userRole", "consultant");
+        router.replace("/(tabs)/(home)");
+      } catch (error: any) {
+        // If 404, user is a mother
+        if (error.message?.includes("404") || error.message?.includes("Consultant profile not found")) {
+          console.log("[Auth Screen] ✅ User is a MOTHER");
+          await AsyncStorage.setItem("userRole", "mother");
+          router.replace("/(tabs)/(home)/mother-dashboard");
+        } else {
+          // Unknown error, default to mother
+          console.warn("[Auth Screen] ⚠️ Unknown error determining role, defaulting to mother:", error);
+          await AsyncStorage.setItem("userRole", "mother");
+          router.replace("/(tabs)/(home)/mother-dashboard");
+        }
+      }
     } catch (error: any) {
-      console.error("[Auth Screen] ❌ Authentication failed");
-      console.error("[Auth Screen] ❌ Error type:", typeof error);
-      console.error("[Auth Screen] ❌ Error message:", error?.message);
-      console.error("[Auth Screen] ❌ Error name:", error?.name);
-      console.error("[Auth Screen] ❌ Full error:", JSON.stringify(error, null, 2));
-      
-      let errorMsg = error?.message || "Erro ao autenticar. Tente novamente.";
-      
-      // Provide more user-friendly error messages
-      if (errorMsg.includes("403") || errorMsg.includes("Credenciais inválidas")) {
-        errorMsg = "Email ou senha incorretos. Verifique suas credenciais e tente novamente.";
-      } else if (errorMsg.includes("401")) {
-        errorMsg = "Email ou senha incorretos.";
-      } else if (errorMsg.includes("429")) {
-        errorMsg = "Muitas tentativas de login. Aguarde alguns minutos e tente novamente.";
-      } else if (errorMsg.includes("500") || errorMsg.includes("servidor")) {
-        errorMsg = "Erro no servidor. Por favor, tente novamente em alguns instantes.";
-      } else if (errorMsg.includes("network") || errorMsg.includes("fetch")) {
-        errorMsg = "Erro de conexão. Verifique sua internet e tente novamente.";
-      }
-      
-      setErrorMessage(errorMsg);
-      
-      // Show alert for critical errors on mobile
-      if (Platform.OS !== "web") {
-        Alert.alert(
-          "Erro de Autenticação",
-          errorMsg,
-          [{ text: "OK" }]
-        );
-      }
+      console.error("[Auth Screen] ❌ Authentication failed:", error);
+      showErrorModal(
+        error.message || "Erro ao fazer login. Verifique suas credenciais."
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleMode = () => {
-    setIsSignUp(!isSignUp);
-    setErrorMessage("");
-  };
-
-  const modeText = isSignUp ? "Cadastrar" : "Entrar";
-  const switchModeText = isSignUp
-    ? "Já tem uma conta? Entrar"
-    : "Não tem uma conta? Cadastrar";
-
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardView}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.content}>
-            <Text style={styles.title}>Consultoria de Sono Infantil</Text>
-            <Text style={styles.subtitle}>
-              {isSignUp ? "Crie sua conta" : "Entre na sua conta"}
-            </Text>
-
-            {errorMessage ? (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
+    <ImageBackground
+      source={{ uri: "https://images.unsplash.com/photo-1519689373023-dd07c7988603?w=1200&q=80" }}
+      style={styles.backgroundImage}
+      resizeMode="cover"
+    >
+      <View style={styles.overlay}>
+        <SafeAreaView style={{ flex: 1 }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ flex: 1 }}
+          >
+            <ScrollView
+              contentContainerStyle={styles.container}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.logoContainer}>
+                <Text style={styles.appName}>TodaNoite</Text>
+                <Text style={styles.tagline}>
+                  Transformando o sono infantil com método e acolhimento
+                </Text>
               </View>
-            ) : null}
 
-            {isSignUp && (
-              <TextInput
-                style={styles.input}
-                placeholder="Nome completo"
-                placeholderTextColor={colors.textSecondary}
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-                editable={!loading}
-              />
-            )}
+              <View style={styles.card}>
+                <Text style={styles.title}>
+                  {isSignUp ? "Criar Conta" : "Entrar"}
+                </Text>
+                <Text style={styles.subtitle}>
+                  {isSignUp
+                    ? "Preencha os dados para criar sua conta"
+                    : "Acesse sua conta para continuar"}
+                </Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor={colors.textSecondary}
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
+                {isSignUp && (
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.label}>Nome</Text>
+                    <TextInput
+                      style={[styles.input, nameFocused && styles.inputFocused]}
+                      placeholder="Seu nome completo"
+                      value={name}
+                      onChangeText={setName}
+                      autoCapitalize="words"
+                      onFocus={() => setNameFocused(true)}
+                      onBlur={() => setNameFocused(false)}
+                    />
+                  </View>
+                )}
 
-            <TextInput
-              style={styles.input}
-              placeholder="Senha (mínimo 6 caracteres)"
-              placeholderTextColor={colors.textSecondary}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>E-mail</Text>
+                  <TextInput
+                    style={[styles.input, emailFocused && styles.inputFocused]}
+                    placeholder="seu@email.com"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    onFocus={() => setEmailFocused(true)}
+                    onBlur={() => setEmailFocused(false)}
+                  />
+                </View>
 
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleAuth}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>{modeText}</Text>
-              )}
-            </TouchableOpacity>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Senha</Text>
+                  <TextInput
+                    style={[styles.input, passwordFocused && styles.inputFocused]}
+                    placeholder="Sua senha"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    onFocus={() => setPasswordFocused(true)}
+                    onBlur={() => setPasswordFocused(false)}
+                  />
+                </View>
 
-            <TouchableOpacity
-              style={styles.switchButton}
-              onPress={toggleMode}
-              disabled={loading}
-            >
-              <Text style={styles.switchButtonText}>{switchModeText}</Text>
-            </TouchableOpacity>
+                <LoadingButton
+                  title={isSignUp ? "Criar Conta" : "Entrar"}
+                  onPress={handleAuth}
+                  loading={loading}
+                  style={styles.button}
+                  textStyle={styles.buttonText}
+                />
 
-            <View style={styles.debugInfo}>
-              <Text style={styles.debugText}>
-                📱 Plataforma: {Platform.OS}
-              </Text>
-              <Text style={styles.debugText}>
-                🔧 Ambiente: {__DEV__ ? "Desenvolvimento" : "Produção"}
-              </Text>
-              <Text style={styles.debugText}>
-                📍 Versão: 1.0.0
-              </Text>
+                <Text style={styles.switchText}>
+                  {isSignUp ? "Já tem uma conta? " : "Não tem uma conta? "}
+                  <Text
+                    style={styles.switchLink}
+                    onPress={() => setIsSignUp(!isSignUp)}
+                  >
+                    {isSignUp ? "Entrar" : "Criar conta"}
+                  </Text>
+                </Text>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+
+        <Modal
+          visible={errorModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setErrorModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Erro</Text>
+              <Text style={styles.modalMessage}>{errorMessage}</Text>
+              <TouchableOpacity
+                style={styles.modalButton}
+                onPress={() => setErrorModalVisible(false)}
+              >
+                <Text style={styles.modalButtonText}>OK</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </Modal>
+      </View>
+    </ImageBackground>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: spacing.lg,
-  },
-  content: {
-    width: "100%",
-    maxWidth: 400,
-    alignSelf: "center",
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: colors.text,
-    textAlign: "center",
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    textAlign: "center",
-    marginBottom: spacing.xl,
-  },
-  errorContainer: {
-    backgroundColor: "#fee",
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: "#fcc",
-  },
-  errorText: {
-    color: "#c00",
-    fontSize: 14,
-    textAlign: "center",
-  },
-  input: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    alignItems: "center",
-    marginTop: spacing.md,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  switchButton: {
-    marginTop: spacing.lg,
-    alignItems: "center",
-  },
-  switchButtonText: {
-    color: colors.primary,
-    fontSize: 14,
-  },
-  debugInfo: {
-    marginTop: spacing.xl,
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  debugText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-});
