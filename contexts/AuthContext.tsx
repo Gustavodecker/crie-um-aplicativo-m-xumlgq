@@ -1,10 +1,9 @@
 
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
-import { Platform, AppState, AppStateStatus } from "react-native";
+import React, { createContext, useContext, useState, ReactNode } from "react";
+import { Platform } from "react-native";
 import * as Linking from "expo-linking";
 import { authClient, setBearerToken, clearAuthTokens, getBearerToken } from "@/lib/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter, useSegments } from "expo-router";
 
 interface User {
   id: string;
@@ -15,7 +14,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  loading: boolean;
+  setUser: (user: User | null) => void;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
   signInWithToken: (token: string) => Promise<void>;
@@ -32,7 +31,6 @@ interface AuthContextType {
   signInWithApple: () => Promise<void>;
   signInWithGitHub: () => Promise<void>;
   signOut: () => Promise<void>;
-  fetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -82,224 +80,12 @@ function openOAuthPopup(provider: string): Promise<string> {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const isRefreshingRef = useRef(false);
-  const userRef = useRef<User | null>(null);
-  const lastValidationRef = useRef<number>(0);
-  const VALIDATION_INTERVAL_MS = 5 * 60 * 1000;
-  const isUploadingRef = useRef(false);
-
-  useEffect(() => {
-    userRef.current = user;
-  }, [user]);
-
-  useEffect(() => {
-    console.log("[Auth] 🚀 AuthProvider mounted - initializing session");
-    
-    fetchUser();
-
-    const subscription = Linking.addEventListener("url", (event) => {
-      console.log("[Auth] 🔗 Deep link received:", event.url);
-      fetchUser();
-    });
-
-    const appStateSubscription = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
-      if (nextAppState === "active") {
-        const now = Date.now();
-        const timeSinceLastValidation = now - lastValidationRef.current;
-        
-        console.log("[Auth] 📱 App became active");
-        
-        if (isUploadingRef.current) {
-          console.log("[Auth] ⏭️ Skipping validation - user is uploading");
-          return;
-        }
-        
-        if (userRef.current && !isRefreshingRef.current && timeSinceLastValidation > VALIDATION_INTERVAL_MS) {
-          console.log("[Auth] 🔍 Triggering background session validation");
-          validateSessionSilently();
-        } else {
-          console.log("[Auth] ⏭️ Skipping validation - user:", !!userRef.current, "refreshing:", isRefreshingRef.current, "timeSince:", Math.round(timeSinceLastValidation / 1000) + "s");
-        }
-      }
-    });
-
-    return () => {
-      subscription.remove();
-      appStateSubscription.remove();
-    };
-  }, []);
-
-  const validateSessionSilently = async () => {
-    if (isRefreshingRef.current) {
-      console.log("[Auth] ⏭️ Already refreshing, skipping validation");
-      return;
-    }
-
-    if (isUploadingRef.current) {
-      console.log("[Auth] ⏭️ Skipping validation - user is uploading");
-      return;
-    }
-
-    isRefreshingRef.current = true;
-    lastValidationRef.current = Date.now();
-
-    try {
-      console.log("[Auth] 🔍 Validating session silently...");
-      
-      const token = await getBearerToken();
-      if (!token) {
-        console.log("[Auth] ⚠️ No token found during silent validation - user must re-login");
-        setUser(null);
-        userRef.current = null;
-        return;
-      }
-
-      const sessionPromise = authClient.getSession();
-      const timeoutPromise = new Promise<null>((_, reject) => 
-        setTimeout(() => reject(new Error("Session check timeout")), 10000)
-      );
-      
-      const session = await Promise.race([sessionPromise, timeoutPromise]) as any;
-      
-      if (session?.data?.user) {
-        console.log("[Auth] ✅ Silent validation: session still valid for", session.data.user.email);
-        setUser(session.data.user as User);
-        userRef.current = session.data.user as User;
-        
-        if (session.data.session?.token) {
-          await setBearerToken(session.data.session.token);
-        }
-      } else if (session?.data === null || session?.error) {
-        console.log("[Auth] ⚠️ Silent validation: session explicitly invalid, clearing user");
-        setUser(null);
-        userRef.current = null;
-        await clearAuthTokens();
-      }
-    } catch (error: any) {
-      const errorMessage = error?.message?.toLowerCase() || '';
-      console.error("[Auth] ⚠️ Silent validation error:", error?.message || error);
-      
-      if (errorMessage.includes('unauthorized') || errorMessage.includes('401') || errorMessage.includes('403')) {
-        console.log("[Auth] 🚪 Session explicitly rejected (401/403), clearing user");
-        setUser(null);
-        userRef.current = null;
-        await clearAuthTokens();
-      } else {
-        console.log("[Auth] 🌐 Transient error during validation, keeping user logged in");
-      }
-    } finally {
-      isRefreshingRef.current = false;
-    }
-  };
-
-  const fetchUser = async () => {
-    try {
-      setLoading(true);
-      console.log("[Auth] 🔄 Fetching user session...");
-      
-      const existingToken = await getBearerToken();
-      if (!existingToken) {
-        console.log("[Auth] ⚠️ No token found in storage");
-        setUser(null);
-        userRef.current = null;
-        setLoading(false);
-        return;
-      }
-
-      console.log("[Auth] 🔑 Token exists in storage, fetching session...");
-      
-      let retries = 0;
-      const maxRetries = 3;
-      let session = null;
-      let lastError: any = null;
-      
-      while (retries < maxRetries) {
-        try {
-          session = await authClient.getSession();
-          console.log("[Auth] ✅ Session fetched successfully");
-          lastError = null;
-          break;
-        } catch (error: any) {
-          retries++;
-          lastError = error;
-          const errorMessage = error?.message || String(error);
-          console.error(`[Auth] ⚠️ Session fetch attempt ${retries}/${maxRetries} failed:`, errorMessage);
-          
-          if (errorMessage.toLowerCase().includes('unauthorized') || 
-              errorMessage.includes('401') || 
-              errorMessage.includes('403')) {
-            console.log("[Auth] 🚪 Auth error - not retrying");
-            break;
-          }
-          
-          if (retries < maxRetries) {
-            const delay = Math.min(1000 * Math.pow(2, retries - 1), 5000);
-            console.log(`[Auth] ⏳ Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-          }
-        }
-      }
-      
-      if (session?.data?.user) {
-        console.log("[Auth] ✅ User found in session:", session.data.user.email);
-        setUser(session.data.user as User);
-        userRef.current = session.data.user as User;
-        
-        if (session.data.session?.token) {
-          const tokenPreview = session.data.session.token.substring(0, 20);
-          console.log("[Auth] 🔑 Syncing token to storage (preview):", tokenPreview + "...");
-          await setBearerToken(session.data.session.token);
-          console.log("[Auth] ✅ Token synced successfully");
-        } else {
-          console.warn("[Auth] ⚠️ No token in session.data.session, using existing token");
-        }
-      } else if (lastError) {
-        const errorMessage = lastError?.message?.toLowerCase() || '';
-        if (errorMessage.includes('unauthorized') || errorMessage.includes('401') || errorMessage.includes('403')) {
-          console.log("[Auth] 🚪 Session invalid (401/403), clearing user");
-          setUser(null);
-          userRef.current = null;
-          await clearAuthTokens();
-        } else {
-          console.log("[Auth] 🌐 Network/temporary error, keeping user logged in (token exists)");
-        }
-      } else {
-        console.log("[Auth] ❌ No user in session response - session expired");
-        setUser(null);
-        userRef.current = null;
-        await clearAuthTokens();
-      }
-    } catch (error: any) {
-      console.error("[Auth] ❌ Failed to fetch user:", error?.message || error);
-      
-      const errorMessage = error?.message?.toLowerCase() || '';
-      if (errorMessage.includes('unauthorized') || errorMessage.includes('401') || errorMessage.includes('403')) {
-        console.log("[Auth] 🚪 Session invalid (401/403), clearing user");
-        setUser(null);
-        userRef.current = null;
-        await clearAuthTokens();
-      } else {
-        console.log("[Auth] 🌐 Network/temporary error, keeping user logged in if token exists");
-        const token = await getBearerToken();
-        if (!token) {
-          console.log("[Auth] ⚠️ No token found, clearing user");
-          setUser(null);
-          userRef.current = null;
-        }
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
       console.log("[Auth] 🔐 Signing in with email:", email);
       
       const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
-      
-      console.log("[Auth] 📡 Calling backend directly:", `${BACKEND_URL}/api/auth/sign-in/email`);
       
       const response = await fetch(`${BACKEND_URL}/api/auth/sign-in/email`, {
         method: "POST",
@@ -328,64 +114,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const responseData = await response.json();
       console.log("[Auth] ✅ Login response received");
-      console.log("[Auth] 🔍 Response keys:", Object.keys(responseData));
       
       let token: string | null = null;
       let user: User | null = null;
       
       if (responseData?.session?.token) {
         token = responseData.session.token;
-        console.log("[Auth] 🔑 Token found at session.token");
       } else if (responseData?.token) {
         token = responseData.token;
-        console.log("[Auth] 🔑 Token found at token");
       } else if (responseData?.data?.session?.token) {
         token = responseData.data.session.token;
-        console.log("[Auth] 🔑 Token found at data.session.token");
       } else if (responseData?.data?.token) {
         token = responseData.data.token;
-        console.log("[Auth] 🔑 Token found at data.token");
       }
       
       if (responseData?.user) {
         user = responseData.user as User;
-        console.log("[Auth] 👤 User found at user");
       } else if (responseData?.data?.user) {
         user = responseData.data.user as User;
-        console.log("[Auth] 👤 User found at data.user");
       }
       
       if (!token) {
-        console.error("[Auth] ❌ CRITICAL: No token in response!");
-        console.error("[Auth] 🔍 Full response:", JSON.stringify(responseData, null, 2));
+        console.error("[Auth] ❌ No token in response!");
         throw new Error("No token received from server");
       }
       
-      console.log("[Auth] 💾 Saving token to storage (length:", token.length, ")...");
+      console.log("[Auth] 💾 Saving token...");
       await setBearerToken(token);
       
-      const savedToken = await getBearerToken();
-      if (!savedToken || savedToken !== token) {
-        console.error("[Auth] ❌ CRITICAL: Token not saved correctly!");
-        throw new Error("Failed to save authentication token");
-      }
-      
-      console.log("[Auth] ✅ Token saved and verified");
-      
-      // 🔥 CRITICAL FIX: Clear stored role so tab layout re-determines it from API
-      await AsyncStorage.removeItem("userRole");
-      console.log("[Auth] 🧹 Cleared stored userRole - will be re-determined from API");
-      
-      // Set user state IMMEDIATELY - this will trigger navigation in _layout.tsx
       if (user) {
-        console.log("[Auth] ✅ Setting user from login response:", user.email);
+        console.log("[Auth] ✅ Setting user:", user.email);
         setUser(user);
-        userRef.current = user;
-        console.log("[Auth] ✅ Login complete - user state updated");
       } else {
-        console.warn("[Auth] ⚠️ No user in login response, will fetch from session");
-        await fetchUser();
+        console.warn("[Auth] ⚠️ No user in response");
+        throw new Error("No user data received");
       }
+      
+      console.log("[Auth] ✅ Login complete");
       
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign in failed:", error?.message || error);
@@ -398,8 +163,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[Auth] 📝 Signing up with email:", email);
       
       const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
-      
-      console.log("[Auth] 📡 Calling backend directly:", `${BACKEND_URL}/api/auth/sign-up/email`);
       
       const response = await fetch(`${BACKEND_URL}/api/auth/sign-up/email`, {
         method: "POST",
@@ -431,57 +194,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const responseData = await response.json();
       console.log("[Auth] ✅ Signup response received");
-      console.log("[Auth] 🔍 Response keys:", Object.keys(responseData));
       
       let token: string | null = null;
       let user: User | null = null;
       
       if (responseData?.session?.token) {
         token = responseData.session.token;
-        console.log("[Auth] 🔑 Token found at session.token");
       } else if (responseData?.token) {
         token = responseData.token;
-        console.log("[Auth] 🔑 Token found at token");
       } else if (responseData?.data?.session?.token) {
         token = responseData.data.session.token;
-        console.log("[Auth] 🔑 Token found at data.session.token");
       } else if (responseData?.data?.token) {
         token = responseData.data.token;
-        console.log("[Auth] 🔑 Token found at data.token");
       }
       
       if (responseData?.user) {
         user = responseData.user as User;
-        console.log("[Auth] 👤 User found at user");
       } else if (responseData?.data?.user) {
         user = responseData.data.user as User;
-        console.log("[Auth] 👤 User found at data.user");
       }
       
       if (!token) {
-        console.error("[Auth] ❌ CRITICAL: No token in response!");
-        console.error("[Auth] 🔍 Full response:", JSON.stringify(responseData, null, 2));
+        console.error("[Auth] ❌ No token in response!");
         throw new Error("No token received from server");
       }
       
-      console.log("[Auth] 💾 Saving token to storage (length:", token.length, ")...");
+      console.log("[Auth] 💾 Saving token...");
       await setBearerToken(token);
       
-      const savedToken = await getBearerToken();
-      if (!savedToken || savedToken !== token) {
-        console.error("[Auth] ❌ CRITICAL: Token not saved correctly!");
-        throw new Error("Failed to save authentication token");
-      }
-      
-      console.log("[Auth] ✅ Token saved and verified");
-      
       if (user) {
+        console.log("[Auth] ✅ Setting user:", user.email);
         setUser(user);
-        userRef.current = user;
-        console.log("[Auth] ✅ User set from signup response:", user.email);
         
-        // 🔥 CRITICAL: After consultant signup, create consultant profile automatically
-        console.log("[Auth] 📝 Creating consultant profile after signup via /api/consultants/create-profile...");
+        // Create consultant profile after signup
+        console.log("[Auth] 📝 Creating consultant profile...");
         try {
           const profileResponse = await fetch(`${BACKEND_URL}/api/consultants/create-profile`, {
             method: "POST",
@@ -495,21 +241,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           
           if (profileResponse.ok) {
-            console.log("[Auth] ✅ Consultant profile created successfully");
+            console.log("[Auth] ✅ Consultant profile created");
           } else {
-            const profileError = await profileResponse.text();
-            console.warn("[Auth] ⚠️ Could not create consultant profile:", profileResponse.status, profileError);
+            console.warn("[Auth] ⚠️ Could not create consultant profile");
           }
         } catch (profileErr: any) {
-          console.warn("[Auth] ⚠️ Error creating consultant profile (non-fatal):", profileErr?.message);
+          console.warn("[Auth] ⚠️ Error creating consultant profile:", profileErr?.message);
         }
         
         await AsyncStorage.setItem("userRole", "consultant");
-        console.log("[Auth] ✅ Signup complete - user is now authenticated as consultant");
       } else {
-        console.warn("[Auth] ⚠️ No user in signup response, will fetch from session");
-        await fetchUser();
+        console.warn("[Auth] ⚠️ No user in response");
+        throw new Error("No user data received");
       }
+      
+      console.log("[Auth] ✅ Signup complete");
       
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign up failed:", error?.message || error);
@@ -526,8 +272,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
-      
-      console.log("[Auth] 📡 Calling /api/auth/sign-in/token endpoint");
       
       const response = await fetch(`${BACKEND_URL}/api/auth/sign-in/token`, {
         method: "POST",
@@ -561,62 +305,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const responseData = await response.json();
       console.log("[Auth] ✅ Token sign-in response received");
-      console.log("[Auth] 🔍 Response keys:", Object.keys(responseData));
       
       let sessionToken: string | null = null;
       let user: User | null = null;
       
       if (responseData?.session?.token) {
         sessionToken = responseData.session.token;
-        console.log("[Auth] 🔑 Session token found at session.token");
       } else if (responseData?.token) {
         sessionToken = responseData.token;
-        console.log("[Auth] 🔑 Session token found at token");
       } else if (responseData?.data?.session?.token) {
         sessionToken = responseData.data.session.token;
-        console.log("[Auth] 🔑 Session token found at data.session.token");
       }
       
       if (responseData?.user) {
         user = responseData.user as User;
-        console.log("[Auth] 👤 User found at user");
       } else if (responseData?.data?.user) {
         user = responseData.data.user as User;
-        console.log("[Auth] 👤 User found at data.user");
       }
       
       if (!sessionToken) {
-        if (responseData?.mother?.email) {
-          console.log("[Auth] ⚠️ Backend returned mother info without session - this endpoint needs to be fixed on backend");
-          throw new Error("O servidor não retornou uma sessão válida. Por favor, entre em contato com o suporte.");
-        }
-        console.error("[Auth] ❌ CRITICAL: No session token in response!");
-        console.error("[Auth] 🔍 Full response:", JSON.stringify(responseData, null, 2));
+        console.error("[Auth] ❌ No session token in response!");
         throw new Error("Não foi possível criar sessão. Tente novamente.");
       }
       
-      console.log("[Auth] 💾 Saving session token to storage (length:", sessionToken.length, ")...");
+      console.log("[Auth] 💾 Saving session token...");
       await setBearerToken(sessionToken);
       
-      const savedToken = await getBearerToken();
-      if (!savedToken || savedToken !== sessionToken) {
-        console.error("[Auth] ❌ CRITICAL: Session token not saved correctly!");
-        throw new Error("Failed to save authentication token");
-      }
-      
-      console.log("[Auth] ✅ Session token saved and verified");
-      
       if (user) {
+        console.log("[Auth] ✅ Setting user:", user.email);
         setUser(user);
-        userRef.current = user;
         await AsyncStorage.setItem("userRole", "mother");
-        console.log("[Auth] ✅ User set from token sign-in response:", user.email);
-        console.log("[Auth] ✅ Token sign in complete");
       } else {
-        console.warn("[Auth] ⚠️ No user in token sign-in response, will fetch from session");
-        await fetchUser();
-        await AsyncStorage.setItem("userRole", "mother");
+        console.warn("[Auth] ⚠️ No user in response");
+        throw new Error("No user data received");
       }
+      
+      console.log("[Auth] ✅ Token sign in complete");
       
     } catch (error: any) {
       console.error("[Auth] ❌ Token sign in failed:", error?.message || error);
@@ -639,8 +363,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
-      
-      console.log("[Auth] 📡 Calling /api/auth/create-account-with-token endpoint");
       
       const response = await fetch(`${BACKEND_URL}/api/auth/create-account-with-token`, {
         method: "POST",
@@ -704,7 +426,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user = responseData.data.user as User;
         }
       } else {
-        console.log("[Auth] ⚠️ Dedicated endpoint not available, using fallback flow");
+        console.log("[Auth] ⚠️ Using fallback flow");
         
         const validateResponse = await fetch(`${BACKEND_URL}/api/mothers/validate-token`, {
           method: "POST",
@@ -716,8 +438,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         
         if (!validateResponse.ok) {
-          const validateError = await validateResponse.text();
-          console.error("[Auth] ❌ Token validation failed:", validateResponse.status, validateError);
           throw new Error("Token inválido. Verifique com sua consultora.");
         }
         
@@ -730,7 +450,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         console.log("[Auth] 📧 Mother email from token:", motherEmail);
         
-        console.log("[Auth] 📡 Signing up with mother's email:", motherEmail);
         const signUpResponse = await fetch(`${BACKEND_URL}/api/auth/sign-up/email`, {
           method: "POST",
           headers: {
@@ -781,7 +500,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("Conta criada mas não foi possível obter sessão. Tente fazer login.");
         }
         
-        console.log("[Auth] 🔗 Linking account to baby via /api/mothers/init-with-token");
+        console.log("[Auth] 🔗 Linking account to baby...");
         try {
           const initResponse = await fetch(`${BACKEND_URL}/api/mothers/init-with-token`, {
             method: "POST",
@@ -794,43 +513,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           });
           
           if (initResponse.ok) {
-            console.log("[Auth] ✅ Account linked to baby successfully");
+            console.log("[Auth] ✅ Account linked to baby");
           } else {
-            const initError = await initResponse.text();
-            console.warn("[Auth] ⚠️ Could not link account to baby:", initResponse.status, initError);
+            console.warn("[Auth] ⚠️ Could not link account to baby");
           }
         } catch (initErr: any) {
-          console.warn("[Auth] ⚠️ Error linking account to baby (non-fatal):", initErr?.message);
+          console.warn("[Auth] ⚠️ Error linking account to baby:", initErr?.message);
         }
       }
       
       if (!sessionToken) {
-        console.error("[Auth] ❌ CRITICAL: No session token available!");
+        console.error("[Auth] ❌ No session token available!");
         throw new Error("Não foi possível criar sessão. Tente novamente.");
       }
       
-      console.log("[Auth] 💾 Saving session token to storage...");
+      console.log("[Auth] 💾 Saving session token...");
       await setBearerToken(sessionToken);
       
-      const savedToken = await getBearerToken();
-      if (!savedToken || savedToken !== sessionToken) {
-        console.error("[Auth] ❌ CRITICAL: Session token not saved correctly!");
-        throw new Error("Failed to save authentication token");
-      }
-      
-      console.log("[Auth] ✅ Session token saved and verified");
-      
       if (user) {
+        console.log("[Auth] ✅ Setting user:", user.email);
         setUser(user);
-        userRef.current = user;
         await AsyncStorage.setItem("userRole", "mother");
-        console.log("[Auth] ✅ User set from create account response:", user.email);
-        console.log("[Auth] ✅ Create account with token complete");
       } else {
-        console.warn("[Auth] ⚠️ No user in create account response, will fetch from session");
-        await fetchUser();
-        await AsyncStorage.setItem("userRole", "mother");
+        console.warn("[Auth] ⚠️ No user in response");
+        throw new Error("No user data received");
       }
+      
+      console.log("[Auth] ✅ Create account complete");
       
     } catch (error: any) {
       console.error("[Auth] ❌ Create account with token failed:", error?.message || error);
@@ -851,7 +560,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
       
-      console.log("[Auth] 📡 Calling /api/mothers/validate-token - correct endpoint");
       const response = await fetch(`${BACKEND_URL}/api/mothers/validate-token`, {
         method: "POST",
         headers: {
@@ -893,7 +601,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (Platform.OS === "web") {
         const token = await openOAuthPopup(provider);
         await setBearerToken(token);
-        await fetchUser();
+        
+        // Fetch user from session after OAuth
+        const session = await authClient.getSession();
+        if (session?.data?.user) {
+          setUser(session.data.user as User);
+        }
       } else {
         const callbackURL = Linking.createURL("/");
         console.log("[Auth] 📱 Using callback URL:", callbackURL);
@@ -903,7 +616,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           callbackURL,
         });
         
-        await fetchUser();
+        // Fetch user from session after OAuth
+        const session = await authClient.getSession();
+        if (session?.data?.user) {
+          setUser(session.data.user as User);
+        }
       }
       
       console.log("[Auth] ✅ Social sign in complete");
@@ -918,9 +635,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGitHub = () => signInWithSocial("github");
 
   const signOut = async () => {
-    console.log("[Auth] 🚪 Signing out - clearing local state immediately");
+    console.log("[Auth] 🚪 Signing out");
     setUser(null);
-    userRef.current = null;
     
     try {
       await Promise.all([
@@ -928,33 +644,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         AsyncStorage.removeItem("userRole").catch(() => {}),
         AsyncStorage.removeItem("motherBabyId").catch(() => {}),
       ]);
-      console.log("[Auth] ✅ Local state and tokens cleared");
+      console.log("[Auth] ✅ Local state cleared");
       
-      authClient.signOut().then(() => {
-        console.log("[Auth] ✅ Backend sign out successful");
-      }).catch((error: any) => {
-        console.error("[Auth] ⚠️ Backend sign out failed (non-critical):", error?.message || error);
+      authClient.signOut().catch((error: any) => {
+        console.error("[Auth] ⚠️ Backend sign out failed:", error?.message || error);
       });
       
     } catch (error: any) {
-      console.error("[Auth] ⚠️ Error during sign out cleanup:", error?.message || error);
+      console.error("[Auth] ⚠️ Error during sign out:", error?.message || error);
     }
     
     console.log("[Auth] ✅ Sign out complete");
   };
 
-  const setUploadingState = (isUploading: boolean) => {
-    console.log("[Auth] 📤 Upload state changed:", isUploading);
-    isUploadingRef.current = isUploading;
-  };
-
-  (AuthContext as any)._setUploadingState = setUploadingState;
-
   return (
     <AuthContext.Provider
       value={{
         user,
-        loading,
+        setUser,
         signInWithEmail,
         signUpWithEmail,
         signInWithToken,
@@ -964,7 +671,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithApple,
         signInWithGitHub,
         signOut,
-        fetchUser,
       }}
     >
       {children}
@@ -978,11 +684,4 @@ export function useAuth() {
     throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
-}
-
-export function setUploadingState(isUploading: boolean) {
-  const setFn = (AuthContext as any)._setUploadingState;
-  if (setFn) {
-    setFn(isUploading);
-  }
 }

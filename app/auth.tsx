@@ -54,10 +54,9 @@ export default function AuthScreen() {
 
     try {
       console.log("User tapped Consultant Login button");
-      console.log("Attempting consultant login with email:", consultantEmail);
       await signInWithEmail(consultantEmail, consultantPassword);
-      console.log("Consultant login successful");
-      // Navigation will be handled by AuthContext + TabLayout
+      console.log("Login successful - navigating to /(tabs)");
+      router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Consultant login error:", err);
       setError(err.message || "Erro ao fazer login");
@@ -82,10 +81,9 @@ export default function AuthScreen() {
 
     try {
       console.log("User tapped Consultant Register button");
-      console.log("Attempting consultant registration with email:", consultantEmail);
       await signUpWithEmail(consultantEmail, consultantPassword, consultantName);
-      console.log("Consultant registration successful");
-      // Navigation will be handled by AuthContext + TabLayout
+      console.log("Registration successful - navigating to /(tabs)");
+      router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Consultant registration error:", err);
       setError(err.message || "Erro ao criar conta");
@@ -105,7 +103,6 @@ export default function AuthScreen() {
 
     try {
       console.log("User tapped Validate Token button");
-      console.log("Validating baby token:", babyToken.substring(0, 4) + "...");
       const result = await validateBabyToken(babyToken.trim());
       
       if (!result.valid) {
@@ -150,10 +147,9 @@ export default function AuthScreen() {
 
     try {
       console.log("User tapped Create Account button");
-      console.log("Creating mother account with token");
       await createAccountWithToken(babyToken.trim(), motherName, motherPassword);
-      console.log("Mother account created successfully");
-      // Navigation will be handled by AuthContext + TabLayout
+      console.log("Account created - navigating to /(tabs)");
+      router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Create account error:", err);
       setError(err.message || "Erro ao criar conta");
@@ -173,10 +169,9 @@ export default function AuthScreen() {
 
     try {
       console.log("User tapped Mother Sign In button");
-      console.log("Signing in mother with email:", validatedEmail);
       await signInWithEmail(validatedEmail, motherPassword);
-      console.log("Mother sign-in successful");
-      // Navigation will be handled by AuthContext + TabLayout
+      console.log("Sign in successful - navigating to /(tabs)");
+      router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Mother sign-in error:", err);
       setError(err.message || "Erro ao fazer login");

@@ -1,11 +1,12 @@
+
 import "react-native-reanimated";
 import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
-import { Stack, Redirect } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, View, ActivityIndicator } from "react-native";
+import { useColorScheme } from "react-native";
 import {
   DarkTheme,
   DefaultTheme,
@@ -15,24 +16,31 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
   initialRouteName: "auth",
 };
 
-// Auth bootstrap component - handles session check and redirects
-function AuthBootstrap({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+// Simple navigation guard
+function NavigationGuard({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const router = useRouter();
+  const segments = useSegments();
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F8F9FE" }}>
-        <ActivityIndicator size="large" color="#6B4CE6" />
-      </View>
-    );
-  }
+  useEffect(() => {
+    const inAuthGroup = segments[0] === "auth";
+
+    if (!user && !inAuthGroup) {
+      // User not logged in, redirect to auth
+      console.log("[RootLayout] 🚪 No user, redirecting to /auth");
+      router.replace("/auth");
+    } else if (user && inAuthGroup) {
+      // User logged in but on auth screen, redirect to app
+      console.log("[RootLayout] ✅ User logged in, redirecting to /(tabs)");
+      router.replace("/(tabs)");
+    }
+  }, [user, segments]);
 
   return <>{children}</>;
 }
@@ -86,13 +94,13 @@ export default function RootLayout() {
       >
         <AuthProvider>
           <GestureHandlerRootView style={{ flex: 1 }}>
-            <AuthBootstrap>
+            <NavigationGuard>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="auth" options={{ headerShown: false }} />
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="+not-found" />
               </Stack>
-            </AuthBootstrap>
+            </NavigationGuard>
             <SystemBars style="auto" />
           </GestureHandlerRootView>
         </AuthProvider>
