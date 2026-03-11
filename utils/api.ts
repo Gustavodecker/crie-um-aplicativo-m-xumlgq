@@ -4,7 +4,6 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BEARER_TOKEN_KEY, setBearerToken as libSetBearerToken } from "@/lib/auth";
 
-// Re-export for convenience
 export { BEARER_TOKEN_KEY };
 
 /**
@@ -49,8 +48,7 @@ export const getBearerToken = async (): Promise<string | null> => {
       }
       return token;
     } else {
-      // 🔥 CRITICAL FIX: Use AsyncStorage.getItem() NOT getItemAsync()
-      // AsyncStorage does NOT have a getItemAsync method
+      // ✅ CORRECT: Use AsyncStorage.getItem() (returns Promise<string | null>)
       const token = await AsyncStorage.getItem(BEARER_TOKEN_KEY);
       if (token) {
         console.log("[API] 🔑 Token from AsyncStorage: EXISTS (length:", token.length, ")");
@@ -66,7 +64,7 @@ export const getBearerToken = async (): Promise<string | null> => {
 };
 
 interface ApiCallOptions extends RequestInit {
-  suppressErrorLog?: boolean; // Don't log errors (for expected 404s)
+  suppressErrorLog?: boolean;
 }
 
 /**
@@ -88,7 +86,6 @@ export const apiCall = async <T = any>(
   const url = `${BACKEND_URL}${endpoint}`;
   const suppressErrorLog = options?.suppressErrorLog || false;
   
-  // Don't log the call if we're suppressing errors (reduces noise for role checks)
   if (!suppressErrorLog) {
     console.log("[API] 📡 Calling:", url, options?.method || "GET");
   }
@@ -98,14 +95,12 @@ export const apiCall = async <T = any>(
       ...options,
     };
 
-    // Remove our custom property before sending
     delete (fetchOptions as any).suppressErrorLog;
 
     // 🔥 CRITICAL: Always get the token and add to headers
     const token = await getBearerToken();
 
     // Only add Content-Type header if there's a body
-    // DELETE requests without body should NOT have Content-Type header
     if (options?.body) {
       fetchOptions.headers = {
         "Content-Type": "application/json",
@@ -137,7 +132,6 @@ export const apiCall = async <T = any>(
     if (!response.ok) {
       const text = await response.text();
       
-      // Only log errors if not suppressed
       if (!suppressErrorLog) {
         console.error("[API] ❌ Error response:", response.status, text);
       }
@@ -164,7 +158,6 @@ export const apiCall = async <T = any>(
     }
     return data;
   } catch (error) {
-    // Only log errors if not suppressed
     if (!suppressErrorLog) {
       console.error("[API] ❌ Request failed:", error);
     }
