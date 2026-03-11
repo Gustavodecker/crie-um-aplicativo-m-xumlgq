@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Redirect, Slot, useRouter } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { View, ActivityIndicator, Text } from "react-native";
@@ -14,32 +14,39 @@ export default function TabLayout() {
   const { user } = useAuth();
   const router = useRouter();
   const [userRole, setUserRole] = useState<UserRole | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [checkingRole, setCheckingRole] = useState(true);
+  const hasCheckedRef = useRef(false);
 
-  // Determine user role ONCE when user changes
+  // Determine user role ONCE when user becomes available
   useEffect(() => {
+    // If no user, clear role and stop checking
     if (!user) {
       console.log("[Tab Layout] ⚠️ No user");
       setUserRole(null);
-      setLoading(false);
+      setCheckingRole(false);
+      hasCheckedRef.current = false;
       return;
     }
 
-    console.log("[Tab Layout] 🔍 Determining user role for:", user.email);
+    // If we already checked for this user, don't check again
+    if (hasCheckedRef.current) {
+      console.log("[Tab Layout] ⏭️ Already checked role for this user");
+      return;
+    }
 
-    let isMounted = true;
+    // Mark that we're checking
+    hasCheckedRef.current = true;
+    console.log("[Tab Layout] 🔍 Determining user role for:", user.email);
 
     const determineRole = async () => {
       try {
         // Check stored role first
         const storedRole = await AsyncStorage.getItem("userRole");
         
-        if (!isMounted) return;
-        
         if (storedRole === "consultant" || storedRole === "mother") {
           console.log("[Tab Layout] ✅ User role from storage:", storedRole);
           setUserRole(storedRole);
-          setLoading(false);
+          setCheckingRole(false);
           
           // Navigate based on role
           if (storedRole === "mother") {
@@ -56,41 +63,32 @@ export default function TabLayout() {
         try {
           await apiGet("/api/consultant/profile");
           
-          if (!isMounted) return;
-          
           console.log("[Tab Layout] ✅ User is CONSULTANT");
           await AsyncStorage.setItem("userRole", "consultant");
           setUserRole("consultant");
-          setLoading(false);
+          setCheckingRole(false);
           router.replace("/(tabs)/(home)");
         } catch (apiError: any) {
-          if (!isMounted) return;
-          
           console.log("[Tab Layout] ✅ User is MOTHER");
           await AsyncStorage.setItem("userRole", "mother");
           setUserRole("mother");
-          setLoading(false);
+          setCheckingRole(false);
           router.replace("/(tabs)/(home)/mother-dashboard");
         }
       } catch (error) {
-        if (!isMounted) return;
-        
         console.error("[Tab Layout] ❌ Error determining role:", error);
+        // Default to mother on error
         setUserRole("mother");
-        setLoading(false);
+        setCheckingRole(false);
         router.replace("/(tabs)/(home)/mother-dashboard");
       }
     };
 
     determineRole();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [user]); // Only depend on user, not router or any functions
+  }, [user]); // Only depend on user
 
   // Show loading
-  if (loading) {
+  if (checkingRole) {
     console.log("[Tab Layout] ⏳ Loading...");
     return (
       <View
