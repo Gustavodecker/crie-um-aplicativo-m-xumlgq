@@ -36,11 +36,10 @@ export default function AuthScreen() {
   const [tokenValidationResult, setTokenValidationResult] = useState<{
     babyName?: string;
     consultantName?: string;
-    accountExists?: boolean;
   } | null>(null);
   
   const router = useRouter();
-  const { signInWithEmail, signUpWithEmail, signInWithToken, createAccountWithToken, validateBabyToken } = useAuth();
+  const { signInWithEmail, signUpWithEmail, createAccountWithToken, validateBabyToken } = useAuth();
 
   const handleConsultantLogin = async () => {
     if (!email || !password) {
@@ -134,14 +133,7 @@ export default function AuthScreen() {
       
       console.log("Token validation result:", result);
       setTokenValidationResult(result);
-      
-      if (result.accountExists) {
-        setError("Já existe uma conta com este token. Use a opção 'Já tenho conta' para fazer login com email e senha.");
-        setLoading(false);
-        return;
-      } else {
-        setMotherStep("token-create-account");
-      }
+      setMotherStep("token-create-account");
     } catch (err: any) {
       console.error("Token validation error:", err);
       setError(err?.message || "Erro ao validar token");
@@ -151,7 +143,7 @@ export default function AuthScreen() {
   };
 
   const handleCreateAccount = async () => {
-    if (!name.trim() || !password) {
+    if (!email.trim() || !password) {
       setError("Por favor, preencha todos os campos");
       return;
     }
@@ -160,13 +152,19 @@ export default function AuthScreen() {
       setError("A senha deve ter pelo menos 6 caracteres");
       return;
     }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError("Por favor, informe um e-mail válido");
+      return;
+    }
     
     setLoading(true);
     setError("");
     
     try {
-      console.log("Creating mother account with token");
-      await createAccountWithToken(babyToken, name, password);
+      console.log("Creating mother account with token and email");
+      await createAccountWithToken(babyToken, email.trim(), password);
       console.log("Mother account created successfully");
       router.replace("/(tabs)");
     } catch (err: any) {
@@ -582,17 +580,19 @@ export default function AuthScreen() {
 
                     <View style={styles.inputContainer}>
                       <IconSymbol
-                        ios_icon_name="person.fill"
-                        android_material_icon_name="person"
+                        ios_icon_name="envelope.fill"
+                        android_material_icon_name="email"
                         size={20}
                         color={colors.textSecondary}
                       />
                       <TextInput
                         style={styles.input}
-                        placeholder="Seu nome"
+                        placeholder="Seu e-mail"
                         placeholderTextColor={colors.textSecondary}
-                        value={name}
-                        onChangeText={setName}
+                        value={email}
+                        onChangeText={setEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
                         editable={!loading}
                       />
                     </View>

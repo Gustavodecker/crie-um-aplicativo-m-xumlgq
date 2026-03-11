@@ -26,7 +26,6 @@ interface BabyResponse {
   birthDate: string;
   motherName: string;
   motherPhone: string;
-  motherEmail: string;
   motherUserId: string | null;
   consultantId: string;
   objectives: string | null;
@@ -43,7 +42,6 @@ export default function RegisterBabyScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [motherName, setMotherName] = useState("");
   const [motherPhone, setMotherPhone] = useState("");
-  const [motherEmail, setMotherEmail] = useState("");
   const [objectives, setObjectives] = useState("");
   const [error, setError] = useState("");
   
@@ -122,17 +120,6 @@ export default function RegisterBabyScreen() {
       return;
     }
 
-    if (!motherEmail.trim()) {
-      setError("Por favor, informe o e-mail da mãe");
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(motherEmail)) {
-      setError("Por favor, informe um e-mail válido");
-      return;
-    }
-
     try {
       setLoading(true);
       
@@ -141,7 +128,6 @@ export default function RegisterBabyScreen() {
         birthDate: formatDateToISO(birthDate),
         motherName: motherName.trim(),
         motherPhone: motherPhone.trim(),
-        motherEmail: motherEmail.trim(),
         objectives: objectives.trim() || undefined,
       };
       
@@ -262,19 +248,6 @@ export default function RegisterBabyScreen() {
                 keyboardType="phone-pad"
               />
             </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>E-mail *</Text>
-              <TextInput
-                style={styles.input}
-                value={motherEmail}
-                onChangeText={setMotherEmail}
-                placeholder="Ex: maria@email.com"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
           </View>
 
           <View style={styles.section}>
@@ -386,7 +359,7 @@ export default function RegisterBabyScreen() {
                   color={colors.primary}
                 />
                 <Text style={styles.instructionsText}>
-                  Envie este token para a mãe. Ela precisará dele para fazer login no aplicativo e acessar a rotina do bebê.
+                  Envie este token para a mãe. No primeiro acesso, ela usará o token para criar sua conta com email e senha.
                 </Text>
               </View>
             </View>
@@ -421,7 +394,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: "700" as const,
+    fontWeight: "700",
     color: colors.text,
     marginTop: spacing.md,
   },
@@ -429,7 +402,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     marginTop: spacing.xs,
-    textAlign: "center" as const,
+    textAlign: "center",
   },
   errorContainer: {
     flexDirection: "row",
@@ -450,7 +423,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "600" as const,
+    fontWeight: "600",
     color: colors.text,
     marginBottom: spacing.md,
   },
@@ -459,7 +432,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: "500" as const,
+    fontWeight: "500",
     color: colors.text,
     marginBottom: spacing.sm,
   },
@@ -474,7 +447,7 @@ const styles = StyleSheet.create({
   },
   textArea: {
     minHeight: 100,
-    textAlignVertical: "top" as const,
+    textAlignVertical: "top",
   },
   dateButton: {
     flexDirection: "row",
@@ -508,7 +481,7 @@ const styles = StyleSheet.create({
   },
   submitButtonText: {
     fontSize: 16,
-    fontWeight: "600" as const,
+    fontWeight: "600",
     color: colors.card,
   },
   cancelButton: {
@@ -545,7 +518,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 24,
-    fontWeight: "700" as const,
+    fontWeight: "700",
     color: colors.text,
     marginTop: spacing.md,
   },
@@ -559,7 +532,7 @@ const styles = StyleSheet.create({
   },
   tokenLabel: {
     fontSize: 14,
-    fontWeight: "600" as const,
+    fontWeight: "600",
     color: colors.text,
     marginBottom: spacing.sm,
   },
@@ -573,9 +546,9 @@ const styles = StyleSheet.create({
   },
   tokenText: {
     fontSize: 20,
-    fontWeight: "700" as const,
+    fontWeight: "700",
     color: colors.primary,
-    textAlign: "center" as const,
+    textAlign: "center",
     letterSpacing: 2,
   },
   copyButton: {
@@ -590,7 +563,7 @@ const styles = StyleSheet.create({
   },
   copyButtonText: {
     fontSize: 16,
-    fontWeight: "600" as const,
+    fontWeight: "600",
     color: colors.card,
   },
   instructionsContainer: {
@@ -615,7 +588,7 @@ const styles = StyleSheet.create({
   },
   closeModalButtonText: {
     fontSize: 16,
-    fontWeight: "600" as const,
+    fontWeight: "600",
     color: colors.text,
   },
 });

@@ -19,15 +19,11 @@ interface AuthContextType {
   setUser: (user: User | null) => void;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
-  signInWithToken: (token: string) => Promise<void>;
-  createAccountWithToken: (token: string, name: string, password: string) => Promise<void>;
+  createAccountWithToken: (token: string, email: string, password: string) => Promise<void>;
   validateBabyToken: (token: string) => Promise<{
     valid: boolean;
-    babyId?: string;
     babyName?: string;
-    motherEmail?: string;
     consultantName?: string;
-    accountExists?: boolean;
   }>;
   signInWithGoogle: () => Promise<void>;
   signInWithApple: () => Promise<void>;
@@ -384,101 +380,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signInWithToken = async (babyToken: string) => {
-    try {
-      console.log("[Auth] 🎫 Signing in with baby token");
-      
-      if (!babyToken || babyToken.trim().length === 0) {
-        throw new Error("Token inválido");
-      }
-
-      const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
-      
-      const response = await fetch(`${BACKEND_URL}/api/auth/sign-in/token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Origin": BACKEND_URL,
-        },
-        body: JSON.stringify({
-          token: babyToken.trim(),
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("[Auth] ❌ Token sign-in failed:", response.status, errorText);
-        
-        let errorMsg = "Token inválido ou expirado";
-        try {
-          const errJson = JSON.parse(errorText);
-          if (errJson.error) errorMsg = errJson.error;
-        } catch {}
-        
-        if (response.status === 404) {
-          throw new Error("Token não encontrado. Verifique com sua consultora.");
-        }
-        if (response.status === 400) {
-          throw new Error("Conta não encontrada para este token. Por favor, crie uma conta primeiro.");
-        }
-        throw new Error(errorMsg);
-      }
-      
-      const responseData = await response.json();
-      console.log("[Auth] ✅ Token sign-in response received");
-      
-      let sessionToken: string | null = null;
-      let user: User | null = null;
-      
-      if (responseData?.session?.token) {
-        sessionToken = responseData.session.token;
-      } else if (responseData?.token) {
-        sessionToken = responseData.token;
-      } else if (responseData?.data?.session?.token) {
-        sessionToken = responseData.data.session.token;
-      }
-      
-      if (responseData?.user) {
-        user = responseData.user as User;
-      } else if (responseData?.data?.user) {
-        user = responseData.data.user as User;
-      }
-      
-      if (!sessionToken) {
-        console.error("[Auth] ❌ No session token in response!");
-        throw new Error("Não foi possível criar sessão. Tente novamente.");
-      }
-      
-      console.log("[Auth] 💾 Saving session token...");
-      await setBearerToken(sessionToken);
-      
-      if (user) {
-        console.log("[Auth] ✅ Setting user:", user.email);
-        setUser(user);
-        await AsyncStorage.setItem("userRole", "mother");
-        setUserRole("mother");
-      } else {
-        console.warn("[Auth] ⚠️ No user in response");
-        throw new Error("No user data received");
-      }
-      
-      console.log("[Auth] ✅ Token sign in complete - user state updated");
-      
-    } catch (error: any) {
-      console.error("[Auth] ❌ Token sign in failed:", error?.message || error);
-      throw error;
-    }
-  };
-
-  const createAccountWithToken = async (babyToken: string, name: string, password: string) => {
+  const createAccountWithToken = async (babyToken: string, email: string, password: string) => {
     try {
       console.log("[Auth] 📝 Creating account with baby token");
       
       if (!babyToken || babyToken.trim().length === 0) {
         throw new Error("Token inválido");
       }
-      if (!name || name.trim().length === 0) {
-        throw new Error("Nome é obrigatório");
+      if (!email || email.trim().length === 0) {
+        throw new Error("Email é obrigatório");
       }
       if (!password || password.length < 6) {
         throw new Error("Senha deve ter pelo menos 6 caracteres");
@@ -496,7 +406,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({
           token: babyToken.trim(),
-          name: name.trim(),
+          email: email.trim(),
           password,
         }),
       });
@@ -519,7 +429,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("Token não encontrado. Verifique com sua consultora.");
         }
         if (response.status === 409) {
-          throw new Error("Já existe uma conta com este token. Use a opção de login.");
+          throw new Error("Já existe uma conta com este email. Use a opção de login.");
         }
         throw new Error(errorMsg);
       }
@@ -571,11 +481,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const validateBabyToken = async (babyToken: string): Promise<{
     valid: boolean;
-    babyId?: string;
     babyName?: string;
-    motherEmail?: string;
     consultantName?: string;
-    accountExists?: boolean;
   }> => {
     try {
       console.log("[Auth] 🔍 Validating baby token");
@@ -609,7 +516,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const data = await response.json();
       console.log("[Auth] ✅ Token validation result:", data);
-      return data;
+      // New API returns: { valid: boolean, babyName: string, consultantName: string }
+      return {
+        valid: data.valid,
+        babyName: data.babyName,
+        consultantName: data.consultantName,
+      };
     } catch (error: any) {
       console.error("[Auth] ❌ Token validation error:", error?.message || error);
       throw error;
@@ -689,7 +601,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser,
         signInWithEmail,
         signUpWithEmail,
-        signInWithToken,
         createAccountWithToken,
         validateBabyToken,
         signInWithGoogle,
