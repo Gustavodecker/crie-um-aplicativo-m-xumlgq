@@ -1,119 +1,60 @@
 
-import React, { useEffect, useState, useRef } from "react";
-import { Redirect, Slot, useRouter } from "expo-router";
+import React, { useEffect } from "react";
+import { Redirect, Slot, useRouter, useSegments } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
-import { View, ActivityIndicator, Text } from "react-native";
+import { View } from "react-native";
 import FloatingTabBar, { TabBarItem } from "@/components/FloatingTabBar";
-import { colors } from "@/styles/commonStyles";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { apiGet } from "@/utils/api";
-
-type UserRole = "consultant" | "mother";
 
 export default function TabLayout() {
   const { user } = useAuth();
   const router = useRouter();
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
-  const [checkingRole, setCheckingRole] = useState(true);
-  const hasCheckedRef = useRef(false);
+  const segments = useSegments();
 
-  // Determine user role ONCE when user becomes available
   useEffect(() => {
-    // If no user, clear role and stop checking
     if (!user) {
-      console.log("[Tab Layout] ⚠️ No user");
-      setUserRole(null);
-      setCheckingRole(false);
-      hasCheckedRef.current = false;
+      console.log("[TabLayout] No user, will redirect to auth");
       return;
     }
 
-    // If we already checked for this user, don't check again
-    if (hasCheckedRef.current) {
-      console.log("[Tab Layout] ⏭️ Already checked role for this user");
-      return;
-    }
+    // User object must contain role property
+    const userRole = (user as any).role;
+    const currentPath = segments.join("/");
 
-    // Mark that we're checking
-    hasCheckedRef.current = true;
-    console.log("[Tab Layout] 🔍 Determining user role for:", user.email);
+    console.log("[TabLayout] User role:", userRole, "Current path:", currentPath);
 
-    const determineRole = async () => {
-      try {
-        // Check stored role first
-        const storedRole = await AsyncStorage.getItem("userRole");
-        
-        if (storedRole === "consultant" || storedRole === "mother") {
-          console.log("[Tab Layout] ✅ User role from storage:", storedRole);
-          setUserRole(storedRole);
-          setCheckingRole(false);
-          
-          // Navigate based on role
-          if (storedRole === "mother") {
-            router.replace("/(tabs)/(home)/mother-dashboard");
-          } else {
-            router.replace("/(tabs)/(home)");
-          }
-          return;
-        }
-        
-        console.log("[Tab Layout] ⚠️ No stored role, determining from API...");
-        
-        // Try to fetch consultant profile
-        try {
-          await apiGet("/api/consultant/profile");
-          
-          console.log("[Tab Layout] ✅ User is CONSULTANT");
-          await AsyncStorage.setItem("userRole", "consultant");
-          setUserRole("consultant");
-          setCheckingRole(false);
-          router.replace("/(tabs)/(home)");
-        } catch (apiError: any) {
-          console.log("[Tab Layout] ✅ User is MOTHER");
-          await AsyncStorage.setItem("userRole", "mother");
-          setUserRole("mother");
-          setCheckingRole(false);
-          router.replace("/(tabs)/(home)/mother-dashboard");
-        }
-      } catch (error) {
-        console.error("[Tab Layout] ❌ Error determining role:", error);
-        // Default to mother on error
-        setUserRole("mother");
-        setCheckingRole(false);
+    if (userRole === "mother") {
+      // Redirect to mother dashboard if not already there
+      if (!currentPath.startsWith("(tabs)/(home)/mother-dashboard")) {
+        console.log("[TabLayout] Redirecting mother to dashboard");
         router.replace("/(tabs)/(home)/mother-dashboard");
       }
-    };
-
-    determineRole();
-  }, [user]); // Only depend on user
-
-  // Show loading
-  if (checkingRole) {
-    console.log("[Tab Layout] ⏳ Loading...");
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: colors.background,
-        }}
-      >
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ marginTop: 16, color: colors.textSecondary }}>Carregando...</Text>
-      </View>
-    );
-  }
+    } else if (userRole === "consultant") {
+      // Redirect to consultant dashboard if not already there
+      if (!currentPath.startsWith("(tabs)/(home)/index") && !currentPath.startsWith("(tabs)/(home)") && !currentPath.includes("profile")) {
+        console.log("[TabLayout] Redirecting consultant to dashboard");
+        router.replace("/(tabs)/(home)");
+      }
+    } else {
+      console.warn("[TabLayout] Unknown user role:", userRole);
+      // Fallback to home
+      if (!currentPath.startsWith("(tabs)/(home)/")) {
+        router.replace("/(tabs)/(home)/");
+      }
+    }
+  }, [user, segments]);
 
   // Redirect to auth if no user
   if (!user) {
-    console.log("[Tab Layout] 🚪 No user, redirecting to auth");
+    console.log("[TabLayout] No user, redirecting to auth");
     return <Redirect href="/auth" />;
   }
 
+  // Get user role
+  const userRole = (user as any).role;
+
   // Render mother layout (no tab bar)
   if (userRole === "mother") {
-    console.log("[Tab Layout] 👩 Rendering mother layout");
+    console.log("[TabLayout] Rendering mother layout");
     return (
       <View style={{ flex: 1 }}>
         <Slot />
@@ -122,7 +63,7 @@ export default function TabLayout() {
   }
 
   // Render consultant layout (with tab bar)
-  console.log("[Tab Layout] 👔 Rendering consultant layout");
+  console.log("[TabLayout] Rendering consultant layout");
   const tabs: TabBarItem[] = [
     {
       name: "Bebês",
