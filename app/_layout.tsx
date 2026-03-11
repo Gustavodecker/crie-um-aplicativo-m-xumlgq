@@ -6,7 +6,7 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme } from "react-native";
+import { useColorScheme, ActivityIndicator, View } from "react-native";
 import {
   DarkTheme,
   DefaultTheme,
@@ -24,11 +24,17 @@ export const unstable_settings = {
 
 // Simple navigation guard
 function NavigationGuard({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
+    // Don't navigate while loading
+    if (loading) {
+      console.log("[RootLayout] ⏳ Still loading auth state...");
+      return;
+    }
+
     const inAuthGroup = segments[0] === "auth";
 
     if (!user && !inAuthGroup) {
@@ -40,7 +46,16 @@ function NavigationGuard({ children }: { children: React.ReactNode }) {
       console.log("[RootLayout] ✅ User logged in, redirecting to /(tabs)");
       router.replace("/(tabs)");
     }
-  }, [user, segments]);
+  }, [user, loading, segments]);
+
+  // Show loading indicator while initializing
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F8F9FE" }}>
+        <ActivityIndicator size="large" color="#6B4CE6" />
+      </View>
+    );
+  }
 
   return <>{children}</>;
 }

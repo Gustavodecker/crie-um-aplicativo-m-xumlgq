@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Platform } from "react-native";
 import * as Linking from "expo-linking";
 import { authClient, setBearerToken, clearAuthTokens, getBearerToken } from "@/lib/auth";
@@ -14,6 +14,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
+  loading: boolean;
   setUser: (user: User | null) => void;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
@@ -80,6 +81,61 @@ function openOAuthPopup(provider: string): Promise<string> {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  // Initialize auth - runs ONLY ONCE on mount
+  useEffect(() => {
+    const initializeAuth = async () => {
+      console.log("[Auth] 🔄 Initializing auth...");
+      
+      try {
+        const token = await getBearerToken();
+        
+        if (!token) {
+          console.log("[Auth] ℹ️ No token found, user not logged in");
+          return;
+        }
+        
+        console.log("[Auth] 🔑 Token found, fetching session...");
+        
+        const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
+        
+        const response = await fetch(`${BACKEND_URL}/api/auth/get-session`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Origin": BACKEND_URL,
+          },
+        });
+        
+        if (!response.ok) {
+          console.log("[Auth] ⚠️ Session invalid, clearing token");
+          await clearAuthTokens();
+          return;
+        }
+        
+        const sessionData = await response.json();
+        
+        if (sessionData?.user) {
+          console.log("[Auth] ✅ Session valid, user:", sessionData.user.email);
+          setUser(sessionData.user as User);
+        } else {
+          console.log("[Auth] ⚠️ No user in session, clearing token");
+          await clearAuthTokens();
+        }
+        
+      } catch (error: any) {
+        console.error("[Auth] ❌ Error initializing auth:", error?.message || error);
+        await clearAuthTokens();
+      } finally {
+        // ALWAYS set loading to false
+        console.log("[Auth] ✅ Auth initialization complete");
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, []); // Empty dependency array - runs ONLY ONCE
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
@@ -661,6 +717,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        loading,
         setUser,
         signInWithEmail,
         signUpWithEmail,
