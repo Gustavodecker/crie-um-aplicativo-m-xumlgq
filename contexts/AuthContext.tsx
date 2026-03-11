@@ -372,20 +372,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("[Auth] ✅ Token saved and verified");
       
-      // 🔥 CRITICAL FIX: Set user state IMMEDIATELY and force a state update
+      // 🔥 CRITICAL FIX: Clear stored role so tab layout re-determines it from API
+      await AsyncStorage.removeItem("userRole");
+      console.log("[Auth] 🧹 Cleared stored userRole - will be re-determined from API");
+      
+      // Set user state IMMEDIATELY
       if (user) {
         console.log("[Auth] ✅ Setting user from login response:", user.email);
-        
-        // Set user state
         setUser(user);
         userRef.current = user;
-        
-        // Clear stored role so tab layout re-determines it from API
-        // (role will be determined by whether user has a consultant profile)
-        await AsyncStorage.removeItem("userRole");
-        
-        console.log("[Auth] ✅ Login complete - user is now authenticated");
-        console.log("[Auth] 🔄 User state updated, navigation should trigger");
+        console.log("[Auth] ✅ Login complete - user state updated");
       } else {
         console.warn("[Auth] ⚠️ No user in login response, will fetch from session");
         await fetchUser();
@@ -426,7 +422,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const errJson = JSON.parse(errorText);
           if (errJson.message) errorMsg = errJson.message;
           if (errJson.error) errorMsg = errJson.error;
-          // Handle "email already in use" type errors
           if (errorText.toLowerCase().includes("already") || errorText.toLowerCase().includes("exists")) {
             errorMsg = "Este e-mail já está cadastrado. Faça login.";
           }
@@ -504,7 +499,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } else {
             const profileError = await profileResponse.text();
             console.warn("[Auth] ⚠️ Could not create consultant profile:", profileResponse.status, profileError);
-            // Non-fatal - user can set up profile later
           }
         } catch (profileErr: any) {
           console.warn("[Auth] ⚠️ Error creating consultant profile (non-fatal):", profileErr?.message);
@@ -572,7 +566,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let sessionToken: string | null = null;
       let user: User | null = null;
       
-      // Try to find session token in various response shapes
       if (responseData?.session?.token) {
         sessionToken = responseData.session.token;
         console.log("[Auth] 🔑 Session token found at session.token");
@@ -593,8 +586,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       if (!sessionToken) {
-        // Backend may return baby/mother info without a session token (old behavior)
-        // Check if it returned mother info that we can use
         if (responseData?.mother?.email) {
           console.log("[Auth] ⚠️ Backend returned mother info without session - this endpoint needs to be fixed on backend");
           throw new Error("O servidor não retornou uma sessão válida. Por favor, entre em contato com o suporte.");
@@ -649,7 +640,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
       
-      // Step 1: Try the dedicated endpoint first
       console.log("[Auth] 📡 Calling /api/auth/create-account-with-token endpoint");
       
       const response = await fetch(`${BACKEND_URL}/api/auth/create-account-with-token`, {
@@ -673,7 +663,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         responseData = {};
       }
       
-      // Check if the dedicated endpoint worked (returns session token)
       const dedicatedEndpointWorked = response.ok && (
         responseData?.session?.token || 
         responseData?.token ||
@@ -681,7 +670,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
       
       if (!response.ok && response.status !== 400) {
-        // Real error (not the "use standard sign-up" fallback)
         console.error("[Auth] ❌ Create account with token failed:", response.status, responseText);
         
         let errorMsg = "Erro ao criar conta";
@@ -700,7 +688,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let user: User | null = null;
       
       if (dedicatedEndpointWorked) {
-        // Dedicated endpoint worked - extract session token
         console.log("[Auth] ✅ Dedicated endpoint worked");
         
         if (responseData?.session?.token) {
@@ -717,10 +704,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user = responseData.data.user as User;
         }
       } else {
-        // Fallback: Use standard sign-up + init-with-token flow
         console.log("[Auth] ⚠️ Dedicated endpoint not available, using fallback flow");
         
-        // First, get the mother's email from the token
         const validateResponse = await fetch(`${BACKEND_URL}/api/mothers/validate-token`, {
           method: "POST",
           headers: {
@@ -745,7 +730,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         console.log("[Auth] 📧 Mother email from token:", motherEmail);
         
-        // Sign up with the mother's email
         console.log("[Auth] 📡 Signing up with mother's email:", motherEmail);
         const signUpResponse = await fetch(`${BACKEND_URL}/api/auth/sign-up/email`, {
           method: "POST",
@@ -779,7 +763,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const signUpData = await signUpResponse.json();
         console.log("[Auth] ✅ Sign up successful");
         
-        // Extract session token from sign-up response
         if (signUpData?.session?.token) {
           sessionToken = signUpData.session.token;
         } else if (signUpData?.token) {
@@ -798,7 +781,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("Conta criada mas não foi possível obter sessão. Tente fazer login.");
         }
         
-        // Link the account to the baby using init-with-token
         console.log("[Auth] 🔗 Linking account to baby via /api/mothers/init-with-token");
         try {
           const initResponse = await fetch(`${BACKEND_URL}/api/mothers/init-with-token`, {
@@ -816,7 +798,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } else {
             const initError = await initResponse.text();
             console.warn("[Auth] ⚠️ Could not link account to baby:", initResponse.status, initError);
-            // Non-fatal - account was created, linking may have failed
           }
         } catch (initErr: any) {
           console.warn("[Auth] ⚠️ Error linking account to baby (non-fatal):", initErr?.message);
@@ -870,7 +851,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
       
-      // Use the correct endpoint: /api/mothers/validate-token (NOT /api/auth/validate-token)
       console.log("[Auth] 📡 Calling /api/mothers/validate-token - correct endpoint");
       const response = await fetch(`${BACKEND_URL}/api/mothers/validate-token`, {
         method: "POST",
@@ -902,7 +882,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return data;
     } catch (error: any) {
       console.error("[Auth] ❌ Token validation error:", error?.message || error);
-      // Re-throw so the UI can show the error
       throw error;
     }
   };
