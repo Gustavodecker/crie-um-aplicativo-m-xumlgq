@@ -7,17 +7,17 @@ import * as authSchema from '../db/schema/auth-schema.js';
 export function registerMotherRoutes(app: App) {
   const requireAuth = app.requireAuth();
 
-  // POST /api/mothers/create-account-with-token - Create mother account with baby token
+  // POST /api/mothers/create-account-with-token - Create mother account with token and email
   app.fastify.post('/api/mothers/create-account-with-token', {
     schema: {
-      description: 'Create mother account using baby token and return session',
+      description: 'Create mother account using baby token, email and password',
       tags: ['mothers'],
       body: {
         type: 'object',
-        required: ['token', 'name', 'password'],
+        required: ['token', 'email', 'password'],
         properties: {
           token: { type: 'string', description: 'Baby registration token' },
-          name: { type: 'string', description: 'Mother name' },
+          email: { type: 'string', format: 'email', description: 'Mother email' },
           password: { type: 'string', description: 'Account password' },
         },
       },
@@ -25,21 +25,13 @@ export function registerMotherRoutes(app: App) {
         201: {
           type: 'object',
           properties: {
+            token: { type: 'string', description: 'Session token' },
             user: {
               type: 'object',
               properties: {
                 id: { type: 'string' },
                 email: { type: 'string' },
                 name: { type: 'string' },
-                emailVerified: { type: 'boolean' },
-              },
-            },
-            session: {
-              type: 'object',
-              properties: {
-                token: { type: 'string' },
-                id: { type: 'string' },
-                expiresAt: { type: 'string' },
               },
             },
           },
@@ -49,54 +41,51 @@ export function registerMotherRoutes(app: App) {
         409: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: { token: string; name: string; password: string } }>, reply: FastifyReply) => {
-    const { token, name, password } = request.body;
+  }, async (request: FastifyRequest<{ Body: { token: string; email: string; password: string } }>, reply: FastifyReply) => {
+    const { token, email, password } = request.body;
 
-    // Log the token value at the start for debugging
-    app.logger.info({ tokenValue: token, tokenPreview: token?.substring(0, 10) + '...' }, 'Creating mother account with token');
+    app.logger.info({ tokenValue: token, email }, 'Creating mother account with token and email');
 
     // Validate inputs
     if (!token || token.trim().length === 0) {
-      app.logger.warn({ body: request.body }, 'Token missing from create-account request');
+      app.logger.warn({ body: request.body }, 'Token missing');
       return reply.status(400).send({ error: 'Token is required' });
     }
 
-    if (!name || name.trim().length === 0) {
-      app.logger.warn({ token }, 'Name missing from create-account request');
-      return reply.status(400).send({ error: 'Name is required' });
+    if (!email || email.trim().length === 0) {
+      app.logger.warn({ token }, 'Email missing');
+      return reply.status(400).send({ error: 'Email is required' });
     }
 
     if (!password || password.trim().length === 0) {
-      app.logger.warn({ token }, 'Password missing from create-account request');
+      app.logger.warn({ token }, 'Password missing');
       return reply.status(400).send({ error: 'Password is required' });
     }
 
     try {
-      // Find baby by token using same logic as validate-token endpoint
+      // Find baby by token
       const baby = await app.db.query.babies.findFirst({
         where: eq(schema.babies.token, token),
       });
 
       if (!baby) {
-        app.logger.warn({ token: token.substring(0, 10) + '...' }, 'Baby not found with token');
-        return reply.status(404).send({ error: 'Token não encontrado' });
+        app.logger.warn({ tokenPreview: token.substring(0, 10) + '...' }, 'Baby not found with token');
+        return reply.status(404).send({ error: 'Token inválido' });
       }
 
-      // Check if mother account already exists for this baby
+      // Check if baby already has a mother
       if (baby.motherUserId) {
-        app.logger.warn({ babyId: baby.id, existingMotherUserId: baby.motherUserId }, 'Mother account already exists for baby');
-        return reply.status(409).send({ error: 'Já existe uma conta para este token' });
+        app.logger.warn({ babyId: baby.id, existingMotherUserId: baby.motherUserId }, 'Baby already has mother');
+        return reply.status(409).send({ error: 'Este token já foi utilizado' });
       }
-
-      const motherEmail = baby.motherEmail;
 
       // Check if user already exists with this email
       const existingUser = await app.db.query.user.findFirst({
-        where: eq(authSchema.user.email, motherEmail),
+        where: eq(authSchema.user.email, email),
       });
 
       if (existingUser) {
-        app.logger.warn({ email: motherEmail }, 'User already exists with this email');
+        app.logger.warn({ email }, 'User already exists with this email');
         return reply.status(409).send({ error: 'Email já registrado' });
       }
 
@@ -104,15 +93,15 @@ export function registerMotherRoutes(app: App) {
       const userId = crypto.randomUUID();
       await app.db.insert(authSchema.user).values({
         id: userId,
-        email: motherEmail,
+        email: email,
         emailVerified: false,
-        name: name,
+        name: baby.motherName,
         image: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
 
-      app.logger.debug({ userId, email: motherEmail }, 'User created for mother');
+      app.logger.debug({ userId, email }, 'User created for mother');
 
       // Create account record with password
       const accountId = crypto.randomUUID();
@@ -134,44 +123,38 @@ export function registerMotherRoutes(app: App) {
 
       app.logger.debug({ userId, accountId }, 'Account created for mother');
 
-      // Update baby with motherUserId
+      // Update baby with motherUserId, motherEmail and invalidate token
       app.logger.info(
-        { babyId: baby.id, newMotherUserId: userId },
-        'About to update baby motherUserId field'
+        { babyId: baby.id, newMotherUserId: userId, newMotherEmail: email },
+        'Updating baby with mother information'
       );
 
       await app.db.update(schema.babies)
-        .set({ motherUserId: userId })
+        .set({
+          motherUserId: userId,
+          motherEmail: email,
+          token: null,
+        })
         .where(eq(schema.babies.id, baby.id));
 
-      app.logger.info({ babyId: baby.id, userId }, 'Baby update database operation executed');
+      app.logger.info({ babyId: baby.id, userId }, 'Baby updated with mother information');
 
-      // VERIFICATION: Immediately query the baby again to confirm the update persisted
+      // VERIFICATION: Confirm the update persisted
       const verifiedBaby = await app.db.query.babies.findFirst({
         where: eq(schema.babies.id, baby.id),
       });
 
-      if (!verifiedBaby) {
-        app.logger.error({ babyId: baby.id }, 'Critical error: baby record disappeared after update');
-        return reply.status(500).send({ error: 'Failed to link baby to account' });
-      }
-
-      app.logger.info(
-        { babyId: baby.id, expectedMotherUserId: userId, actualMotherUserId: verifiedBaby.motherUserId },
-        'Baby record verified - checking motherUserId'
-      );
-
-      if (verifiedBaby.motherUserId !== userId) {
+      if (!verifiedBaby || verifiedBaby.motherUserId !== userId) {
         app.logger.error(
-          { babyId: baby.id, expectedMotherUserId: userId, actualMotherUserId: verifiedBaby.motherUserId },
-          'CRITICAL: motherUserId not persisted - mother account creation incomplete'
+          { babyId: baby.id, expectedMotherUserId: userId, actualMotherUserId: verifiedBaby?.motherUserId },
+          'CRITICAL: Baby update failed'
         );
         return reply.status(500).send({ error: 'Failed to link baby to account' });
       }
 
       app.logger.info(
-        { babyId: baby.id, verifiedMotherUserId: verifiedBaby.motherUserId, userId },
-        'Baby association verified successfully - motherUserId correctly set'
+        { babyId: baby.id, motherUserId: verifiedBaby.motherUserId, token: verifiedBaby.token },
+        'Baby association verified - token invalidated'
       );
 
       // Create session
@@ -196,21 +179,16 @@ export function registerMotherRoutes(app: App) {
       );
 
       return reply.status(201).send({
+        token: sessionToken,
         user: {
           id: userId,
-          email: motherEmail,
-          name: name,
-          emailVerified: false,
-        },
-        session: {
-          token: sessionToken,
-          id: sessionId,
-          expiresAt: expiresAt.toISOString(),
+          email: email,
+          name: baby.motherName,
         },
       });
 
     } catch (error) {
-      app.logger.error({ err: error, token: token.substring(0, 10) + '...' }, 'Error creating mother account with token');
+      app.logger.error({ err: error, token: token.substring(0, 10) + '...' }, 'Error creating mother account');
       return reply.status(500).send({ error: 'Falha ao criar conta' });
     }
   });
@@ -218,7 +196,7 @@ export function registerMotherRoutes(app: App) {
   // POST /api/mothers/validate-token - Validate baby token without authentication
   app.fastify.post('/api/mothers/validate-token', {
     schema: {
-      description: 'Validate baby token and get mother/baby information',
+      description: 'Validate baby token and get baby/consultant information',
       tags: ['mothers'],
       body: {
         type: 'object',
@@ -232,11 +210,8 @@ export function registerMotherRoutes(app: App) {
           type: 'object',
           properties: {
             valid: { type: 'boolean' },
-            babyId: { type: 'string' },
             babyName: { type: 'string' },
-            motherEmail: { type: 'string' },
             consultantName: { type: 'string' },
-            accountExists: { type: 'boolean' },
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
@@ -262,21 +237,18 @@ export function registerMotherRoutes(app: App) {
 
     if (!baby) {
       app.logger.warn({ tokenPreview: token.substring(0, 10) + '...' }, 'Baby not found with token');
-      return reply.status(404).send({ error: 'Invalid token. Baby not found.' });
+      return reply.status(404).send({ error: 'Token inválido' });
     }
 
     app.logger.info(
-      { babyId: baby.id, accountExists: !!baby.motherUserId },
+      { babyId: baby.id },
       'Baby token validated successfully'
     );
 
     return reply.status(200).send({
       valid: true,
-      babyId: baby.id,
       babyName: baby.name,
-      motherEmail: baby.motherEmail,
       consultantName: baby.consultant.name,
-      accountExists: !!baby.motherUserId,
     });
   });
 

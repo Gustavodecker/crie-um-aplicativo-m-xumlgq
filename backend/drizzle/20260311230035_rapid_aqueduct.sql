@@ -1,0 +1,1 @@
+ALTER TABLE "babies" ALTER COLUMN "mother_email" DROP NOT NULL;

@@ -24,7 +24,7 @@ export const babies = pgTable('babies', {
   birthDate: date('birth_date').notNull(),
   motherName: text('mother_name').notNull(),
   motherPhone: text('mother_phone').notNull(),
-  motherEmail: text('mother_email').notNull(),
+  motherEmail: text('mother_email'),
   motherUserId: text('mother_user_id').references(() => user.id, { onDelete: 'set null' }),
   consultantId: uuid('consultant_id').notNull().references(() => consultants.id, { onDelete: 'cascade' }),
   objectives: text('objectives'),

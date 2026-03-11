@@ -208,7 +208,6 @@ describe("API Integration Tests", () => {
         birthDate: "2024-01-15",
         motherName: "Mother Test",
         motherPhone: "+1234567890",
-        motherEmail: userEmail,
         objectives: "Sleep training",
       }),
     });
@@ -231,7 +230,6 @@ describe("API Integration Tests", () => {
         birthDate: "2024-02-15",
         motherName: "Mother via Consultant",
         motherPhone: "+0987654321",
-        motherEmail: "consultant-baby@example.com",
         objectives: "Sleep training via consultant",
       }),
     });
@@ -376,7 +374,6 @@ describe("API Integration Tests", () => {
         birthDate: "2024-03-15",
         motherName: "Mother Test",
         motherPhone: "+1234567890",
-        motherEmail: "delete@example.com",
       }),
     });
     const babyToDelete = await createRes.json();
@@ -440,7 +437,6 @@ describe("API Integration Tests", () => {
         birthDate: "2024-01-15",
         motherName: "Mother",
         motherPhone: "+1234567890",
-        motherEmail: "test@example.com",
       }),
     });
     await expectStatus(res, 401);
@@ -455,7 +451,6 @@ describe("API Integration Tests", () => {
         birthDate: "2024-01-15",
         motherName: "Mother",
         motherPhone: "+1234567890",
-        motherEmail: "test@example.com",
       }),
     });
     await expectStatus(res, 401);
@@ -580,7 +575,6 @@ describe("API Integration Tests", () => {
         birthDate: "2024-06-15",
         motherName: "Mother Test",
         motherPhone: "+1234567890",
-        motherEmail: "no-contract@example.com",
       }),
     });
     const newBaby = await newBabyRes.json();
@@ -1721,11 +1715,8 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.valid).toBe(true);
-    expect(data.babyId).toBe(babyId);
     expect(data.babyName).toBe("Baby Updated");
-    expect(data.motherEmail).toBe(userEmail);
     expect(data.consultantName).toBeDefined();
-    expect(typeof data.accountExists).toBe("boolean");
   });
 
   test("Validate nonexistent token returns 404", async () => {
@@ -1806,7 +1797,6 @@ describe("API Integration Tests", () => {
         birthDate: "2024-08-15",
         motherName: "New Mother",
         motherPhone: "+1234567890",
-        motherEmail: `newmother+${uniqueId}@example.com`,
       }),
     });
     const babyData = await babyRes.json();
@@ -1817,7 +1807,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         token: newBabyToken,
-        name: "New Mother Account",
+        email: `newmother+${uniqueId}@example.com`,
         password: "SecurePassword123!",
       }),
     });
@@ -1825,10 +1815,8 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.user).toBeDefined();
     expect(data.user.id).toBeDefined();
-    expect(data.user.name).toBe("New Mother Account");
     expect(data.user.email).toBeDefined();
-    expect(data.session).toBeDefined();
-    expect(data.session.token).toBeDefined();
+    expect(data.token).toBeDefined();
   });
 
   test("Create mother account with nonexistent token returns 404", async () => {
@@ -1837,7 +1825,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         token: "NONEXISTENT-TOKEN",
-        name: "Some Mother",
+        email: "test@example.com",
         password: "Password123!",
       }),
     });
@@ -1850,26 +1838,14 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         token: babyToken,
-        name: "Some Mother",
+        email: "test@example.com",
         // Missing password
       }),
     });
     await expectStatus(res, 400);
   });
 
-  test("Create mother account without token field returns 400", async () => {
-    const res = await api("/api/mothers/create-account-with-token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Some Mother",
-        password: "Password123!",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Create mother account without name field returns 400", async () => {
+  test("Create mother account without email field returns 400", async () => {
     const res = await api("/api/mothers/create-account-with-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1881,41 +1857,69 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("Create mother account when account already exists returns 409", async () => {
-    // Create a baby for this test
-    const uniqueId = crypto.randomUUID();
-    const babyRes = await authenticatedApi("/api/babies", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Baby for Duplicate Account",
-        birthDate: "2024-09-15",
-        motherName: "Duplicate Mother",
-        motherPhone: "+1234567890",
-        motherEmail: `duplicate-account+${uniqueId}@example.com`,
-      }),
-    });
-    const babyData = await babyRes.json();
-    const duplicateBabyToken = babyData.token;
-
-    // Create account first time
-    await api("/api/mothers/create-account-with-token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: duplicateBabyToken,
-        name: "Duplicate Mother Account",
-        password: "Password123!",
-      }),
-    });
-
-    // Try to create again (should fail with 409)
+  test("Create mother account without token field returns 400", async () => {
     const res = await api("/api/mothers/create-account-with-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        token: duplicateBabyToken,
-        name: "Duplicate Mother Account",
+        email: "test@example.com",
+        password: "Password123!",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Create mother account when account already exists returns 409", async () => {
+    // Create two babies for this test
+    const uniqueId = crypto.randomUUID();
+    const sharedEmail = `duplicate-account+${uniqueId}@example.com`;
+
+    // Create first baby
+    const baby1Res = await authenticatedApi("/api/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby for Duplicate Account 1",
+        birthDate: "2024-09-15",
+        motherName: "Duplicate Mother",
+        motherPhone: "+1234567890",
+      }),
+    });
+    const baby1Data = await baby1Res.json();
+    const baby1Token = baby1Data.token;
+
+    // Create second baby
+    const baby2Res = await authenticatedApi("/api/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby for Duplicate Account 2",
+        birthDate: "2024-09-16",
+        motherName: "Duplicate Mother",
+        motherPhone: "+1234567890",
+      }),
+    });
+    const baby2Data = await baby2Res.json();
+    const baby2Token = baby2Data.token;
+
+    // Create account with first baby and email
+    await api("/api/mothers/create-account-with-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: baby1Token,
+        email: sharedEmail,
+        password: "Password123!",
+      }),
+    });
+
+    // Try to create another account with same email but different baby (should fail with 409)
+    const res = await api("/api/mothers/create-account-with-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: baby2Token,
+        email: sharedEmail,
         password: "Password123!",
       }),
     });
@@ -1932,7 +1936,6 @@ describe("API Integration Tests", () => {
         birthDate: "2024-06-15",
         motherName: "Mother Test",
         motherPhone: "+1234567890",
-        motherEmail: "mother-link@example.com",
       }),
     });
     const newBabyData = await newBabyRes.json();
@@ -1999,7 +2002,6 @@ describe("API Integration Tests", () => {
         birthDate: "2024-07-15",
         motherName: "Duplicate Mother",
         motherPhone: "+1234567890",
-        motherEmail: "duplicate@example.com",
       }),
     });
     const babyData = await babyRes.json();
