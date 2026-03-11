@@ -2,9 +2,185 @@ import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
+import * as authSchema from '../db/schema/auth-schema.js';
 
 export function registerMotherRoutes(app: App) {
   const requireAuth = app.requireAuth();
+
+  // POST /api/mothers/create-account-with-token - Create mother account with baby token
+  app.fastify.post('/api/mothers/create-account-with-token', {
+    schema: {
+      description: 'Create mother account using baby token and return session',
+      tags: ['mothers'],
+      body: {
+        type: 'object',
+        required: ['token', 'name', 'password'],
+        properties: {
+          token: { type: 'string', description: 'Baby registration token' },
+          name: { type: 'string', description: 'Mother name' },
+          password: { type: 'string', description: 'Account password' },
+        },
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                email: { type: 'string' },
+                name: { type: 'string' },
+                emailVerified: { type: 'boolean' },
+              },
+            },
+            session: {
+              type: 'object',
+              properties: {
+                token: { type: 'string' },
+                id: { type: 'string' },
+                expiresAt: { type: 'string' },
+              },
+            },
+          },
+        },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+        409: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Body: { token: string; name: string; password: string } }>, reply: FastifyReply) => {
+    const { token, name, password } = request.body;
+
+    // Log the token value at the start for debugging
+    app.logger.info({ tokenValue: token, tokenPreview: token?.substring(0, 10) + '...' }, 'Creating mother account with token');
+
+    // Validate inputs
+    if (!token || token.trim().length === 0) {
+      app.logger.warn({ body: request.body }, 'Token missing from create-account request');
+      return reply.status(400).send({ error: 'Token is required' });
+    }
+
+    if (!name || name.trim().length === 0) {
+      app.logger.warn({ token }, 'Name missing from create-account request');
+      return reply.status(400).send({ error: 'Name is required' });
+    }
+
+    if (!password || password.trim().length === 0) {
+      app.logger.warn({ token }, 'Password missing from create-account request');
+      return reply.status(400).send({ error: 'Password is required' });
+    }
+
+    try {
+      // Find baby by token using same logic as validate-token endpoint
+      const baby = await app.db.query.babies.findFirst({
+        where: eq(schema.babies.token, token),
+      });
+
+      if (!baby) {
+        app.logger.warn({ token: token.substring(0, 10) + '...' }, 'Baby not found with token');
+        return reply.status(404).send({ error: 'Token não encontrado' });
+      }
+
+      // Check if mother account already exists for this baby
+      if (baby.motherUserId) {
+        app.logger.warn({ babyId: baby.id, existingMotherUserId: baby.motherUserId }, 'Mother account already exists for baby');
+        return reply.status(409).send({ error: 'Já existe uma conta para este token' });
+      }
+
+      const motherEmail = baby.motherEmail;
+
+      // Check if user already exists with this email
+      const existingUser = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, motherEmail),
+      });
+
+      if (existingUser) {
+        app.logger.warn({ email: motherEmail }, 'User already exists with this email');
+        return reply.status(409).send({ error: 'Email já registrado' });
+      }
+
+      // Create new user
+      const userId = crypto.randomUUID();
+      await app.db.insert(authSchema.user).values({
+        id: userId,
+        email: motherEmail,
+        emailVerified: false,
+        name: name,
+        image: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      app.logger.debug({ userId, email: motherEmail }, 'User created for mother');
+
+      // Create account record with password
+      const accountId = crypto.randomUUID();
+      await app.db.insert(authSchema.account).values({
+        id: accountId,
+        accountId: userId,
+        providerId: 'credential',
+        userId: userId,
+        password: password,
+        accessToken: null,
+        refreshToken: null,
+        idToken: null,
+        accessTokenExpiresAt: null,
+        refreshTokenExpiresAt: null,
+        scope: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      app.logger.debug({ userId, accountId }, 'Account created for mother');
+
+      // Update baby with motherUserId
+      await app.db.update(schema.babies)
+        .set({ motherUserId: userId })
+        .where(eq(schema.babies.id, baby.id));
+
+      app.logger.debug({ babyId: baby.id, motherUserId: userId }, 'Baby updated with motherUserId');
+
+      // Create session
+      const sessionId = crypto.randomUUID();
+      const sessionToken = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+      await app.db.insert(authSchema.session).values({
+        id: sessionId,
+        userId: userId,
+        token: sessionToken,
+        expiresAt: expiresAt,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ipAddress: request.ip,
+        userAgent: request.headers['user-agent'] || null,
+      });
+
+      app.logger.info(
+        { userId, babyId: baby.id, sessionId },
+        'Mother account created and session established'
+      );
+
+      return reply.status(201).send({
+        user: {
+          id: userId,
+          email: motherEmail,
+          name: name,
+          emailVerified: false,
+        },
+        session: {
+          token: sessionToken,
+          id: sessionId,
+          expiresAt: expiresAt.toISOString(),
+        },
+      });
+
+    } catch (error) {
+      app.logger.error({ err: error, token: token.substring(0, 10) + '...' }, 'Error creating mother account with token');
+      return reply.status(500).send({ error: 'Falha ao criar conta' });
+    }
+  });
 
   // POST /api/mothers/validate-token - Validate baby token without authentication
   app.fastify.post('/api/mothers/validate-token', {
