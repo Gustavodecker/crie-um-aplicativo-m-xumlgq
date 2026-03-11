@@ -17,7 +17,7 @@ import { IconSymbol } from "@/components/IconSymbol";
 import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
 import { apiPost } from "@/utils/api";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import * as Clipboard from "@react-native-clipboard/clipboard";
+import * as Clipboard from "expo-clipboard";
 
 interface BabyResponse {
   id: string;
@@ -85,9 +85,9 @@ export default function RegisterBabyScreen() {
     }
   };
 
-  const handleCopyToken = () => {
+  const handleCopyToken = async () => {
     console.log("User tapped Copy Token button");
-    Clipboard.setString(generatedToken);
+    await Clipboard.setStringAsync(generatedToken);
     setCopiedToken(true);
     setTimeout(() => setCopiedToken(false), 2000);
   };
