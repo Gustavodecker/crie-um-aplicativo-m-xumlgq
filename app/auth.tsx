@@ -266,7 +266,7 @@ export default function AuthScreen() {
               <View style={styles.logoContainer}>
                 <Text style={styles.appName}>TodaNoite</Text>
                 <Text style={styles.tagline}>
-                  Transformando o sono infantil com método e acolhimento
+                  Noites tranquilas para toda a família
                 </Text>
               </View>
 
