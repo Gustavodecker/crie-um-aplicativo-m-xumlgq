@@ -6,6 +6,106 @@ import * as schema from '../db/schema/schema.js';
 export function registerConsultantRoutes(app: App) {
   const requireAuth = app.requireAuth();
 
+  // POST /api/consultants/create-profile - Create consultant profile after signup
+  app.fastify.post('/api/consultants/create-profile', {
+    schema: {
+      description: 'Create consultant profile (called after signing up via /api/auth/sign-up/email)',
+      tags: ['consultant'],
+      body: {
+        type: 'object',
+        required: ['name'],
+        properties: {
+          name: { type: 'string', description: 'Consultant/professional name' },
+          professionalTitle: { type: ['string', 'null'], description: 'Professional title (e.g., Dr., Sleep Coach)' },
+          description: { type: ['string', 'null'], description: 'Professional description/bio' },
+          primaryColor: { type: 'string', default: '#007AFF', description: 'Primary brand color (hex)' },
+          secondaryColor: { type: 'string', default: '#5AC8FA', description: 'Secondary brand color (hex)' },
+        },
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            userId: { type: 'string' },
+            name: { type: 'string' },
+            professionalTitle: { type: ['string', 'null'] },
+            description: { type: ['string', 'null'] },
+            primaryColor: { type: 'string' },
+            secondaryColor: { type: 'string' },
+            createdAt: { type: 'string' },
+          },
+        },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        409: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (
+    request: FastifyRequest<{
+      Body: {
+        name: string;
+        professionalTitle?: string | null;
+        description?: string | null;
+        primaryColor?: string;
+        secondaryColor?: string;
+      };
+    }>,
+    reply: FastifyReply
+  ) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    const { name, professionalTitle, description, primaryColor = '#007AFF', secondaryColor = '#5AC8FA' } = request.body;
+
+    if (!name || name.trim().length === 0) {
+      app.logger.warn({ userId: session.user.id }, 'Name missing from create-profile request');
+      return reply.status(400).send({ error: 'Name is required' });
+    }
+
+    app.logger.info({ userId: session.user.id, name }, 'Creating consultant profile');
+
+    try {
+      // Check if consultant profile already exists
+      const existingConsultant = await app.db.query.consultants.findFirst({
+        where: eq(schema.consultants.userId, session.user.id),
+      });
+
+      if (existingConsultant) {
+        app.logger.warn({ userId: session.user.id, consultantId: existingConsultant.id }, 'Consultant profile already exists');
+        return reply.status(409).send({
+          error: 'Consultant profile already exists for this account',
+          consultantId: existingConsultant.id,
+        });
+      }
+
+      // Create consultant profile
+      const createdConsultant = await app.db
+        .insert(schema.consultants)
+        .values({
+          userId: session.user.id,
+          name,
+          professionalTitle: professionalTitle ?? undefined,
+          description: description ?? undefined,
+          primaryColor,
+          secondaryColor,
+          photo: undefined,
+          logo: undefined,
+        })
+        .returning();
+
+      app.logger.info(
+        { userId: session.user.id, consultantId: createdConsultant[0].id, name },
+        'Consultant profile created successfully'
+      );
+
+      return reply.status(201).send(createdConsultant[0]);
+    } catch (error) {
+      app.logger.error({ err: error, userId: session.user.id }, 'Error creating consultant profile');
+      return reply.status(500).send({ error: 'Failed to create consultant profile' });
+    }
+  });
+
   // GET /api/consultant/profile - Returns consultant profile
   app.fastify.get('/api/consultant/profile', {
     schema: {

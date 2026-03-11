@@ -114,6 +114,89 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  // ===== Create Consultant Profile Endpoint =====
+
+  test("Create consultant profile with create-profile endpoint", async () => {
+    const { token: consultantToken } = await signUpTestUser();
+    const res = await authenticatedApi("/api/consultants/create-profile", consultantToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Dr. New Consultant",
+        professionalTitle: "Sleep Specialist",
+        description: "Expert in infant sleep coaching",
+        primaryColor: "#FF9800",
+        secondaryColor: "#FFC107",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.name).toBe("Dr. New Consultant");
+    expect(data.professionalTitle).toBe("Sleep Specialist");
+    expect(data.description).toBe("Expert in infant sleep coaching");
+    expect(data.userId).toBeDefined();
+  });
+
+  test("Create consultant profile with defaults for colors", async () => {
+    const { token: consultantToken } = await signUpTestUser();
+    const res = await authenticatedApi("/api/consultants/create-profile", consultantToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Dr. Default Colors",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.name).toBe("Dr. Default Colors");
+    expect(data.primaryColor).toBe("#007AFF"); // default
+    expect(data.secondaryColor).toBe("#5AC8FA"); // default
+  });
+
+  test("Create consultant profile without required name returns 400", async () => {
+    const { token: consultantToken } = await signUpTestUser();
+    const res = await authenticatedApi("/api/consultants/create-profile", consultantToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        professionalTitle: "Coach",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Create consultant profile without auth returns 401", async () => {
+    const res = await api("/api/consultants/create-profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Unauthorized",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Create consultant profile with duplicate user returns 409", async () => {
+    const { token: consultantToken } = await signUpTestUser();
+    // Create first profile
+    await authenticatedApi("/api/consultants/create-profile", consultantToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Dr. First Profile",
+      }),
+    });
+    // Try to create second profile for same user
+    const res = await authenticatedApi("/api/consultants/create-profile", consultantToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Dr. Second Profile",
+      }),
+    });
+    await expectStatus(res, 409);
+  });
+
   // ===== Babies =====
 
   test("Create baby", async () => {
@@ -1579,6 +1662,46 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  // ===== Mother Token Validation =====
+
+  test("Validate baby token without auth", async () => {
+    const res = await api("/api/mothers/validate-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: babyToken,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.valid).toBe(true);
+    expect(data.babyId).toBe(babyId);
+    expect(data.babyName).toBe("Baby Updated");
+    expect(data.motherEmail).toBe(userEmail);
+    expect(data.consultantName).toBeDefined();
+    expect(typeof data.accountExists).toBe("boolean");
+  });
+
+  test("Validate nonexistent token returns 404", async () => {
+    const res = await api("/api/mothers/validate-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "NONEXISTENT-TOKEN-INVALID",
+      }),
+    });
+    await expectStatus(res, 404);
+  });
+
+  test("Validate token without required field returns 400", async () => {
+    const res = await api("/api/mothers/validate-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ===== Mother Registration =====
 
   test("Register mother for baby", async () => {
@@ -1624,6 +1747,111 @@ describe("API Integration Tests", () => {
       body: JSON.stringify({}),
     });
     await expectStatus(res, 400);
+  });
+
+  test("Link mother to baby with mothers/init-with-token endpoint", async () => {
+    // Create new baby and new mother user
+    const newBabyRes = await authenticatedApi("/api/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby for Mother Link",
+        birthDate: "2024-06-15",
+        motherName: "Mother Test",
+        motherPhone: "+1234567890",
+        motherEmail: "mother-link@example.com",
+      }),
+    });
+    const newBabyData = await newBabyRes.json();
+    const newBabyToken = newBabyData.token;
+
+    // Create new mother user
+    const { token: motherToken } = await signUpTestUser();
+
+    // Mother links to baby
+    const res = await authenticatedApi("/api/mothers/init-with-token", motherToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: newBabyToken,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBe(newBabyData.id);
+    expect(data.name).toBe("Baby for Mother Link");
+    expect(data.message).toBeDefined();
+  });
+
+  test("Link mother with nonexistent token returns 404", async () => {
+    const { token: motherToken } = await signUpTestUser();
+    const res = await authenticatedApi("/api/mothers/init-with-token", motherToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "NONEXISTENT",
+      }),
+    });
+    await expectStatus(res, 404);
+  });
+
+  test("Link mother without auth returns 401", async () => {
+    const res = await api("/api/mothers/init-with-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: babyToken,
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Link mother without required token field returns 400", async () => {
+    const { token: motherToken } = await signUpTestUser();
+    const res = await authenticatedApi("/api/mothers/init-with-token", motherToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Link mother that already registered returns 409", async () => {
+    // Create baby and mother
+    const babyRes = await authenticatedApi("/api/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby for Duplicate Link",
+        birthDate: "2024-07-15",
+        motherName: "Duplicate Mother",
+        motherPhone: "+1234567890",
+        motherEmail: "duplicate@example.com",
+      }),
+    });
+    const babyData = await babyRes.json();
+    const babyTokenNew = babyData.token;
+
+    const { token: motherToken } = await signUpTestUser();
+
+    // First link
+    await authenticatedApi("/api/mothers/init-with-token", motherToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: babyTokenNew,
+      }),
+    });
+
+    // Try to link again (should fail with 409)
+    const res = await authenticatedApi("/api/mothers/init-with-token", motherToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: babyTokenNew,
+      }),
+    });
+    await expectStatus(res, 409);
   });
 
   // ===== Mother Baby Access =====

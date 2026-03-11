@@ -7,6 +7,8 @@ export const consultants = pgTable('consultants', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: text('user_id').notNull().unique().references(() => user.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
+  professionalTitle: text('professional_title'),
+  description: text('description'),
   photo: text('photo'),
   logo: text('logo'),
   primaryColor: text('primary_color').default('#6B4CE6'),
