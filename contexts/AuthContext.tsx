@@ -306,6 +306,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Origin": BACKEND_URL, // Required by Better Auth for CORS validation
         },
         body: JSON.stringify({
           email,
@@ -400,6 +401,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Origin": BACKEND_URL, // Required by Better Auth for CORS validation
         },
         body: JSON.stringify({
           email,
@@ -498,6 +500,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Origin": BACKEND_URL, // Required by Better Auth for CORS validation
         },
         body: JSON.stringify({
           token: babyToken.trim(),
@@ -601,6 +604,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Origin": BACKEND_URL, // Required by Better Auth for CORS validation
         },
         body: JSON.stringify({
           token: babyToken.trim(),
@@ -700,6 +704,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Origin": BACKEND_URL, // Required by Better Auth for CORS validation
         },
         body: JSON.stringify({ token: babyToken.trim() }),
       });
