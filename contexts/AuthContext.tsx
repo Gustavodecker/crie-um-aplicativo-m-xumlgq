@@ -116,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const sessionData = await response.json();
         
         if (sessionData?.user) {
-          console.log("[Auth] ✅ Session valid, user:", sessionData.user.email);
+          console.log("[Auth] ✅ Session valid, user:", sessionData.user.email, "id:", sessionData.user.id);
           setUser(sessionData.user as User);
           
           // Load userRole from storage
@@ -125,8 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.log("[Auth] ✅ Loaded userRole from storage:", storedRole);
             setUserRole(storedRole);
           } else {
-            // Try to determine role by checking if consultant profile exists
-            console.log("[Auth] ℹ️ No userRole in storage, checking consultant profile...");
+            // Try to determine role by checking BOTH consultant profile AND mother baby
+            console.log("[Auth] ℹ️ No userRole in storage, determining role...");
             try {
               const profileResponse = await fetch(`${BACKEND_URL}/api/consultant/profile`, {
                 method: "GET",
@@ -141,9 +141,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUserRole("consultant");
                 await AsyncStorage.setItem("userRole", "consultant");
               } else {
-                console.log("[Auth] ✅ User is mother");
-                setUserRole("mother");
-                await AsyncStorage.setItem("userRole", "mother");
+                // Not a consultant - check if they have a linked baby (mother)
+                console.log("[Auth] 🔍 No consultant profile, checking if user is mother...");
+                try {
+                  const babyResponse = await fetch(`${BACKEND_URL}/api/mother/baby`, {
+                    method: "GET",
+                    headers: {
+                      "Authorization": `Bearer ${token}`,
+                      "Origin": BACKEND_URL,
+                    },
+                  });
+                  
+                  if (babyResponse.ok) {
+                    console.log("[Auth] ✅ User is mother (has linked baby)");
+                    setUserRole("mother");
+                    await AsyncStorage.setItem("userRole", "mother");
+                  } else {
+                    // Default to mother if no consultant profile found
+                    console.log("[Auth] ℹ️ No baby linked, defaulting to mother role");
+                    setUserRole("mother");
+                    await AsyncStorage.setItem("userRole", "mother");
+                  }
+                } catch (babyErr) {
+                  console.log("[Auth] ℹ️ Could not check baby, defaulting to mother role");
+                  setUserRole("mother");
+                  await AsyncStorage.setItem("userRole", "mother");
+                }
               }
             } catch (roleErr) {
               console.log("[Auth] ℹ️ Could not determine role, defaulting to consultant");
@@ -233,13 +256,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await setBearerToken(token);
       
       if (user) {
-        console.log("[Auth] ✅ Setting user:", user.email);
+        console.log("[Auth] ✅ Setting user:", user.email, "id:", user.id);
         setUser(user);
         
-        // Determine role by checking if consultant profile exists
+        // Determine role by checking BOTH consultant profile AND mother baby
+        // This prevents incorrectly assigning "consultant" role to mothers
         console.log("[Auth] 🔍 Determining user role...");
         try {
-          const profileResponse = await fetch(`${BACKEND_URL}/api/consultant/profile`, {
+          const consultantResponse = await fetch(`${BACKEND_URL}/api/consultant/profile`, {
             method: "GET",
             headers: {
               "Authorization": `Bearer ${token}`,
@@ -247,14 +271,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             },
           });
           
-          if (profileResponse.ok) {
-            console.log("[Auth] ✅ User is consultant");
+          if (consultantResponse.ok) {
+            console.log("[Auth] ✅ User is consultant (has consultant profile)");
             setUserRole("consultant");
             await AsyncStorage.setItem("userRole", "consultant");
           } else {
-            console.log("[Auth] ✅ User is mother");
-            setUserRole("mother");
-            await AsyncStorage.setItem("userRole", "mother");
+            // Not a consultant - check if they have a linked baby (mother)
+            console.log("[Auth] 🔍 No consultant profile, checking if user is mother...");
+            try {
+              const babyResponse = await fetch(`${BACKEND_URL}/api/mother/baby`, {
+                method: "GET",
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Origin": BACKEND_URL,
+                },
+              });
+              
+              if (babyResponse.ok) {
+                console.log("[Auth] ✅ User is mother (has linked baby)");
+                setUserRole("mother");
+                await AsyncStorage.setItem("userRole", "mother");
+              } else if (babyResponse.status === 404) {
+                // No baby linked - could be a mother whose account was created with old backend
+                // or a new mother who hasn't linked yet. Default to mother role.
+                console.log("[Auth] ⚠️ No baby linked to this account (404) - setting role as mother");
+                console.log("[Auth] ℹ️ User ID:", user.id, "- if this is a new session, baby may be linked to old user ID");
+                setUserRole("mother");
+                await AsyncStorage.setItem("userRole", "mother");
+              } else {
+                console.log("[Auth] ℹ️ Could not determine role from baby check, defaulting to mother");
+                setUserRole("mother");
+                await AsyncStorage.setItem("userRole", "mother");
+              }
+            } catch (babyErr) {
+              console.log("[Auth] ℹ️ Could not check baby, defaulting to mother role");
+              setUserRole("mother");
+              await AsyncStorage.setItem("userRole", "mother");
+            }
           }
         } catch (roleErr) {
           console.log("[Auth] ℹ️ Could not determine role, defaulting to consultant");
@@ -462,10 +515,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await setBearerToken(sessionToken);
       
       if (user) {
-        console.log("[Auth] ✅ Setting user:", user.email);
+        console.log("[Auth] ✅ Setting user:", user.email, "id:", user.id);
         setUser(user);
         await AsyncStorage.setItem("userRole", "mother");
         setUserRole("mother");
+        
+        // Verify the session is valid and the user ID matches what was stored in the baby
+        console.log("[Auth] 🔍 Verifying session after account creation...");
+        try {
+          const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
+          const sessionResponse = await fetch(`${BACKEND_URL}/api/auth/get-session`, {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${sessionToken}`,
+              "Origin": BACKEND_URL,
+            },
+          });
+          
+          if (sessionResponse.ok) {
+            const sessionData = await sessionResponse.json();
+            const sessionUserId = sessionData?.user?.id;
+            console.log("[Auth] ✅ Session verified - session userId:", sessionUserId, "response userId:", user.id);
+            
+            if (sessionUserId && sessionUserId !== user.id) {
+              console.warn("[Auth] ⚠️ Session userId mismatch! Session:", sessionUserId, "Response:", user.id);
+              // Update user with the correct session user ID
+              setUser({ ...user, id: sessionUserId });
+            }
+          } else {
+            console.warn("[Auth] ⚠️ Could not verify session after account creation");
+          }
+        } catch (verifyErr: any) {
+          console.warn("[Auth] ⚠️ Session verification error:", verifyErr?.message);
+        }
       } else {
         console.warn("[Auth] ⚠️ No user in response");
         throw new Error("No user data received");
@@ -625,4 +707,23 @@ export function useAuth() {
 // Export for upload state management
 export function setUploadingState(uploading: boolean) {
   console.log("[Auth] Upload state:", uploading);
+}
+
+/**
+ * Helper to check if a user is a mother by verifying they have a linked baby.
+ * Returns true if the user has a linked baby, false otherwise.
+ */
+export async function checkIfMother(token: string, backendUrl: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${backendUrl}/api/mother/baby`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Origin": backendUrl,
+      },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }

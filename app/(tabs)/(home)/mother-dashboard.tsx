@@ -10,13 +10,16 @@ import {
   RefreshControl,
   Image,
   Animated,
+  Modal,
+  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, borderRadius, typography, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { ConsultantProfileCard } from "@/components/ConsultantProfileCard";
-import { apiGet } from "@/utils/api";
+import { apiGet, BACKEND_URL, getBearerToken } from "@/utils/api";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -77,6 +80,7 @@ function resolveImageSource(source: string | number | undefined): { uri: string 
 
 export default function MotherDashboardScreen() {
   const router = useRouter();
+  const { signOut } = useAuth();
   const isMountedRef = useRef(true);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   
@@ -87,6 +91,11 @@ export default function MotherDashboardScreen() {
   const [lastOrientation, setLastOrientation] = useState<LastOrientation | null>(null);
   const [consultant, setConsultant] = useState<ConsultantProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [noBabyLinked, setNoBabyLinked] = useState(false);
+  const [showRelinkModal, setShowRelinkModal] = useState(false);
+  const [relinkToken, setRelinkToken] = useState("");
+  const [relinkLoading, setRelinkLoading] = useState(false);
+  const [relinkError, setRelinkError] = useState("");
 
   // Fade-in animation
   useEffect(() => {
@@ -205,11 +214,12 @@ export default function MotherDashboardScreen() {
       
       if (error.message?.includes("Authentication token not found")) {
         errorMessage = "Sessão expirada. Por favor, faça login novamente.";
-      } else if (error.message?.includes("401")) {
+      } else if (error.message?.includes("401") || error.message?.toLowerCase().includes("unauthorized")) {
         errorMessage = "Não autorizado. Por favor, faça login novamente.";
-      } else if (error.message?.includes("404")) {
-        errorMessage = "Dados não encontrados. Entre em contato com sua consultora.";
-      } else if (error.message?.includes("Network")) {
+      } else if (error.message?.includes("No baby linked") || error.message?.includes("404")) {
+        setNoBabyLinked(true);
+        errorMessage = "Nenhum bebê vinculado à sua conta.";
+      } else if (error.message?.includes("Network") || error.message?.includes("fetch")) {
         errorMessage = "Erro de conexão. Verifique sua internet.";
       } else if (error.message) {
         errorMessage = error.message;
@@ -223,6 +233,58 @@ export default function MotherDashboardScreen() {
       }
     }
   }, []);
+
+  const handleRelink = useCallback(async () => {
+    if (!relinkToken.trim()) {
+      setRelinkError("Por favor, insira o token");
+      return;
+    }
+    
+    setRelinkLoading(true);
+    setRelinkError("");
+    
+    try {
+      console.log("[Mother Dashboard] Attempting to re-link baby with token");
+      const authToken = await getBearerToken();
+      
+      const response = await fetch(`${BACKEND_URL}/api/mothers/init-with-token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ token: relinkToken.trim() }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error("[Mother Dashboard] Re-link failed:", response.status, data);
+        if (response.status === 409) {
+          setRelinkError("Este token já foi utilizado por outra conta.");
+        } else if (response.status === 404) {
+          setRelinkError("Token inválido. Verifique com sua consultora.");
+        } else {
+          setRelinkError(data.error || "Erro ao vincular bebê");
+        }
+        return;
+      }
+      
+      console.log("[Mother Dashboard] Re-link successful:", data);
+      setShowRelinkModal(false);
+      setRelinkToken("");
+      setNoBabyLinked(false);
+      setError(null);
+      // Reload dashboard
+      setLoading(true);
+      loadDashboard();
+    } catch (err: any) {
+      console.error("[Mother Dashboard] Re-link error:", err);
+      setRelinkError(err?.message || "Erro ao vincular bebê");
+    } finally {
+      setRelinkLoading(false);
+    }
+  }, [relinkToken, loadDashboard]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -252,25 +314,110 @@ export default function MotherDashboardScreen() {
             ios_icon_name="exclamationmark.triangle.fill" 
             android_material_icon_name="warning" 
             size={64} 
-            color={colors.error} 
+            color={noBabyLinked ? colors.warning : colors.error} 
           />
-          <Text style={styles.errorTitle}>Ops!</Text>
+          <Text style={styles.errorTitle}>{noBabyLinked ? "Bebê não vinculado" : "Ops!"}</Text>
           <Text style={styles.errorText}>
             {error || "Não foi possível carregar os dados"}
           </Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadDashboard}>
-            <Text style={styles.retryButtonText}>Tentar Novamente</Text>
-          </TouchableOpacity>
           
-          {error?.includes("Sessão expirada") || error?.includes("Não autorizado") ? (
-            <TouchableOpacity 
-              style={[styles.retryButton, { backgroundColor: colors.secondary, marginTop: spacing.md }]} 
-              onPress={() => router.replace("/auth")}
-            >
-              <Text style={styles.retryButtonText}>Fazer Login</Text>
-            </TouchableOpacity>
-          ) : null}
+          {noBabyLinked ? (
+            <>
+              <Text style={[styles.errorText, { fontSize: 13, marginTop: spacing.sm }]}>
+                Isso pode acontecer se sua conta foi criada com uma versão anterior do aplicativo. 
+                Solicite um novo token à sua consultora para vincular seu bebê.
+              </Text>
+              <TouchableOpacity 
+                style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.lg }]} 
+                onPress={() => setShowRelinkModal(true)}
+              >
+                <Text style={styles.retryButtonText}>Vincular com Token</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.retryButton, { backgroundColor: colors.secondary, marginTop: spacing.md }]} 
+                onPress={async () => {
+                  await signOut();
+                  router.replace("/auth");
+                }}
+              >
+                <Text style={styles.retryButtonText}>Sair e Recriar Conta</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity style={styles.retryButton} onPress={loadDashboard}>
+                <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+              </TouchableOpacity>
+              
+              {(error?.includes("Sessão expirada") || error?.includes("Não autorizado")) ? (
+                <TouchableOpacity 
+                  style={[styles.retryButton, { backgroundColor: colors.secondary, marginTop: spacing.md }]} 
+                  onPress={() => router.replace("/auth")}
+                >
+                  <Text style={styles.retryButtonText}>Fazer Login</Text>
+                </TouchableOpacity>
+              ) : null}
+            </>
+          )}
         </View>
+
+        {/* Re-link Modal */}
+        <Modal
+          visible={showRelinkModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowRelinkModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <Text style={styles.modalTitle}>Vincular Bebê</Text>
+              <Text style={styles.modalSubtitle}>
+                Insira o token fornecido pela sua consultora para vincular seu bebê à sua conta.
+              </Text>
+              
+              {relinkError ? (
+                <View style={styles.modalError}>
+                  <Text style={styles.modalErrorText}>{relinkError}</Text>
+                </View>
+              ) : null}
+              
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Token do bebê"
+                placeholderTextColor={colors.textSecondary}
+                value={relinkToken}
+                onChangeText={setRelinkToken}
+                autoCapitalize="characters"
+                editable={!relinkLoading}
+              />
+              
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => {
+                    setShowRelinkModal(false);
+                    setRelinkToken("");
+                    setRelinkError("");
+                  }}
+                  disabled={relinkLoading}
+                >
+                  <Text style={styles.modalButtonCancelText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonConfirm, relinkLoading && { opacity: 0.6 }]}
+                  onPress={handleRelink}
+                  disabled={relinkLoading}
+                >
+                  {relinkLoading ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <Text style={styles.modalButtonConfirmText}>Vincular</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -892,5 +1039,84 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     lineHeight: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xl,
+  },
+  modalContainer: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    width: "100%",
+    maxWidth: 400,
+    ...shadows.lg,
+  },
+  modalTitle: {
+    ...typography.h2,
+    marginBottom: spacing.sm,
+    textAlign: "center",
+  },
+  modalSubtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: "center",
+    marginBottom: spacing.lg,
+    lineHeight: 22,
+  },
+  modalError: {
+    backgroundColor: "#FEE2E2",
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  modalErrorText: {
+    color: colors.error,
+    fontSize: 14,
+    textAlign: "center",
+  },
+  modalInput: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: 16,
+    color: colors.text,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.lg,
+    textAlign: "center",
+    letterSpacing: 2,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: spacing.md,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48,
+  },
+  modalButtonCancel: {
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalButtonCancelText: {
+    ...typography.button,
+    color: colors.text,
+  },
+  modalButtonConfirm: {
+    backgroundColor: colors.primary,
+    ...shadows.sm,
+  },
+  modalButtonConfirmText: {
+    ...typography.button,
+    color: "#FFF",
   },
 });

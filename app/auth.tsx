@@ -106,7 +106,15 @@ export default function AuthScreen() {
       router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Mother login error:", err);
-      setError(err?.message || "Erro ao fazer login");
+      const errMsg = err?.message || "Erro ao fazer login";
+      // Provide helpful message for common errors
+      if (errMsg.toLowerCase().includes("invalid") || errMsg.toLowerCase().includes("credentials") || errMsg.toLowerCase().includes("password")) {
+        setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
+      } else if (errMsg.toLowerCase().includes("not found") || errMsg.toLowerCase().includes("user")) {
+        setError("Conta não encontrada. Verifique seu email ou crie uma nova conta com o token da consultora.");
+      } else {
+        setError(errMsg);
+      }
     } finally {
       setLoading(false);
     }
