@@ -4,6 +4,7 @@ import * as authSchema from './db/schema/auth-schema.js';
 import { sessionConfig } from './config/session.js';
 
 // Import route registration functions
+import { registerAuthRoutes } from './routes/auth.js';
 import { registerInitRoutes } from './routes/init.js';
 import { registerConsultantRoutes } from './routes/consultant.js';
 import { registerMotherRoutes } from './routes/mother.js';
@@ -85,6 +86,7 @@ app.logger.info(
 app.withStorage();
 
 // Register all routes
+registerAuthRoutes(app);
 registerInitRoutes(app);
 registerConsultantRoutes(app);
 registerMotherRoutes(app);
