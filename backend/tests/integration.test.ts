@@ -222,6 +222,26 @@ describe("API Integration Tests", () => {
     expect(data.token).toBeDefined();
   });
 
+  test("Create baby via consultant endpoint", async () => {
+    const res = await authenticatedApi("/api/consultant/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby via Consultant",
+        birthDate: "2024-02-15",
+        motherName: "Mother via Consultant",
+        motherPhone: "+0987654321",
+        motherEmail: "consultant-baby@example.com",
+        objectives: "Sleep training via consultant",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.name).toBe("Baby via Consultant");
+    expect(data.consultantId).toBe(consultantId);
+    expect(data.token).toBeDefined();
+  });
+
   test("Get baby by ID", async () => {
     const res = await authenticatedApi(`/api/babies/${babyId}`, authToken);
     await expectStatus(res, 200);
@@ -400,8 +420,34 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Create baby via consultant endpoint without required fields returns 400", async () => {
+    const res = await authenticatedApi("/api/consultant/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Incomplete Baby",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Create baby without auth returns 401", async () => {
     const res = await api("/api/babies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby",
+        birthDate: "2024-01-15",
+        motherName: "Mother",
+        motherPhone: "+1234567890",
+        motherEmail: "test@example.com",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Create baby via consultant endpoint without auth returns 401", async () => {
+    const res = await api("/api/consultant/babies", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
