@@ -2,9 +2,112 @@ import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
+import { generateToken } from '../utils/token.js';
 
 export function registerConsultantRoutes(app: App) {
   const requireAuth = app.requireAuth();
+
+  // POST /api/consultant/babies - Creates baby for authenticated consultant
+  app.fastify.post('/api/consultant/babies', {
+    schema: {
+      description: 'Create a new baby for the authenticated consultant',
+      tags: ['consultant', 'babies'],
+      body: {
+        type: 'object',
+        required: ['name', 'birthDate', 'motherName', 'motherPhone', 'motherEmail'],
+        properties: {
+          name: { type: 'string' },
+          birthDate: { type: 'string', format: 'date' },
+          motherName: { type: 'string' },
+          motherPhone: { type: 'string' },
+          motherEmail: { type: 'string' },
+          objectives: { type: ['string', 'null'] },
+        },
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            token: { type: 'string' },
+            name: { type: 'string' },
+            birthDate: { type: 'string', format: 'date' },
+            motherName: { type: 'string' },
+            motherPhone: { type: 'string' },
+            motherEmail: { type: 'string' },
+            motherUserId: { type: ['string', 'null'] },
+            consultantId: { type: 'string', format: 'uuid' },
+            objectives: { type: ['string', 'null'] },
+            conclusion: { type: ['string', 'null'] },
+            archived: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Body: { name: string; birthDate: string; motherName: string; motherPhone: string; motherEmail: string; objectives?: string } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    app.logger.info({ userId: session.user.id, body: request.body }, 'Creating baby for consultant');
+
+    const consultant = await app.db.query.consultants.findFirst({
+      where: eq(schema.consultants.userId, session.user.id),
+    });
+
+    if (!consultant) {
+      app.logger.warn({ userId: session.user.id }, 'User is not a consultant');
+      return reply.status(401).send({ error: 'Not a consultant' });
+    }
+
+    // Generate unique token with retry logic
+    let token: string;
+    let maxRetries = 10;
+    let created = false;
+
+    while (maxRetries > 0 && !created) {
+      token = generateToken();
+
+      // Check if token already exists
+      const existing = await app.db.query.babies.findFirst({
+        where: eq(schema.babies.token, token),
+      });
+
+      if (!existing) {
+        try {
+          const [baby] = await app.db.insert(schema.babies).values({
+            token: token,
+            name: request.body.name,
+            birthDate: request.body.birthDate,
+            motherName: request.body.motherName,
+            motherPhone: request.body.motherPhone,
+            motherEmail: request.body.motherEmail,
+            objectives: request.body.objectives || null,
+            consultantId: consultant.id,
+          }).returning();
+
+          app.logger.info(
+            { babyId: baby.id, token: baby.token, consultantId: consultant.id },
+            'Baby created successfully for consultant'
+          );
+          return reply.status(201).send(baby);
+        } catch (err) {
+          // Token collision or other error, retry
+          maxRetries--;
+          if (maxRetries === 0) {
+            app.logger.error({ err, userId: session.user.id }, 'Failed to create baby after retries');
+            return reply.status(500).send({ error: 'Failed to create baby' });
+          }
+        }
+      } else {
+        maxRetries--;
+      }
+    }
+
+    app.logger.error({ userId: session.user.id }, 'Failed to generate unique token after retries');
+    return reply.status(500).send({ error: 'Failed to create baby' });
+  });
 
   // POST /api/consultants/create-profile - Create consultant profile after signup
   app.fastify.post('/api/consultants/create-profile', {
