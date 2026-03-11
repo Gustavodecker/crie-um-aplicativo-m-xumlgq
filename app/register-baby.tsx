@@ -10,12 +10,30 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  Modal,
 } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { IconSymbol } from "@/components/IconSymbol";
 import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
 import { apiPost } from "@/utils/api";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as Clipboard from "@react-native-clipboard/clipboard";
+
+interface BabyResponse {
+  id: string;
+  token: string;
+  name: string;
+  birthDate: string;
+  motherName: string;
+  motherPhone: string;
+  motherEmail: string;
+  motherUserId: string | null;
+  consultantId: string;
+  objectives: string | null;
+  conclusion: string | null;
+  archived: boolean;
+  createdAt: string;
+}
 
 export default function RegisterBabyScreen() {
   const router = useRouter();
@@ -28,6 +46,12 @@ export default function RegisterBabyScreen() {
   const [motherEmail, setMotherEmail] = useState("");
   const [objectives, setObjectives] = useState("");
   const [error, setError] = useState("");
+  
+  // Token modal state
+  const [showTokenModal, setShowTokenModal] = useState(false);
+  const [generatedToken, setGeneratedToken] = useState("");
+  const [registeredBabyName, setRegisteredBabyName] = useState("");
+  const [copiedToken, setCopiedToken] = useState(false);
 
   const formatDateToBR = (date: Date): string => {
     const day = date.getDate().toString().padStart(2, "0");
@@ -59,6 +83,22 @@ export default function RegisterBabyScreen() {
         setShowDatePicker(false);
       }
     }
+  };
+
+  const handleCopyToken = () => {
+    console.log("User tapped Copy Token button");
+    Clipboard.setString(generatedToken);
+    setCopiedToken(true);
+    setTimeout(() => setCopiedToken(false), 2000);
+  };
+
+  const handleCloseTokenModal = () => {
+    console.log("User closed token modal");
+    setShowTokenModal(false);
+    setGeneratedToken("");
+    setRegisteredBabyName("");
+    setCopiedToken(false);
+    router.back();
   };
 
   const handleSubmit = async () => {
@@ -102,7 +142,7 @@ export default function RegisterBabyScreen() {
         objectives: objectives.trim() || undefined,
       });
 
-      const response = await apiPost("/api/babies", {
+      const response = await apiPost<BabyResponse>("/api/babies", {
         name: name.trim(),
         birthDate: formatDateToISO(birthDate),
         motherName: motherName.trim(),
@@ -112,7 +152,16 @@ export default function RegisterBabyScreen() {
       });
 
       console.log("Baby registered successfully:", response);
-      router.back();
+      
+      // Show token modal with the generated token
+      if (response.token) {
+        setGeneratedToken(response.token);
+        setRegisteredBabyName(response.name);
+        setShowTokenModal(true);
+      } else {
+        console.error("No token returned from backend");
+        setError("Bebê cadastrado, mas não foi possível gerar o token. Tente novamente.");
+      }
     } catch (err: any) {
       console.error("Error registering baby:", err);
       setError(err.message || "Erro ao cadastrar bebê. Tente novamente.");
@@ -288,6 +337,70 @@ export default function RegisterBabyScreen() {
           maximumDate={new Date()}
         />
       )}
+
+      {/* Token Modal */}
+      <Modal
+        visible={showTokenModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseTokenModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <IconSymbol
+                ios_icon_name="checkmark.circle.fill"
+                android_material_icon_name="check-circle"
+                size={64}
+                color={colors.success}
+              />
+              <Text style={styles.modalTitle}>Bebê Cadastrado!</Text>
+              <Text style={styles.modalSubtitle}>{registeredBabyName}</Text>
+            </View>
+
+            <View style={styles.tokenSection}>
+              <Text style={styles.tokenLabel}>Token de Acesso para a Mãe:</Text>
+              <View style={styles.tokenContainer}>
+                <Text style={styles.tokenText}>{generatedToken}</Text>
+              </View>
+              
+              <TouchableOpacity
+                style={styles.copyButton}
+                onPress={handleCopyToken}
+              >
+                <IconSymbol
+                  ios_icon_name={copiedToken ? "checkmark" : "doc.on.doc"}
+                  android_material_icon_name={copiedToken ? "check" : "content-copy"}
+                  size={20}
+                  color={colors.card}
+                />
+                <Text style={styles.copyButtonText}>
+                  {copiedToken ? "Token Copiado!" : "Copiar Token"}
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.instructionsContainer}>
+                <IconSymbol
+                  ios_icon_name="info.circle"
+                  android_material_icon_name="info"
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text style={styles.instructionsText}>
+                  Envie este token para a mãe. Ela precisará dele para fazer login no aplicativo e acessar a rotina do bebê.
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.closeModalButton}
+              onPress={handleCloseTokenModal}
+            >
+              <Text style={styles.closeModalButtonText}>Fechar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -406,5 +519,104 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     fontSize: 16,
     color: colors.textSecondary,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    width: "100%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalHeader: {
+    alignItems: "center",
+    marginBottom: spacing.xl,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "700" as const,
+    color: colors.text,
+    marginTop: spacing.md,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  tokenSection: {
+    marginBottom: spacing.xl,
+  },
+  tokenLabel: {
+    fontSize: 14,
+    fontWeight: "600" as const,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  tokenContainer: {
+    backgroundColor: colors.background,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  tokenText: {
+    fontSize: 20,
+    fontWeight: "700" as const,
+    color: colors.primary,
+    textAlign: "center" as const,
+    letterSpacing: 2,
+  },
+  copyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  copyButtonText: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    color: colors.card,
+  },
+  instructionsContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: colors.primary + "15",
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+  },
+  instructionsText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  closeModalButton: {
+    backgroundColor: colors.background,
+    padding: spacing.lg,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
+  },
+  closeModalButtonText: {
+    fontSize: 16,
+    fontWeight: "600" as const,
+    color: colors.text,
   },
 });
