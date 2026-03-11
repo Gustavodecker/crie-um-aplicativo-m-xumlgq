@@ -14,20 +14,18 @@ export default function TabLayout() {
   const segments = useSegments();
   const [checkingRole, setCheckingRole] = useState(true);
   const [userRole, setUserRole] = useState<"consultant" | "mother" | null>(null);
-  const hasRedirectedRef = useRef(false);
   const roleCheckAttemptRef = useRef(0);
 
   // Reset state when user changes
   useEffect(() => {
     console.log("[Tab Layout] 👤 User state changed:", user ? user.email : "null");
-    hasRedirectedRef.current = false;
     roleCheckAttemptRef.current = 0;
     
-    // 🔥 CRITICAL FIX: Reset role when user changes
     if (!user) {
       setUserRole(null);
       setCheckingRole(false);
     } else {
+      // Clear role to force re-determination
       setUserRole(null);
       setCheckingRole(true);
     }
@@ -84,10 +82,10 @@ export default function TabLayout() {
     }
   }, [user, checkingRole]);
 
-  // Handle navigation after role is determined
+  // 🔥 CRITICAL FIX: Navigate immediately when role is determined
   useEffect(() => {
-    // 🔥 CRITICAL FIX: Don't wait for hasRedirectedRef - navigate immediately when role is ready
     if (!userRole || loading || checkingRole) {
+      console.log("[Tab Layout] ⏳ Waiting for role determination... (userRole:", userRole, "loading:", loading, "checkingRole:", checkingRole, ")");
       return;
     }
 
@@ -97,37 +95,24 @@ export default function TabLayout() {
     if (userRole === "mother") {
       const isAlreadyOnMotherDashboard = currentPath.includes("mother-dashboard");
 
-      if (!isAlreadyOnMotherDashboard && !hasRedirectedRef.current) {
-        console.log("[Tab Layout] 🔄 Navigating mother to dashboard");
-        hasRedirectedRef.current = true;
-        // Use setTimeout to ensure navigation happens after render
-        setTimeout(() => {
-          router.replace("/(tabs)/(home)/mother-dashboard");
-        }, 100);
+      if (!isAlreadyOnMotherDashboard) {
+        console.log("[Tab Layout] 🔄 Navigating mother to dashboard NOW");
+        router.replace("/(tabs)/(home)/mother-dashboard");
       } else {
         console.log("[Tab Layout] ✅ Mother already on dashboard");
-        hasRedirectedRef.current = true;
       }
     } else if (userRole === "consultant") {
       const isOnAuthScreen = currentPath.includes("auth");
       const isOnConsultantHome = currentPath === "(tabs)/(home)" || currentPath === "(tabs)/(home)/index";
       
-      if (isOnAuthScreen && !hasRedirectedRef.current) {
-        console.log("[Tab Layout] 🔄 Navigating consultant from auth to home");
-        hasRedirectedRef.current = true;
-        // Use setTimeout to ensure navigation happens after render
-        setTimeout(() => {
-          router.replace("/(tabs)/(home)");
-        }, 100);
-      } else if (!isOnConsultantHome) {
-        console.log("[Tab Layout] ✅ Consultant on valid screen:", currentPath);
-        hasRedirectedRef.current = true;
+      if (isOnAuthScreen) {
+        console.log("[Tab Layout] 🔄 Navigating consultant from auth to home NOW");
+        router.replace("/(tabs)/(home)");
       } else {
-        console.log("[Tab Layout] ✅ Consultant already on home");
-        hasRedirectedRef.current = true;
+        console.log("[Tab Layout] ✅ Consultant on valid screen:", currentPath);
       }
     }
-  }, [userRole, segments, router, loading, checkingRole]);
+  }, [userRole, loading, checkingRole, segments, router]);
 
   // Show loading state
   if (loading || checkingRole) {
