@@ -30,12 +30,10 @@ interface Baby {
 }
 
 export default function HomeLayout() {
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const [loading, setLoading] = useState(true);
   const [consultantProfile, setConsultantProfile] = useState<ConsultantProfile | null>(null);
   const [babies, setBabies] = useState<Baby[]>([]);
-
-  const userRole = (user as any)?.role;
 
   const loadConsultantData = useCallback(async () => {
     if (userRole !== "consultant") {

@@ -6,7 +6,7 @@ import { View } from "react-native";
 import FloatingTabBar, { TabBarItem } from "@/components/FloatingTabBar";
 
 export default function TabLayout() {
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
@@ -16,8 +16,6 @@ export default function TabLayout() {
       return;
     }
 
-    // User object must contain role property
-    const userRole = (user as any).role;
     const currentPath = segments.join("/");
 
     console.log("[TabLayout] User role:", userRole, "Current path:", currentPath);
@@ -29,28 +27,18 @@ export default function TabLayout() {
         router.replace("/(tabs)/(home)/mother-dashboard");
       }
     } else if (userRole === "consultant") {
-      // Redirect to consultant dashboard if not already there
-      if (!currentPath.startsWith("(tabs)/(home)/index") && !currentPath.startsWith("(tabs)/(home)") && !currentPath.includes("profile")) {
-        console.log("[TabLayout] Redirecting consultant to dashboard");
-        router.replace("/(tabs)/(home)");
-      }
+      // Consultant can navigate freely within tabs
+      console.log("[TabLayout] Consultant navigating to:", currentPath);
     } else {
-      console.warn("[TabLayout] Unknown user role:", userRole);
-      // Fallback to home
-      if (!currentPath.startsWith("(tabs)/(home)/")) {
-        router.replace("/(tabs)/(home)/");
-      }
+      console.warn("[TabLayout] Unknown user role:", userRole, "- defaulting to consultant behavior");
     }
-  }, [user, segments]);
+  }, [user, userRole, segments]);
 
   // Redirect to auth if no user
   if (!user) {
     console.log("[TabLayout] No user, redirecting to auth");
     return <Redirect href="/auth" />;
   }
-
-  // Get user role
-  const userRole = (user as any).role;
 
   // Render mother layout (no tab bar)
   if (userRole === "mother") {

@@ -14,6 +14,7 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
+  userRole: string | null;
   loading: boolean;
   setUser: (user: User | null) => void;
   signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -81,6 +82,7 @@ function openOAuthPopup(provider: string): Promise<string> {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   // Initialize auth - runs ONLY ONCE on mount
@@ -119,6 +121,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (sessionData?.user) {
           console.log("[Auth] ✅ Session valid, user:", sessionData.user.email);
           setUser(sessionData.user as User);
+          
+          // Load userRole from storage
+          const storedRole = await AsyncStorage.getItem("userRole");
+          if (storedRole) {
+            console.log("[Auth] ✅ Loaded userRole from storage:", storedRole);
+            setUserRole(storedRole);
+          } else {
+            // Default to consultant if no role stored (backward compatibility)
+            console.log("[Auth] ℹ️ No userRole in storage, defaulting to consultant");
+            setUserRole("consultant");
+          }
         } else {
           console.log("[Auth] ⚠️ No user in session, clearing token");
           await clearAuthTokens();
@@ -201,6 +214,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user) {
         console.log("[Auth] ✅ Setting user:", user.email);
         setUser(user);
+        
+        // Load userRole from storage (set during signup or previous login)
+        const storedRole = await AsyncStorage.getItem("userRole");
+        if (storedRole) {
+          console.log("[Auth] ✅ Loaded userRole from storage:", storedRole);
+          setUserRole(storedRole);
+        } else {
+          // Default to consultant for email sign-in
+          console.log("[Auth] ℹ️ No userRole in storage, defaulting to consultant");
+          setUserRole("consultant");
+          await AsyncStorage.setItem("userRole", "consultant");
+        }
       } else {
         console.warn("[Auth] ⚠️ No user in response");
         throw new Error("No user data received");
@@ -306,6 +331,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         await AsyncStorage.setItem("userRole", "consultant");
+        setUserRole("consultant");
       } else {
         console.warn("[Auth] ⚠️ No user in response");
         throw new Error("No user data received");
@@ -391,6 +417,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("[Auth] ✅ Setting user:", user.email);
         setUser(user);
         await AsyncStorage.setItem("userRole", "mother");
+        setUserRole("mother");
       } else {
         console.warn("[Auth] ⚠️ No user in response");
         throw new Error("No user data received");
@@ -590,6 +617,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("[Auth] ✅ Setting user:", user.email);
         setUser(user);
         await AsyncStorage.setItem("userRole", "mother");
+        setUserRole("mother");
       } else {
         console.warn("[Auth] ⚠️ No user in response");
         throw new Error("No user data received");
@@ -693,6 +721,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     console.log("[Auth] 🚪 Signing out");
     setUser(null);
+    setUserRole(null);
     
     try {
       await Promise.all([
@@ -717,6 +746,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         user,
+        userRole,
         loading,
         setUser,
         signInWithEmail,

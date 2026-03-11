@@ -93,12 +93,14 @@ export default function RegisterBabyScreen() {
   };
 
   const handleCloseTokenModal = () => {
-    console.log("User closed token modal");
+    console.log("User closed token modal, navigating back to babies list");
     setShowTokenModal(false);
     setGeneratedToken("");
     setRegisteredBabyName("");
     setCopiedToken(false);
-    router.back();
+    
+    // Navigate back to consultant dashboard to refresh the babies list
+    router.replace("/(tabs)/(home)");
   };
 
   const handleSubmit = async () => {
@@ -133,23 +135,20 @@ export default function RegisterBabyScreen() {
 
     try {
       setLoading(true);
-      console.log("Submitting baby registration:", {
-        name,
-        birthDate: formatDateToISO(birthDate),
-        motherName,
-        motherPhone,
-        motherEmail,
-        objectives: objectives.trim() || undefined,
-      });
-
-      const response = await apiPost<BabyResponse>("/api/babies", {
+      
+      const requestBody = {
         name: name.trim(),
         birthDate: formatDateToISO(birthDate),
         motherName: motherName.trim(),
         motherPhone: motherPhone.trim(),
         motherEmail: motherEmail.trim(),
         objectives: objectives.trim() || undefined,
-      });
+      };
+      
+      console.log("Submitting baby registration to /api/consultant/babies:", requestBody);
+
+      // Use consultant-specific endpoint - backend will associate with authenticated consultant
+      const response = await apiPost<BabyResponse>("/api/consultant/babies", requestBody);
 
       console.log("Baby registered successfully:", response);
       
