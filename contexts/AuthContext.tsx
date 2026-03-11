@@ -4,6 +4,7 @@ import { Platform, AppState, AppStateStatus } from "react-native";
 import * as Linking from "expo-linking";
 import { authClient, setBearerToken, clearAuthTokens, getBearerToken } from "@/lib/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter, useSegments } from "expo-router";
 
 interface User {
   id: string;
@@ -86,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userRef = useRef<User | null>(null);
   const lastValidationRef = useRef<number>(0);
   const VALIDATION_INTERVAL_MS = 5 * 60 * 1000;
-  const isUploadingRef = useRef(false); // Track if user is uploading
+  const isUploadingRef = useRef(false);
 
   useEffect(() => {
     userRef.current = user;
@@ -109,7 +110,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         console.log("[Auth] 📱 App became active");
         
-        // 🔥 CRITICAL FIX: Don't validate session if user is uploading
         if (isUploadingRef.current) {
           console.log("[Auth] ⏭️ Skipping validation - user is uploading");
           return;
@@ -136,7 +136,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // 🔥 CRITICAL FIX: Don't validate if user is uploading
     if (isUploadingRef.current) {
       console.log("[Auth] ⏭️ Skipping validation - user is uploading");
       return;
@@ -306,7 +305,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Origin": BACKEND_URL, // Required by Better Auth for CORS validation
+          "Origin": BACKEND_URL,
         },
         body: JSON.stringify({
           email,
@@ -318,18 +317,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!response.ok) {
         const errorText = await response.text();
         console.error("[Auth] ❌ Login failed:", response.status, errorText);
-        throw new Error(`Login failed: ${response.status}`);
+        let errorMsg = "Erro ao fazer login";
+        try {
+          const errJson = JSON.parse(errorText);
+          if (errJson.message) errorMsg = errJson.message;
+          if (errJson.error) errorMsg = errJson.error;
+        } catch {}
+        throw new Error(errorMsg);
       }
       
       const responseData = await response.json();
       console.log("[Auth] ✅ Login response received");
       console.log("[Auth] 🔍 Response keys:", Object.keys(responseData));
       
-      // Extract token from response
       let token: string | null = null;
       let user: User | null = null;
       
-      // Try all possible token locations
       if (responseData?.session?.token) {
         token = responseData.session.token;
         console.log("[Auth] 🔑 Token found at session.token");
@@ -344,7 +347,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("[Auth] 🔑 Token found at data.token");
       }
       
-      // Try to extract user
       if (responseData?.user) {
         user = responseData.user as User;
         console.log("[Auth] 👤 User found at user");
@@ -359,11 +361,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("No token received from server");
       }
       
-      // Save token IMMEDIATELY
       console.log("[Auth] 💾 Saving token to storage (length:", token.length, ")...");
       await setBearerToken(token);
       
-      // Verify token was saved
       const savedToken = await getBearerToken();
       if (!savedToken || savedToken !== token) {
         console.error("[Auth] ❌ CRITICAL: Token not saved correctly!");
@@ -372,12 +372,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("[Auth] ✅ Token saved and verified");
       
-      // Set user directly from login response
+      // 🔥 CRITICAL FIX: Set user state IMMEDIATELY and force a state update
       if (user) {
+        console.log("[Auth] ✅ Setting user from login response:", user.email);
+        
+        // Set user state
         setUser(user);
         userRef.current = user;
-        console.log("[Auth] ✅ User set from login response:", user.email);
+        
+        // Store role as consultant for routing
+        await AsyncStorage.setItem("userRole", "consultant");
+        
         console.log("[Auth] ✅ Login complete - user is now authenticated");
+        console.log("[Auth] 🔄 User state updated, navigation should trigger");
       } else {
         console.warn("[Auth] ⚠️ No user in login response, will fetch from session");
         await fetchUser();
@@ -401,7 +408,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Origin": BACKEND_URL, // Required by Better Auth for CORS validation
+          "Origin": BACKEND_URL,
         },
         body: JSON.stringify({
           email,
@@ -420,11 +427,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[Auth] ✅ Signup response received");
       console.log("[Auth] 🔍 Response keys:", Object.keys(responseData));
       
-      // Extract token from response
       let token: string | null = null;
       let user: User | null = null;
       
-      // Try all possible token locations
       if (responseData?.session?.token) {
         token = responseData.session.token;
         console.log("[Auth] 🔑 Token found at session.token");
@@ -439,7 +444,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("[Auth] 🔑 Token found at data.token");
       }
       
-      // Try to extract user
       if (responseData?.user) {
         user = responseData.user as User;
         console.log("[Auth] 👤 User found at user");
@@ -454,11 +458,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("No token received from server");
       }
       
-      // Save token IMMEDIATELY
       console.log("[Auth] 💾 Saving token to storage (length:", token.length, ")...");
       await setBearerToken(token);
       
-      // Verify token was saved
       const savedToken = await getBearerToken();
       if (!savedToken || savedToken !== token) {
         console.error("[Auth] ❌ CRITICAL: Token not saved correctly!");
@@ -467,7 +469,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("[Auth] ✅ Token saved and verified");
       
-      // Set user directly from signup response
       if (user) {
         setUser(user);
         userRef.current = user;
@@ -500,7 +501,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Origin": BACKEND_URL, // Required by Better Auth for CORS validation
+          "Origin": BACKEND_URL,
         },
         body: JSON.stringify({
           token: babyToken.trim(),
@@ -527,7 +528,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[Auth] ✅ Token sign-in response received");
       console.log("[Auth] 🔍 Response keys:", Object.keys(responseData));
       
-      // Extract session token from response
       let sessionToken: string | null = null;
       let user: User | null = null;
       
@@ -550,11 +550,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("No session token received from server");
       }
       
-      // Save the session token (NOT the baby token)
       console.log("[Auth] 💾 Saving session token to storage (length:", sessionToken.length, ")...");
       await setBearerToken(sessionToken);
       
-      // Verify token was saved
       const savedToken = await getBearerToken();
       if (!savedToken || savedToken !== sessionToken) {
         console.error("[Auth] ❌ CRITICAL: Session token not saved correctly!");
@@ -563,11 +561,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("[Auth] ✅ Session token saved and verified");
       
-      // Set user directly from response
       if (user) {
         setUser(user);
         userRef.current = user;
-        // Mark user as mother role in AsyncStorage for tab layout routing
         await AsyncStorage.setItem("userRole", "mother");
         console.log("[Auth] ✅ User set from token sign-in response:", user.email);
         console.log("[Auth] ✅ Token sign in complete");
@@ -604,7 +600,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Origin": BACKEND_URL, // Required by Better Auth for CORS validation
+          "Origin": BACKEND_URL,
         },
         body: JSON.stringify({
           token: babyToken.trim(),
@@ -635,7 +631,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const responseData = await response.json();
       console.log("[Auth] ✅ Create account with token response received");
       
-      // Extract session token from response
       let sessionToken: string | null = null;
       let user: User | null = null;
       
@@ -657,7 +652,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("No session token received from server");
       }
       
-      // Save the session token
       console.log("[Auth] 💾 Saving session token to storage...");
       await setBearerToken(sessionToken);
       
@@ -672,7 +666,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user) {
         setUser(user);
         userRef.current = user;
-        // Mark user as mother role in AsyncStorage for tab layout routing
         await AsyncStorage.setItem("userRole", "mother");
         console.log("[Auth] ✅ User set from create account response:", user.email);
         console.log("[Auth] ✅ Create account with token complete");
@@ -704,7 +697,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Origin": BACKEND_URL, // Required by Better Auth for CORS validation
+          "Origin": BACKEND_URL,
         },
         body: JSON.stringify({ token: babyToken.trim() }),
       });
@@ -781,13 +774,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log("[Auth] ✅ Sign out complete");
   };
 
-  // 🔥 NEW: Export function to pause/resume session validation during uploads
   const setUploadingState = (isUploading: boolean) => {
     console.log("[Auth] 📤 Upload state changed:", isUploading);
     isUploadingRef.current = isUploading;
   };
 
-  // Expose setUploadingState via context (we'll add it to the context type)
   (AuthContext as any)._setUploadingState = setUploadingState;
 
   return (
@@ -820,7 +811,6 @@ export function useAuth() {
   return context;
 }
 
-// 🔥 NEW: Export helper to pause session validation during uploads
 export function setUploadingState(isUploading: boolean) {
   const setFn = (AuthContext as any)._setUploadingState;
   if (setFn) {
