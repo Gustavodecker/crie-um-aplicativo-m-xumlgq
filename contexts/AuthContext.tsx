@@ -446,8 +446,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
+
+      console.log("[Auth] 📡 Calling /api/mothers/create-account-with-token with token:", babyToken.trim());
       
-      const response = await fetch(`${BACKEND_URL}/api/auth/create-account-with-token`, {
+      const response = await fetch(`${BACKEND_URL}/api/mothers/create-account-with-token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -468,13 +470,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         responseData = {};
       }
       
-      const dedicatedEndpointWorked = response.ok && (
-        responseData?.session?.token || 
-        responseData?.token ||
-        responseData?.data?.session?.token
-      );
-      
-      if (!response.ok && response.status !== 400) {
+      if (!response.ok) {
         console.error("[Auth] ❌ Create account with token failed:", response.status, responseText);
         
         let errorMsg = "Erro ao criar conta";
@@ -489,124 +485,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(errorMsg);
       }
       
+      console.log("[Auth] ✅ Create account with token response received");
+      
       let sessionToken: string | null = null;
       let user: User | null = null;
       
-      if (dedicatedEndpointWorked) {
-        console.log("[Auth] ✅ Dedicated endpoint worked");
-        
-        if (responseData?.session?.token) {
-          sessionToken = responseData.session.token;
-        } else if (responseData?.token) {
-          sessionToken = responseData.token;
-        } else if (responseData?.data?.session?.token) {
-          sessionToken = responseData.data.session.token;
-        }
-        
-        if (responseData?.user) {
-          user = responseData.user as User;
-        } else if (responseData?.data?.user) {
-          user = responseData.data.user as User;
-        }
-      } else {
-        console.log("[Auth] ⚠️ Using fallback flow");
-        
-        const validateResponse = await fetch(`${BACKEND_URL}/api/mothers/validate-token`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Origin": BACKEND_URL,
-          },
-          body: JSON.stringify({ token: babyToken.trim() }),
-        });
-        
-        if (!validateResponse.ok) {
-          throw new Error("Token inválido. Verifique com sua consultora.");
-        }
-        
-        const tokenInfo = await validateResponse.json();
-        const motherEmail = tokenInfo.motherEmail;
-        
-        if (!motherEmail) {
-          throw new Error("Não foi possível obter o e-mail da mãe. Verifique o token.");
-        }
-        
-        console.log("[Auth] 📧 Mother email from token:", motherEmail);
-        
-        const signUpResponse = await fetch(`${BACKEND_URL}/api/auth/sign-up/email`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Origin": BACKEND_URL,
-          },
-          body: JSON.stringify({
-            email: motherEmail,
-            password,
-            name: name.trim(),
-          }),
-        });
-        
-        if (!signUpResponse.ok) {
-          const signUpError = await signUpResponse.text();
-          console.error("[Auth] ❌ Sign up failed:", signUpResponse.status, signUpError);
-          
-          let signUpErrorMsg = "Erro ao criar conta";
-          try {
-            const errJson = JSON.parse(signUpError);
-            if (errJson.message) signUpErrorMsg = errJson.message;
-            if (errJson.error) signUpErrorMsg = errJson.error;
-            if (signUpError.toLowerCase().includes("already") || signUpError.toLowerCase().includes("exists")) {
-              signUpErrorMsg = "Já existe uma conta com este e-mail. Use a opção de login.";
-            }
-          } catch {}
-          throw new Error(signUpErrorMsg);
-        }
-        
-        const signUpData = await signUpResponse.json();
-        console.log("[Auth] ✅ Sign up successful");
-        
-        if (signUpData?.session?.token) {
-          sessionToken = signUpData.session.token;
-        } else if (signUpData?.token) {
-          sessionToken = signUpData.token;
-        } else if (signUpData?.data?.session?.token) {
-          sessionToken = signUpData.data.session.token;
-        }
-        
-        if (signUpData?.user) {
-          user = signUpData.user as User;
-        } else if (signUpData?.data?.user) {
-          user = signUpData.data.user as User;
-        }
-        
-        if (!sessionToken) {
-          throw new Error("Conta criada mas não foi possível obter sessão. Tente fazer login.");
-        }
-        
-        console.log("[Auth] 🔗 Linking account to baby...");
-        try {
-          const initResponse = await fetch(`${BACKEND_URL}/api/mothers/init-with-token`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${sessionToken}`,
-              "Origin": BACKEND_URL,
-            },
-            body: JSON.stringify({ token: babyToken.trim() }),
-          });
-          
-          if (initResponse.ok) {
-            console.log("[Auth] ✅ Account linked to baby");
-          } else {
-            console.warn("[Auth] ⚠️ Could not link account to baby");
-          }
-        } catch (initErr: any) {
-          console.warn("[Auth] ⚠️ Error linking account to baby:", initErr?.message);
-        }
+      if (responseData?.session?.token) {
+        sessionToken = responseData.session.token;
+      } else if (responseData?.token) {
+        sessionToken = responseData.token;
+      } else if (responseData?.data?.session?.token) {
+        sessionToken = responseData.data.session.token;
+      }
+      
+      if (responseData?.user) {
+        user = responseData.user as User;
+      } else if (responseData?.data?.user) {
+        user = responseData.data.user as User;
       }
       
       if (!sessionToken) {
-        console.error("[Auth] ❌ No session token available!");
+        console.error("[Auth] ❌ No session token in response!");
         throw new Error("Não foi possível criar sessão. Tente novamente.");
       }
       
