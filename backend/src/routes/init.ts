@@ -68,7 +68,7 @@ export function registerInitRoutes(app: App) {
     return reply.status(201).send(consultant);
   });
 
-  // POST /api/init/mother - Register as mother for a baby using token
+  // POST /api/init/mother - Register as mother for a baby using token (for backward compatibility)
   app.fastify.post('/api/init/mother', {
     schema: {
       description: 'Register as mother for a baby using token',
@@ -90,7 +90,7 @@ export function registerInitRoutes(app: App) {
             birthDate: { type: 'string', format: 'date' },
             motherName: { type: 'string' },
             motherPhone: { type: 'string' },
-            motherEmail: { type: 'string' },
+            motherEmail: { type: ['string', 'null'] },
             motherUserId: { type: 'string' },
             consultantId: { type: 'string', format: 'uuid' },
             objectives: { type: ['string', 'null'] },
@@ -101,39 +101,50 @@ export function registerInitRoutes(app: App) {
         400: { type: 'object', properties: { error: { type: 'string' } } },
         401: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
+        409: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request: FastifyRequest<{ Body: { token: string } }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
-    app.logger.info({ userId: session.user.id, token: request.body.token }, 'Registering as mother');
+    const { token } = request.body;
 
-    const baby = await app.db.query.babies.findFirst({
-      where: eq(schema.babies.token, request.body.token),
-    });
-
-    if (!baby) {
-      app.logger.warn({ token: request.body.token }, 'Baby not found');
-      return reply.status(404).send({ error: 'Baby not found' });
+    if (!token || token.trim().length === 0) {
+      app.logger.warn({ userId: session.user.id }, 'Token missing from init/mother request');
+      return reply.status(400).send({ error: 'Token is required' });
     }
 
-    if (baby.motherUserId) {
-      app.logger.warn({ babyId: baby.id }, 'Baby already has a registered mother');
-      return reply.status(400).send({ error: 'Baby already has a registered mother' });
+    app.logger.info({ userId: session.user.id, tokenPreview: token.substring(0, 10) + '...' }, 'Registering as mother with token');
+
+    try {
+      const baby = await app.db.query.babies.findFirst({
+        where: eq(schema.babies.token, token),
+      });
+
+      if (!baby) {
+        app.logger.warn({ userId: session.user.id, tokenPreview: token.substring(0, 10) + '...' }, 'Baby not found with token');
+        return reply.status(404).send({ error: 'Baby not found' });
+      }
+
+      // Check if baby already has a registered mother
+      if (baby.motherUserId) {
+        app.logger.warn({ userId: session.user.id, babyId: baby.id, existingMotherUserId: baby.motherUserId }, 'Baby already has a registered mother');
+        return reply.status(409).send({ error: 'Baby already linked to a mother account' });
+      }
+
+      // Link baby to authenticated mother user
+      const [updated] = await app.db.update(schema.babies)
+        .set({ motherUserId: session.user.id })
+        .where(eq(schema.babies.token, token))
+        .returning();
+
+      app.logger.info({ babyId: updated.id, userId: session.user.id }, 'Mother registered successfully');
+      return updated;
+
+    } catch (error) {
+      app.logger.error({ err: error, userId: session.user.id }, 'Error registering mother');
+      return reply.status(500).send({ error: 'Failed to register as mother' });
     }
-
-    if (baby.motherEmail !== session.user.email) {
-      app.logger.warn({ userId: session.user.id, babyId: baby.id, email: session.user.email, expectedEmail: baby.motherEmail }, 'Email mismatch');
-      return reply.status(400).send({ error: 'Email does not match registered mother email' });
-    }
-
-    const [updated] = await app.db.update(schema.babies)
-      .set({ motherUserId: session.user.id })
-      .where(eq(schema.babies.token, request.body.token))
-      .returning();
-
-    app.logger.info({ babyId: updated.id, userId: session.user.id }, 'Mother registered successfully');
-    return updated;
   });
 }

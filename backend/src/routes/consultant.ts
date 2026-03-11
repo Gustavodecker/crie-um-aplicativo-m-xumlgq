@@ -14,13 +14,12 @@ export function registerConsultantRoutes(app: App) {
       tags: ['consultant', 'babies'],
       body: {
         type: 'object',
-        required: ['name', 'birthDate', 'motherName', 'motherPhone', 'motherEmail'],
+        required: ['name', 'birthDate', 'motherName', 'motherPhone'],
         properties: {
           name: { type: 'string' },
           birthDate: { type: 'string', format: 'date' },
           motherName: { type: 'string' },
           motherPhone: { type: 'string' },
-          motherEmail: { type: 'string' },
           objectives: { type: ['string', 'null'] },
         },
       },
@@ -34,7 +33,7 @@ export function registerConsultantRoutes(app: App) {
             birthDate: { type: 'string', format: 'date' },
             motherName: { type: 'string' },
             motherPhone: { type: 'string' },
-            motherEmail: { type: 'string' },
+            motherEmail: { type: ['string', 'null'] },
             motherUserId: { type: ['string', 'null'] },
             consultantId: { type: 'string', format: 'uuid' },
             objectives: { type: ['string', 'null'] },
@@ -46,7 +45,7 @@ export function registerConsultantRoutes(app: App) {
         401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: { name: string; birthDate: string; motherName: string; motherPhone: string; motherEmail: string; objectives?: string } }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: { name: string; birthDate: string; motherName: string; motherPhone: string; objectives?: string } }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
@@ -82,7 +81,7 @@ export function registerConsultantRoutes(app: App) {
             birthDate: request.body.birthDate,
             motherName: request.body.motherName,
             motherPhone: request.body.motherPhone,
-            motherEmail: request.body.motherEmail,
+            motherEmail: null,
             objectives: request.body.objectives || null,
             consultantId: consultant.id,
           }).returning();
