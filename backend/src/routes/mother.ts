@@ -135,11 +135,44 @@ export function registerMotherRoutes(app: App) {
       app.logger.debug({ userId, accountId }, 'Account created for mother');
 
       // Update baby with motherUserId
+      app.logger.info(
+        { babyId: baby.id, newMotherUserId: userId },
+        'About to update baby motherUserId field'
+      );
+
       await app.db.update(schema.babies)
         .set({ motherUserId: userId })
         .where(eq(schema.babies.id, baby.id));
 
-      app.logger.debug({ babyId: baby.id, motherUserId: userId }, 'Baby updated with motherUserId');
+      app.logger.info({ babyId: baby.id, userId }, 'Baby update database operation executed');
+
+      // VERIFICATION: Immediately query the baby again to confirm the update persisted
+      const verifiedBaby = await app.db.query.babies.findFirst({
+        where: eq(schema.babies.id, baby.id),
+      });
+
+      if (!verifiedBaby) {
+        app.logger.error({ babyId: baby.id }, 'Critical error: baby record disappeared after update');
+        return reply.status(500).send({ error: 'Failed to link baby to account' });
+      }
+
+      app.logger.info(
+        { babyId: baby.id, expectedMotherUserId: userId, actualMotherUserId: verifiedBaby.motherUserId },
+        'Baby record verified - checking motherUserId'
+      );
+
+      if (verifiedBaby.motherUserId !== userId) {
+        app.logger.error(
+          { babyId: baby.id, expectedMotherUserId: userId, actualMotherUserId: verifiedBaby.motherUserId },
+          'CRITICAL: motherUserId not persisted - mother account creation incomplete'
+        );
+        return reply.status(500).send({ error: 'Failed to link baby to account' });
+      }
+
+      app.logger.info(
+        { babyId: baby.id, verifiedMotherUserId: verifiedBaby.motherUserId, userId },
+        'Baby association verified successfully - motherUserId correctly set'
+      );
 
       // Create session
       const sessionId = crypto.randomUUID();

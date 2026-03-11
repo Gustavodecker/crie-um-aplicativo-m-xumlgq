@@ -1797,6 +1797,7 @@ describe("API Integration Tests", () => {
 
   test("Create mother account with baby token", async () => {
     // Create a new baby to get a fresh token
+    const uniqueId = crypto.randomUUID();
     const babyRes = await authenticatedApi("/api/babies", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1805,7 +1806,7 @@ describe("API Integration Tests", () => {
         birthDate: "2024-08-15",
         motherName: "New Mother",
         motherPhone: "+1234567890",
-        motherEmail: "newmother@example.com",
+        motherEmail: `newmother+${uniqueId}@example.com`,
       }),
     });
     const babyData = await babyRes.json();
@@ -1882,6 +1883,7 @@ describe("API Integration Tests", () => {
 
   test("Create mother account when account already exists returns 409", async () => {
     // Create a baby for this test
+    const uniqueId = crypto.randomUUID();
     const babyRes = await authenticatedApi("/api/babies", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1890,7 +1892,7 @@ describe("API Integration Tests", () => {
         birthDate: "2024-09-15",
         motherName: "Duplicate Mother",
         motherPhone: "+1234567890",
-        motherEmail: "duplicate-account@example.com",
+        motherEmail: `duplicate-account+${uniqueId}@example.com`,
       }),
     });
     const babyData = await babyRes.json();
