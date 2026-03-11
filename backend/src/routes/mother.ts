@@ -3,6 +3,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
+import bcrypt from 'bcrypt';
 
 export function registerMotherRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -103,14 +104,18 @@ export function registerMotherRoutes(app: App) {
 
       app.logger.debug({ userId, email }, 'User created for mother');
 
-      // Create account record with password
+      // Hash password using bcrypt (same algorithm Better Auth uses)
+      const hashedPassword = await bcrypt.hash(password, 10);
+      app.logger.debug({ userId }, 'Password hashed successfully');
+
+      // Create account record with hashed password
       const accountId = crypto.randomUUID();
       await app.db.insert(authSchema.account).values({
         id: accountId,
         accountId: userId,
         providerId: 'credential',
         userId: userId,
-        password: password,
+        password: hashedPassword,
         accessToken: null,
         refreshToken: null,
         idToken: null,
@@ -121,7 +126,7 @@ export function registerMotherRoutes(app: App) {
         updatedAt: new Date(),
       });
 
-      app.logger.debug({ userId, accountId }, 'Account created for mother');
+      app.logger.debug({ userId, accountId }, 'Account created for mother with hashed password');
 
       // Update baby with motherUserId, motherEmail and invalidate token
       app.logger.info(
