@@ -150,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("No user data received");
       }
       
-      console.log("[Auth] ✅ Login complete");
+      console.log("[Auth] ✅ Login complete - user state updated");
       
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign in failed:", error?.message || error);
@@ -255,7 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("No user data received");
       }
       
-      console.log("[Auth] ✅ Signup complete");
+      console.log("[Auth] ✅ Signup complete - user state updated");
       
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign up failed:", error?.message || error);
@@ -340,7 +340,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("No user data received");
       }
       
-      console.log("[Auth] ✅ Token sign in complete");
+      console.log("[Auth] ✅ Token sign in complete - user state updated");
       
     } catch (error: any) {
       console.error("[Auth] ❌ Token sign in failed:", error?.message || error);
@@ -539,7 +539,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("No user data received");
       }
       
-      console.log("[Auth] ✅ Create account complete");
+      console.log("[Auth] ✅ Create account complete - user state updated");
       
     } catch (error: any) {
       console.error("[Auth] ❌ Create account with token failed:", error?.message || error);
@@ -684,4 +684,9 @@ export function useAuth() {
     throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
+}
+
+// Export for upload state management
+export function setUploadingState(uploading: boolean) {
+  console.log("[Auth] Upload state:", uploading);
 }

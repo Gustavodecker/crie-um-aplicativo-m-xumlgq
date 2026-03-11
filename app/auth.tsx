@@ -13,191 +13,185 @@ import {
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "@/contexts/AuthContext";
-import { IconSymbol } from "@/components/IconSymbol";
 import { colors, spacing, borderRadius, typography, shadows } from "@/styles/commonStyles";
+import { IconSymbol } from "@/components/IconSymbol";
+import { useAuth } from "@/contexts/AuthContext";
 
-type MotherStep = "token" | "create-account" | "sign-in";
+type MotherStep = "token" | "validate" | "create-account" | "sign-in";
 type ConsultantStep = "login" | "register";
 
 export default function AuthScreen() {
-  const { signInWithEmail, signUpWithEmail, validateBabyToken, createAccountWithToken, signInWithToken } = useAuth();
-  const router = useRouter();
-
-  // Consultant state
-  const [consultantStep, setConsultantStep] = useState<ConsultantStep>("login");
-  const [consultantEmail, setConsultantEmail] = useState("");
-  const [consultantPassword, setConsultantPassword] = useState("");
-  const [consultantName, setConsultantName] = useState("");
-
-  // Mother state
+  const [activeTab, setActiveTab] = useState<"mother" | "consultant">("consultant");
   const [motherStep, setMotherStep] = useState<MotherStep>("token");
+  const [consultantStep, setConsultantStep] = useState<ConsultantStep>("login");
+  
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
   const [babyToken, setBabyToken] = useState("");
-  const [motherName, setMotherName] = useState("");
-  const [motherPassword, setMotherPassword] = useState("");
-  const [validatedEmail, setValidatedEmail] = useState("");
-  const [validatedBabyName, setValidatedBabyName] = useState("");
-  const [accountExists, setAccountExists] = useState(false);
-
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"consultant" | "mother">("consultant");
+  
+  const [tokenValidationResult, setTokenValidationResult] = useState<{
+    babyName?: string;
+    consultantName?: string;
+    accountExists?: boolean;
+  } | null>(null);
+  
+  const router = useRouter();
+  const { signInWithEmail, signUpWithEmail, signInWithToken, createAccountWithToken, validateBabyToken } = useAuth();
 
   const handleConsultantLogin = async () => {
-    if (!consultantEmail || !consultantPassword) {
+    if (!email || !password) {
       setError("Por favor, preencha todos os campos");
       return;
     }
-
-    setError("");
+    
     setLoading(true);
-
+    setError("");
+    
     try {
-      console.log("User tapped Consultant Login button");
-      await signInWithEmail(consultantEmail, consultantPassword);
-      console.log("Login successful - navigating to /(tabs)");
+      console.log("Attempting consultant login with email:", email);
+      await signInWithEmail(email, password);
+      console.log("Consultant login successful");
+      // Navigation will be handled by TabLayout after user state updates
       router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Consultant login error:", err);
-      setError(err.message || "Erro ao fazer login");
+      setError(err?.message || "Erro ao fazer login");
     } finally {
       setLoading(false);
     }
   };
 
   const handleConsultantRegister = async () => {
-    if (!consultantEmail || !consultantPassword || !consultantName) {
+    if (!email || !password || !name) {
       setError("Por favor, preencha todos os campos");
       return;
     }
-
-    if (consultantPassword.length < 6) {
+    
+    if (password.length < 6) {
       setError("A senha deve ter pelo menos 6 caracteres");
       return;
     }
-
-    setError("");
+    
     setLoading(true);
-
+    setError("");
+    
     try {
-      console.log("User tapped Consultant Register button");
-      await signUpWithEmail(consultantEmail, consultantPassword, consultantName);
-      console.log("Registration successful - navigating to /(tabs)");
+      console.log("Attempting consultant registration with email:", email);
+      await signUpWithEmail(email, password, name);
+      console.log("Consultant registration successful");
+      // Navigation will be handled by TabLayout after user state updates
       router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Consultant registration error:", err);
-      setError(err.message || "Erro ao criar conta");
+      setError(err?.message || "Erro ao criar conta");
     } finally {
       setLoading(false);
     }
   };
 
   const handleValidateToken = async () => {
-    if (!babyToken || babyToken.trim().length === 0) {
-      setError("Por favor, insira o token do bebê");
+    if (!babyToken.trim()) {
+      setError("Por favor, insira o token");
       return;
     }
-
-    setError("");
+    
     setLoading(true);
-
+    setError("");
+    
     try {
-      console.log("User tapped Validate Token button");
-      const result = await validateBabyToken(babyToken.trim());
+      console.log("Validating baby token");
+      const result = await validateBabyToken(babyToken);
       
       if (!result.valid) {
         setError("Token inválido. Verifique com sua consultora.");
         setLoading(false);
         return;
       }
-
-      console.log("Token validation successful");
-      setValidatedEmail(result.motherEmail || "");
-      setValidatedBabyName(result.babyName || "");
-      setAccountExists(result.accountExists || false);
-
+      
+      console.log("Token validation result:", result);
+      setTokenValidationResult(result);
+      
       if (result.accountExists) {
-        console.log("Account exists - showing sign-in form");
         setMotherStep("sign-in");
       } else {
-        console.log("Account does not exist - showing create-account form");
         setMotherStep("create-account");
       }
     } catch (err: any) {
       console.error("Token validation error:", err);
-      setError(err.message || "Erro ao validar token");
+      setError(err?.message || "Erro ao validar token");
     } finally {
       setLoading(false);
     }
   };
 
   const handleCreateAccount = async () => {
-    if (!motherName || !motherPassword) {
+    if (!name.trim() || !password) {
       setError("Por favor, preencha todos os campos");
       return;
     }
-
-    if (motherPassword.length < 6) {
+    
+    if (password.length < 6) {
       setError("A senha deve ter pelo menos 6 caracteres");
       return;
     }
-
-    setError("");
+    
     setLoading(true);
-
+    setError("");
+    
     try {
-      console.log("User tapped Create Account button");
-      await createAccountWithToken(babyToken.trim(), motherName, motherPassword);
-      console.log("Account created - navigating to /(tabs)");
+      console.log("Creating mother account with token");
+      await createAccountWithToken(babyToken, name, password);
+      console.log("Mother account created successfully");
+      // Navigation will be handled by TabLayout after user state updates
       router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Create account error:", err);
-      setError(err.message || "Erro ao criar conta");
+      setError(err?.message || "Erro ao criar conta");
     } finally {
       setLoading(false);
     }
   };
 
   const handleMotherSignIn = async () => {
-    if (!motherPassword) {
+    if (!password) {
       setError("Por favor, insira sua senha");
       return;
     }
-
-    setError("");
+    
     setLoading(true);
-
+    setError("");
+    
     try {
-      console.log("User tapped Mother Sign In button");
-      await signInWithEmail(validatedEmail, motherPassword);
-      console.log("Sign in successful - navigating to /(tabs)");
+      console.log("Mother signing in with token");
+      await signInWithToken(babyToken);
+      console.log("Mother sign in successful");
+      // Navigation will be handled by TabLayout after user state updates
       router.replace("/(tabs)");
     } catch (err: any) {
-      console.error("Mother sign-in error:", err);
-      setError(err.message || "Erro ao fazer login");
+      console.error("Mother sign in error:", err);
+      setError(err?.message || "Erro ao fazer login");
     } finally {
       setLoading(false);
     }
   };
 
   const handleResetMotherFlow = () => {
-    console.log("User tapped Reset Mother Flow");
     setMotherStep("token");
     setBabyToken("");
-    setMotherName("");
-    setMotherPassword("");
-    setValidatedEmail("");
-    setValidatedBabyName("");
-    setAccountExists(false);
+    setName("");
+    setPassword("");
     setError("");
+    setTokenValidationResult(null);
   };
 
   const handleResetConsultantFlow = () => {
-    console.log("User tapped Reset Consultant Flow");
-    setConsultantStep("login");
-    setConsultantEmail("");
-    setConsultantPassword("");
-    setConsultantName("");
+    setEmail("");
+    setPassword("");
+    setName("");
     setError("");
   };
 
@@ -212,14 +206,12 @@ export default function AuthScreen() {
           <ScrollView
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
           >
             <View style={styles.header}>
-              <Text style={styles.title}>Consultoria de Sono</Text>
-              <Text style={styles.subtitle}>Bem-vindo de volta</Text>
+              <Text style={styles.title}>Bem-vinda!</Text>
+              <Text style={styles.subtitle}>Consultoria de Sono Infantil</Text>
             </View>
 
-            {/* Tab Selector */}
             <View style={styles.tabContainer}>
               <TouchableOpacity
                 style={[styles.tab, activeTab === "consultant" && styles.tabActive]}
@@ -247,26 +239,22 @@ export default function AuthScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Error Message */}
             {error ? (
               <View style={styles.errorContainer}>
                 <IconSymbol
                   ios_icon_name="exclamationmark.triangle.fill"
                   android_material_icon_name="warning"
                   size={20}
-                  color="#EF4444"
+                  color={colors.error}
                 />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
 
-            {/* Consultant Tab Content */}
-            {activeTab === "consultant" && (
-              <View style={styles.formContainer}>
+            {activeTab === "consultant" ? (
+              <View style={styles.form}>
                 {consultantStep === "login" ? (
                   <>
-                    <Text style={styles.formTitle}>Login da Consultora</Text>
-                    
                     <View style={styles.inputContainer}>
                       <IconSymbol
                         ios_icon_name="envelope.fill"
@@ -278,10 +266,10 @@ export default function AuthScreen() {
                         style={styles.input}
                         placeholder="E-mail"
                         placeholderTextColor={colors.textSecondary}
-                        value={consultantEmail}
-                        onChangeText={setConsultantEmail}
-                        autoCapitalize="none"
+                        value={email}
+                        onChangeText={setEmail}
                         keyboardType="email-address"
+                        autoCapitalize="none"
                         editable={!loading}
                       />
                     </View>
@@ -297,8 +285,8 @@ export default function AuthScreen() {
                         style={styles.input}
                         placeholder="Senha"
                         placeholderTextColor={colors.textSecondary}
-                        value={consultantPassword}
-                        onChangeText={setConsultantPassword}
+                        value={password}
+                        onChangeText={setPassword}
                         secureTextEntry
                         editable={!loading}
                       />
@@ -319,9 +307,8 @@ export default function AuthScreen() {
                     <TouchableOpacity
                       style={styles.linkButton}
                       onPress={() => {
-                        console.log("User tapped Switch to Register");
                         setConsultantStep("register");
-                        setError("");
+                        handleResetConsultantFlow();
                       }}
                       disabled={loading}
                     >
@@ -330,8 +317,6 @@ export default function AuthScreen() {
                   </>
                 ) : (
                   <>
-                    <Text style={styles.formTitle}>Cadastro da Consultora</Text>
-                    
                     <View style={styles.inputContainer}>
                       <IconSymbol
                         ios_icon_name="person.fill"
@@ -343,8 +328,8 @@ export default function AuthScreen() {
                         style={styles.input}
                         placeholder="Nome completo"
                         placeholderTextColor={colors.textSecondary}
-                        value={consultantName}
-                        onChangeText={setConsultantName}
+                        value={name}
+                        onChangeText={setName}
                         editable={!loading}
                       />
                     </View>
@@ -360,10 +345,10 @@ export default function AuthScreen() {
                         style={styles.input}
                         placeholder="E-mail"
                         placeholderTextColor={colors.textSecondary}
-                        value={consultantEmail}
-                        onChangeText={setConsultantEmail}
-                        autoCapitalize="none"
+                        value={email}
+                        onChangeText={setEmail}
                         keyboardType="email-address"
+                        autoCapitalize="none"
                         editable={!loading}
                       />
                     </View>
@@ -379,8 +364,8 @@ export default function AuthScreen() {
                         style={styles.input}
                         placeholder="Senha (mínimo 6 caracteres)"
                         placeholderTextColor={colors.textSecondary}
-                        value={consultantPassword}
-                        onChangeText={setConsultantPassword}
+                        value={password}
+                        onChangeText={setPassword}
                         secureTextEntry
                         editable={!loading}
                       />
@@ -394,16 +379,15 @@ export default function AuthScreen() {
                       {loading ? (
                         <ActivityIndicator color="#FFFFFF" />
                       ) : (
-                        <Text style={styles.buttonText}>Cadastrar</Text>
+                        <Text style={styles.buttonText}>Criar Conta</Text>
                       )}
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={styles.linkButton}
                       onPress={() => {
-                        console.log("User tapped Switch to Login");
                         setConsultantStep("login");
-                        setError("");
+                        handleResetConsultantFlow();
                       }}
                       disabled={loading}
                     >
@@ -412,18 +396,14 @@ export default function AuthScreen() {
                   </>
                 )}
               </View>
-            )}
-
-            {/* Mother Tab Content */}
-            {activeTab === "mother" && (
-              <View style={styles.formContainer}>
+            ) : (
+              <View style={styles.form}>
                 {motherStep === "token" ? (
                   <>
-                    <Text style={styles.formTitle}>Acesso da Mãe</Text>
-                    <Text style={styles.formDescription}>
+                    <Text style={styles.instructionText}>
                       Insira o token fornecido pela sua consultora
                     </Text>
-                    
+
                     <View style={styles.inputContainer}>
                       <IconSymbol
                         ios_icon_name="key.fill"
@@ -456,12 +436,18 @@ export default function AuthScreen() {
                   </>
                 ) : motherStep === "create-account" ? (
                   <>
-                    <Text style={styles.formTitle}>Criar Conta</Text>
-                    <Text style={styles.formDescription}>
-                      Bebê: {validatedBabyName}
-                      {"\n"}E-mail: {validatedEmail}
-                    </Text>
-                    
+                    <View style={styles.welcomeBox}>
+                      <Text style={styles.welcomeText}>
+                        Olá! Você foi cadastrada pela consultora{" "}
+                        <Text style={styles.welcomeBold}>{tokenValidationResult?.consultantName}</Text>
+                      </Text>
+                      <Text style={styles.welcomeText}>
+                        Bebê: <Text style={styles.welcomeBold}>{tokenValidationResult?.babyName}</Text>
+                      </Text>
+                    </View>
+
+                    <Text style={styles.instructionText}>Crie sua conta para acessar</Text>
+
                     <View style={styles.inputContainer}>
                       <IconSymbol
                         ios_icon_name="person.fill"
@@ -473,8 +459,8 @@ export default function AuthScreen() {
                         style={styles.input}
                         placeholder="Seu nome"
                         placeholderTextColor={colors.textSecondary}
-                        value={motherName}
-                        onChangeText={setMotherName}
+                        value={name}
+                        onChangeText={setName}
                         editable={!loading}
                       />
                     </View>
@@ -488,10 +474,10 @@ export default function AuthScreen() {
                       />
                       <TextInput
                         style={styles.input}
-                        placeholder="Senha (mínimo 6 caracteres)"
+                        placeholder="Crie uma senha (mínimo 6 caracteres)"
                         placeholderTextColor={colors.textSecondary}
-                        value={motherPassword}
-                        onChangeText={setMotherPassword}
+                        value={password}
+                        onChangeText={setPassword}
                         secureTextEntry
                         editable={!loading}
                       />
@@ -519,12 +505,17 @@ export default function AuthScreen() {
                   </>
                 ) : (
                   <>
-                    <Text style={styles.formTitle}>Login</Text>
-                    <Text style={styles.formDescription}>
-                      Bebê: {validatedBabyName}
-                      {"\n"}E-mail: {validatedEmail}
-                    </Text>
-                    
+                    <View style={styles.welcomeBox}>
+                      <Text style={styles.welcomeText}>
+                        Bem-vinda de volta!
+                      </Text>
+                      <Text style={styles.welcomeText}>
+                        Bebê: <Text style={styles.welcomeBold}>{tokenValidationResult?.babyName}</Text>
+                      </Text>
+                    </View>
+
+                    <Text style={styles.instructionText}>Insira sua senha para acessar</Text>
+
                     <View style={styles.inputContainer}>
                       <IconSymbol
                         ios_icon_name="lock.fill"
@@ -536,8 +527,8 @@ export default function AuthScreen() {
                         style={styles.input}
                         placeholder="Senha"
                         placeholderTextColor={colors.textSecondary}
-                        value={motherPassword}
-                        onChangeText={setMotherPassword}
+                        value={password}
+                        onChangeText={setPassword}
                         secureTextEntry
                         editable={!loading}
                       />
@@ -583,12 +574,12 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    padding: spacing.lg,
+    padding: spacing.xl,
+    justifyContent: "center",
   },
   header: {
     alignItems: "center",
     marginBottom: spacing.xl,
-    marginTop: spacing.xl,
   },
   title: {
     fontSize: 32,
@@ -602,10 +593,11 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: colors.surface,
+    backgroundColor: colors.card,
     borderRadius: borderRadius.lg,
     padding: 4,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
+    ...shadows.sm,
   },
   tab: {
     flex: 1,
@@ -624,52 +616,21 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: "#FFFFFF",
   },
-  errorContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FEE2E2",
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.lg,
-    gap: spacing.sm,
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 14,
-    color: "#DC2626",
-  },
-  formContainer: {
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    ...shadows.medium,
-  },
-  formTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  formDescription: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
-    lineHeight: 20,
+  form: {
+    gap: spacing.lg,
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.background,
+    backgroundColor: colors.card,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    gap: spacing.sm,
+    ...shadows.sm,
   },
   input: {
     flex: 1,
     paddingVertical: spacing.md,
-    paddingLeft: spacing.sm,
     fontSize: 16,
     color: colors.text,
   },
@@ -678,25 +639,57 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderRadius: borderRadius.md,
     alignItems: "center",
-    marginTop: spacing.md,
-    ...shadows.small,
+    ...shadows.md,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
+    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
-    color: "#FFFFFF",
   },
   linkButton: {
-    paddingVertical: spacing.md,
     alignItems: "center",
-    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
   },
   linkText: {
-    fontSize: 14,
     color: colors.primary,
+    fontSize: 14,
     fontWeight: "500",
+  },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FEE2E2",
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  errorText: {
+    flex: 1,
+    color: colors.error,
+    fontSize: 14,
+  },
+  instructionText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: "center",
+  },
+  welcomeBox: {
+    backgroundColor: colors.card,
+    padding: spacing.lg,
+    borderRadius: borderRadius.md,
+    ...shadows.sm,
+  },
+  welcomeText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  welcomeBold: {
+    fontWeight: "bold",
+    color: colors.text,
   },
 });

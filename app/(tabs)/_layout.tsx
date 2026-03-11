@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import { Redirect, Slot, useRouter } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { View, ActivityIndicator, Text } from "react-native";
@@ -16,8 +16,8 @@ export default function TabLayout() {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Determine user role
-  const determineRole = useCallback(async () => {
+  // Determine user role ONCE when user changes
+  useEffect(() => {
     if (!user) {
       console.log("[Tab Layout] ⚠️ No user");
       setUserRole(null);
@@ -27,51 +27,67 @@ export default function TabLayout() {
 
     console.log("[Tab Layout] 🔍 Determining user role for:", user.email);
 
-    try {
-      // Check stored role first
-      const storedRole = await AsyncStorage.getItem("userRole");
-      
-      if (storedRole === "consultant" || storedRole === "mother") {
-        console.log("[Tab Layout] ✅ User role from storage:", storedRole);
-        setUserRole(storedRole);
-        setLoading(false);
-        
-        // Navigate based on role
-        if (storedRole === "mother") {
-          router.replace("/(tabs)/(home)/mother-dashboard");
-        } else {
-          router.replace("/(tabs)/(home)");
-        }
-        return;
-      }
-      
-      console.log("[Tab Layout] ⚠️ No stored role, determining from API...");
-      
-      // Try to fetch consultant profile
+    let isMounted = true;
+
+    const determineRole = async () => {
       try {
-        await apiGet("/api/consultant/profile");
-        console.log("[Tab Layout] ✅ User is CONSULTANT");
-        await AsyncStorage.setItem("userRole", "consultant");
-        setUserRole("consultant");
-        router.replace("/(tabs)/(home)");
-      } catch (apiError: any) {
-        console.log("[Tab Layout] ✅ User is MOTHER");
-        await AsyncStorage.setItem("userRole", "mother");
+        // Check stored role first
+        const storedRole = await AsyncStorage.getItem("userRole");
+        
+        if (!isMounted) return;
+        
+        if (storedRole === "consultant" || storedRole === "mother") {
+          console.log("[Tab Layout] ✅ User role from storage:", storedRole);
+          setUserRole(storedRole);
+          setLoading(false);
+          
+          // Navigate based on role
+          if (storedRole === "mother") {
+            router.replace("/(tabs)/(home)/mother-dashboard");
+          } else {
+            router.replace("/(tabs)/(home)");
+          }
+          return;
+        }
+        
+        console.log("[Tab Layout] ⚠️ No stored role, determining from API...");
+        
+        // Try to fetch consultant profile
+        try {
+          await apiGet("/api/consultant/profile");
+          
+          if (!isMounted) return;
+          
+          console.log("[Tab Layout] ✅ User is CONSULTANT");
+          await AsyncStorage.setItem("userRole", "consultant");
+          setUserRole("consultant");
+          setLoading(false);
+          router.replace("/(tabs)/(home)");
+        } catch (apiError: any) {
+          if (!isMounted) return;
+          
+          console.log("[Tab Layout] ✅ User is MOTHER");
+          await AsyncStorage.setItem("userRole", "mother");
+          setUserRole("mother");
+          setLoading(false);
+          router.replace("/(tabs)/(home)/mother-dashboard");
+        }
+      } catch (error) {
+        if (!isMounted) return;
+        
+        console.error("[Tab Layout] ❌ Error determining role:", error);
         setUserRole("mother");
+        setLoading(false);
         router.replace("/(tabs)/(home)/mother-dashboard");
       }
-    } catch (error) {
-      console.error("[Tab Layout] ❌ Error determining role:", error);
-      setUserRole("mother");
-      router.replace("/(tabs)/(home)/mother-dashboard");
-    } finally {
-      setLoading(false);
-    }
-  }, [user, router]);
+    };
 
-  useEffect(() => {
     determineRole();
-  }, [determineRole]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]); // Only depend on user, not router or any functions
 
   // Show loading
   if (loading) {
