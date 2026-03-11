@@ -1755,6 +1755,42 @@ describe("API Integration Tests", () => {
     expect(data.motherUserId).toBe(userId);
   });
 
+  test("Register another mother for same baby returns 409", async () => {
+    // Create new baby for this test
+    const babyRes = await authenticatedApi("/api/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby for Duplicate Mother Registration",
+        birthDate: "2024-05-15",
+        motherName: "Test Mother",
+        motherPhone: "+1234567890",
+      }),
+    });
+    const babyData = await babyRes.json();
+    const testBabyToken = babyData.token;
+
+    // First mother registers
+    await authenticatedApi("/api/init/mother", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: testBabyToken,
+      }),
+    });
+
+    // Try to register different mother for same baby (should fail with 409)
+    const { token: anotherMotherToken } = await signUpTestUser();
+    const res = await authenticatedApi("/api/init/mother", anotherMotherToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: testBabyToken,
+      }),
+    });
+    await expectStatus(res, 409);
+  });
+
   test("Register mother with nonexistent token returns 404", async () => {
     const res = await authenticatedApi("/api/init/mother", authToken, {
       method: "POST",

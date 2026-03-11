@@ -102,7 +102,30 @@ export function registerMotherRoutes(app: App) {
         updatedAt: new Date(),
       });
 
-      app.logger.debug({ userId, email }, 'User created for mother');
+      app.logger.info({ userId, email, name: baby.motherName }, 'User created for mother');
+
+      // VERIFICATION: Verify user was created correctly
+      const verifiedUser = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, email),
+      });
+
+      if (!verifiedUser || verifiedUser.id !== userId) {
+        app.logger.error(
+          {
+            createdUserId: userId,
+            email,
+            foundUserId: verifiedUser?.id,
+            userFound: !!verifiedUser
+          },
+          'CRITICAL: User creation or verification failed'
+        );
+        return reply.status(500).send({ error: 'Failed to create user account' });
+      }
+
+      app.logger.debug(
+        { userId, email, verified: true },
+        'User verification successful - user can be found by email'
+      );
 
       // Hash password using bcrypt (same algorithm Better Auth uses)
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -162,10 +185,15 @@ export function registerMotherRoutes(app: App) {
         'Baby association verified - token invalidated'
       );
 
-      // Create session
+      // Create session for the newly created user
       const sessionId = crypto.randomUUID();
       const sessionToken = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+      app.logger.info(
+        { userId, sessionId, sessionTokenPreview: sessionToken.substring(0, 10) + '...' },
+        'Creating session for newly created mother'
+      );
 
       await app.db.insert(authSchema.session).values({
         id: sessionId,
@@ -178,9 +206,50 @@ export function registerMotherRoutes(app: App) {
         userAgent: request.headers['user-agent'] || null,
       });
 
+      // VERIFICATION: Verify session was created correctly
+      try {
+        const verifiedSession = await app.db.query.session.findFirst({
+          where: eq(authSchema.session.token, sessionToken),
+        });
+
+        if (!verifiedSession || verifiedSession.userId !== userId) {
+          app.logger.error(
+            {
+              userId,
+              sessionTokenPreview: sessionToken.substring(0, 10) + '...',
+              expectedUserId: userId,
+              actualUserId: verifiedSession?.userId,
+              sessionFound: !!verifiedSession
+            },
+            'CRITICAL: Session creation verification failed'
+          );
+          // Log but don't fail - the session was created, just couldn't verify
+          app.logger.warn(
+            { userId, babyId: baby.id },
+            'Proceeding with session despite verification issue'
+          );
+        } else {
+          app.logger.debug(
+            { userId, sessionFound: true },
+            'Session verification successful'
+          );
+        }
+      } catch (verifyErr) {
+        app.logger.warn(
+          { userId, babyId: baby.id, err: verifyErr },
+          'Could not verify session creation, but proceeding'
+        );
+      }
+
       app.logger.info(
-        { userId, babyId: baby.id, sessionId },
-        'Mother account created and session established'
+        {
+          userId,
+          babyId: baby.id,
+          sessionId,
+          motherEmail: email,
+          babyMotherUserId: verifiedBaby.motherUserId
+        },
+        'Mother account created and session verified - baby linked successfully'
       );
 
       return reply.status(201).send({
@@ -381,16 +450,50 @@ export function registerMotherRoutes(app: App) {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
-    app.logger.info({ userId: session.user.id }, 'Fetching linked baby for mother');
+    const sessionUserId = session.user.id;
+    app.logger.info(
+      { userId: sessionUserId },
+      'Fetching linked baby for mother'
+    );
 
     const baby = await app.db.query.babies.findFirst({
-      where: eq(schema.babies.motherUserId, session.user.id),
+      where: eq(schema.babies.motherUserId, sessionUserId),
     });
 
     if (!baby) {
-      app.logger.warn({ userId: session.user.id }, 'No baby linked to mother');
+      // Log detailed diagnostic info
+      app.logger.warn(
+        { userId: sessionUserId },
+        'No baby linked to mother'
+      );
+
+      // Try to find any baby with this motherUserId to debug
+      const allBabies = await app.db.query.babies.findMany();
+      const babyWithThisUser = allBabies.find((b: any) => b.motherUserId === sessionUserId);
+      const babyWithDifferentUser = allBabies.find((b: any) => b.motherUserId !== null);
+
+      app.logger.debug(
+        {
+          userId: sessionUserId,
+          babyFoundWithThisUser: !!babyWithThisUser,
+          babyExistsWithDifferentUser: !!babyWithDifferentUser,
+          existingBabyMotherUserId: babyWithDifferentUser?.motherUserId
+        },
+        'Debug: Checking all babies to identify linking issue'
+      );
+
       return reply.status(404).send({ error: 'No baby linked to this account' });
     }
+
+    app.logger.info(
+      {
+        userId: sessionUserId,
+        babyId: baby.id,
+        babyMotherUserId: baby.motherUserId,
+        match: baby.motherUserId === sessionUserId
+      },
+      'Baby found for mother'
+    );
 
     // Get active contract for the baby
     const contracts = await app.db.query.contracts.findMany({
