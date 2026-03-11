@@ -79,12 +79,12 @@ export default function TabLayout() {
 
   // Handle navigation after role is determined
   useEffect(() => {
-    if (!userRole || hasRedirectedRef.current) {
+    if (!userRole || hasRedirectedRef.current || loading || checkingRole) {
       return;
     }
 
     const currentPath = segments.join("/");
-    console.log("[Tab Layout] 📍 Current path:", currentPath);
+    console.log("[Tab Layout] 📍 Current path:", currentPath, "| User role:", userRole);
 
     if (userRole === "mother") {
       const isAlreadyOnMotherDashboard = currentPath.includes("mother-dashboard");
@@ -92,28 +92,28 @@ export default function TabLayout() {
       if (!isAlreadyOnMotherDashboard) {
         console.log("[Tab Layout] 🔄 Navigating mother to dashboard");
         hasRedirectedRef.current = true;
-        // Use replace to avoid back button issues
-        setTimeout(() => {
-          router.replace("/(tabs)/(home)/mother-dashboard");
-        }, 100);
+        router.replace("/(tabs)/(home)/mother-dashboard");
       } else {
+        console.log("[Tab Layout] ✅ Mother already on dashboard");
         hasRedirectedRef.current = true;
       }
     } else if (userRole === "consultant") {
       const isOnAuthScreen = currentPath.includes("auth");
+      const isOnConsultantHome = currentPath === "(tabs)/(home)" || currentPath === "(tabs)/(home)/index";
       
       if (isOnAuthScreen) {
-        console.log("[Tab Layout] 🔄 Navigating consultant to home");
+        console.log("[Tab Layout] 🔄 Navigating consultant from auth to home");
         hasRedirectedRef.current = true;
-        // Use replace to avoid back button issues
-        setTimeout(() => {
-          router.replace("/(tabs)/(home)");
-        }, 100);
+        router.replace("/(tabs)/(home)");
+      } else if (!isOnConsultantHome) {
+        console.log("[Tab Layout] ✅ Consultant on valid screen:", currentPath);
+        hasRedirectedRef.current = true;
       } else {
+        console.log("[Tab Layout] ✅ Consultant already on home");
         hasRedirectedRef.current = true;
       }
     }
-  }, [userRole, segments, router]);
+  }, [userRole, segments, router, loading, checkingRole]);
 
   // Show loading state
   if (loading || checkingRole) {
