@@ -113,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!response.ok) {
           console.log("[Auth] ⚠️ Session invalid, clearing token");
           await clearAuthTokens();
+          await AsyncStorage.removeItem("userRole");
           return;
         }
         
@@ -128,18 +129,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.log("[Auth] ✅ Loaded userRole from storage:", storedRole);
             setUserRole(storedRole);
           } else {
-            // Default to consultant if no role stored (backward compatibility)
-            console.log("[Auth] ℹ️ No userRole in storage, defaulting to consultant");
-            setUserRole("consultant");
+            // Try to determine role by checking if consultant profile exists
+            console.log("[Auth] ℹ️ No userRole in storage, checking consultant profile...");
+            try {
+              const profileResponse = await fetch(`${BACKEND_URL}/api/consultant/profile`, {
+                method: "GET",
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Origin": BACKEND_URL,
+                },
+              });
+              
+              if (profileResponse.ok) {
+                console.log("[Auth] ✅ User is consultant");
+                setUserRole("consultant");
+                await AsyncStorage.setItem("userRole", "consultant");
+              } else {
+                console.log("[Auth] ✅ User is mother");
+                setUserRole("mother");
+                await AsyncStorage.setItem("userRole", "mother");
+              }
+            } catch (roleErr) {
+              console.log("[Auth] ℹ️ Could not determine role, defaulting to consultant");
+              setUserRole("consultant");
+              await AsyncStorage.setItem("userRole", "consultant");
+            }
           }
         } else {
           console.log("[Auth] ⚠️ No user in session, clearing token");
           await clearAuthTokens();
+          await AsyncStorage.removeItem("userRole");
         }
         
       } catch (error: any) {
         console.error("[Auth] ❌ Error initializing auth:", error?.message || error);
         await clearAuthTokens();
+        await AsyncStorage.removeItem("userRole");
       } finally {
         // ALWAYS set loading to false
         console.log("[Auth] ✅ Auth initialization complete");
@@ -215,14 +240,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("[Auth] ✅ Setting user:", user.email);
         setUser(user);
         
-        // Load userRole from storage (set during signup or previous login)
-        const storedRole = await AsyncStorage.getItem("userRole");
-        if (storedRole) {
-          console.log("[Auth] ✅ Loaded userRole from storage:", storedRole);
-          setUserRole(storedRole);
-        } else {
-          // Default to consultant for email sign-in
-          console.log("[Auth] ℹ️ No userRole in storage, defaulting to consultant");
+        // Determine role by checking if consultant profile exists
+        console.log("[Auth] 🔍 Determining user role...");
+        try {
+          const profileResponse = await fetch(`${BACKEND_URL}/api/consultant/profile`, {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Origin": BACKEND_URL,
+            },
+          });
+          
+          if (profileResponse.ok) {
+            console.log("[Auth] ✅ User is consultant");
+            setUserRole("consultant");
+            await AsyncStorage.setItem("userRole", "consultant");
+          } else {
+            console.log("[Auth] ✅ User is mother");
+            setUserRole("mother");
+            await AsyncStorage.setItem("userRole", "mother");
+          }
+        } catch (roleErr) {
+          console.log("[Auth] ℹ️ Could not determine role, defaulting to consultant");
           setUserRole("consultant");
           await AsyncStorage.setItem("userRole", "consultant");
         }

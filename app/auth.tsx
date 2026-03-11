@@ -17,12 +17,12 @@ import { colors, spacing, borderRadius, typography, shadows } from "@/styles/com
 import { IconSymbol } from "@/components/IconSymbol";
 import { useAuth } from "@/contexts/AuthContext";
 
-type MotherStep = "token" | "validate" | "create-account" | "sign-in";
+type MotherStep = "choose" | "login" | "token-validate" | "token-create-account";
 type ConsultantStep = "login" | "register";
 
 export default function AuthScreen() {
   const [activeTab, setActiveTab] = useState<"mother" | "consultant">("consultant");
-  const [motherStep, setMotherStep] = useState<MotherStep>("token");
+  const [motherStep, setMotherStep] = useState<MotherStep>("choose");
   const [consultantStep, setConsultantStep] = useState<ConsultantStep>("login");
   
   const [email, setEmail] = useState("");
@@ -55,7 +55,6 @@ export default function AuthScreen() {
       console.log("Attempting consultant login with email:", email);
       await signInWithEmail(email, password);
       console.log("Consultant login successful");
-      // Navigation will be handled by TabLayout after user state updates
       router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Consultant login error:", err);
@@ -83,11 +82,32 @@ export default function AuthScreen() {
       console.log("Attempting consultant registration with email:", email);
       await signUpWithEmail(email, password, name);
       console.log("Consultant registration successful");
-      // Navigation will be handled by TabLayout after user state updates
       router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Consultant registration error:", err);
       setError(err?.message || "Erro ao criar conta");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMotherLogin = async () => {
+    if (!email || !password) {
+      setError("Por favor, preencha todos os campos");
+      return;
+    }
+    
+    setLoading(true);
+    setError("");
+    
+    try {
+      console.log("Attempting mother login with email:", email);
+      await signInWithEmail(email, password);
+      console.log("Mother login successful");
+      router.replace("/(tabs)");
+    } catch (err: any) {
+      console.error("Mother login error:", err);
+      setError(err?.message || "Erro ao fazer login");
     } finally {
       setLoading(false);
     }
@@ -116,9 +136,11 @@ export default function AuthScreen() {
       setTokenValidationResult(result);
       
       if (result.accountExists) {
-        setMotherStep("sign-in");
+        setError("Já existe uma conta com este token. Use a opção 'Já tenho conta' para fazer login com email e senha.");
+        setLoading(false);
+        return;
       } else {
-        setMotherStep("create-account");
+        setMotherStep("token-create-account");
       }
     } catch (err: any) {
       console.error("Token validation error:", err);
@@ -146,7 +168,6 @@ export default function AuthScreen() {
       console.log("Creating mother account with token");
       await createAccountWithToken(babyToken, name, password);
       console.log("Mother account created successfully");
-      // Navigation will be handled by TabLayout after user state updates
       router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Create account error:", err);
@@ -156,32 +177,10 @@ export default function AuthScreen() {
     }
   };
 
-  const handleMotherSignIn = async () => {
-    if (!password) {
-      setError("Por favor, insira sua senha");
-      return;
-    }
-    
-    setLoading(true);
-    setError("");
-    
-    try {
-      console.log("Mother signing in with token");
-      await signInWithToken(babyToken);
-      console.log("Mother sign in successful");
-      // Navigation will be handled by TabLayout after user state updates
-      router.replace("/(tabs)");
-    } catch (err: any) {
-      console.error("Mother sign in error:", err);
-      setError(err?.message || "Erro ao fazer login");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleResetMotherFlow = () => {
-    setMotherStep("token");
+    setMotherStep("choose");
     setBabyToken("");
+    setEmail("");
     setName("");
     setPassword("");
     setError("");
@@ -219,6 +218,7 @@ export default function AuthScreen() {
                   console.log("User switched to Consultant tab");
                   setActiveTab("consultant");
                   setError("");
+                  handleResetConsultantFlow();
                 }}
               >
                 <Text style={[styles.tabText, activeTab === "consultant" && styles.tabTextActive]}>
@@ -231,6 +231,7 @@ export default function AuthScreen() {
                   console.log("User switched to Mother tab");
                   setActiveTab("mother");
                   setError("");
+                  handleResetMotherFlow();
                 }}
               >
                 <Text style={[styles.tabText, activeTab === "mother" && styles.tabTextActive]}>
@@ -398,7 +399,130 @@ export default function AuthScreen() {
               </View>
             ) : (
               <View style={styles.form}>
-                {motherStep === "token" ? (
+                {motherStep === "choose" ? (
+                  <>
+                    <Text style={styles.instructionText}>
+                      Como você deseja acessar?
+                    </Text>
+
+                    <TouchableOpacity
+                      style={styles.choiceButton}
+                      onPress={() => {
+                        console.log("Mother chose: Already have account");
+                        setMotherStep("login");
+                      }}
+                    >
+                      <View style={styles.choiceIconContainer}>
+                        <IconSymbol
+                          ios_icon_name="person.circle.fill"
+                          android_material_icon_name="account-circle"
+                          size={32}
+                          color={colors.primary}
+                        />
+                      </View>
+                      <View style={styles.choiceTextContainer}>
+                        <Text style={styles.choiceTitle}>Já tenho conta</Text>
+                        <Text style={styles.choiceSubtitle}>Entrar com email e senha</Text>
+                      </View>
+                      <IconSymbol
+                        ios_icon_name="chevron.right"
+                        android_material_icon_name="chevron-right"
+                        size={24}
+                        color={colors.textSecondary}
+                      />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.choiceButton}
+                      onPress={() => {
+                        console.log("Mother chose: First access with token");
+                        setMotherStep("token-validate");
+                      }}
+                    >
+                      <View style={styles.choiceIconContainer}>
+                        <IconSymbol
+                          ios_icon_name="key.fill"
+                          android_material_icon_name="vpn-key"
+                          size={32}
+                          color={colors.secondary}
+                        />
+                      </View>
+                      <View style={styles.choiceTextContainer}>
+                        <Text style={styles.choiceTitle}>Primeiro acesso</Text>
+                        <Text style={styles.choiceSubtitle}>Tenho um token da consultora</Text>
+                      </View>
+                      <IconSymbol
+                        ios_icon_name="chevron.right"
+                        android_material_icon_name="chevron-right"
+                        size={24}
+                        color={colors.textSecondary}
+                      />
+                    </TouchableOpacity>
+                  </>
+                ) : motherStep === "login" ? (
+                  <>
+                    <Text style={styles.instructionText}>
+                      Entre com seu email e senha
+                    </Text>
+
+                    <View style={styles.inputContainer}>
+                      <IconSymbol
+                        ios_icon_name="envelope.fill"
+                        android_material_icon_name="email"
+                        size={20}
+                        color={colors.textSecondary}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="E-mail"
+                        placeholderTextColor={colors.textSecondary}
+                        value={email}
+                        onChangeText={setEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        editable={!loading}
+                      />
+                    </View>
+
+                    <View style={styles.inputContainer}>
+                      <IconSymbol
+                        ios_icon_name="lock.fill"
+                        android_material_icon_name="lock"
+                        size={20}
+                        color={colors.textSecondary}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Senha"
+                        placeholderTextColor={colors.textSecondary}
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                        editable={!loading}
+                      />
+                    </View>
+
+                    <TouchableOpacity
+                      style={[styles.button, loading && styles.buttonDisabled]}
+                      onPress={handleMotherLogin}
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.buttonText}>Entrar</Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.linkButton}
+                      onPress={handleResetMotherFlow}
+                      disabled={loading}
+                    >
+                      <Text style={styles.linkText}>Voltar</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : motherStep === "token-validate" ? (
                   <>
                     <Text style={styles.instructionText}>
                       Insira o token fornecido pela sua consultora
@@ -430,11 +554,19 @@ export default function AuthScreen() {
                       {loading ? (
                         <ActivityIndicator color="#FFFFFF" />
                       ) : (
-                        <Text style={styles.buttonText}>Continuar</Text>
+                        <Text style={styles.buttonText}>Validar Token</Text>
                       )}
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.linkButton}
+                      onPress={handleResetMotherFlow}
+                      disabled={loading}
+                    >
+                      <Text style={styles.linkText}>Voltar</Text>
+                    </TouchableOpacity>
                   </>
-                ) : motherStep === "create-account" ? (
+                ) : (
                   <>
                     <View style={styles.welcomeBox}>
                       <Text style={styles.welcomeText}>
@@ -492,57 +624,6 @@ export default function AuthScreen() {
                         <ActivityIndicator color="#FFFFFF" />
                       ) : (
                         <Text style={styles.buttonText}>Criar Conta</Text>
-                      )}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.linkButton}
-                      onPress={handleResetMotherFlow}
-                      disabled={loading}
-                    >
-                      <Text style={styles.linkText}>Voltar</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.welcomeBox}>
-                      <Text style={styles.welcomeText}>
-                        Bem-vinda de volta!
-                      </Text>
-                      <Text style={styles.welcomeText}>
-                        Bebê: <Text style={styles.welcomeBold}>{tokenValidationResult?.babyName}</Text>
-                      </Text>
-                    </View>
-
-                    <Text style={styles.instructionText}>Insira sua senha para acessar</Text>
-
-                    <View style={styles.inputContainer}>
-                      <IconSymbol
-                        ios_icon_name="lock.fill"
-                        android_material_icon_name="lock"
-                        size={20}
-                        color={colors.textSecondary}
-                      />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Senha"
-                        placeholderTextColor={colors.textSecondary}
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                        editable={!loading}
-                      />
-                    </View>
-
-                    <TouchableOpacity
-                      style={[styles.button, loading && styles.buttonDisabled]}
-                      onPress={handleMotherSignIn}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <ActivityIndicator color="#FFFFFF" />
-                      ) : (
-                        <Text style={styles.buttonText}>Entrar</Text>
                       )}
                     </TouchableOpacity>
 
@@ -691,5 +772,35 @@ const styles = StyleSheet.create({
   welcomeBold: {
     fontWeight: "bold",
     color: colors.text,
+  },
+  choiceButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+    ...shadows.sm,
+  },
+  choiceIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  choiceTextContainer: {
+    flex: 1,
+  },
+  choiceTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: 2,
+  },
+  choiceSubtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
   },
 });
