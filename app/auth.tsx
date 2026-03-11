@@ -20,9 +20,12 @@ import { useAuth } from "@/contexts/AuthContext";
 // Mother flow steps
 type MotherStep = "token" | "create-account" | "sign-in";
 
+// Consultant flow steps
+type ConsultantStep = "login" | "register";
+
 export default function AuthScreen() {
   const router = useRouter();
-  const { signInWithEmail, signInWithToken, createAccountWithToken, validateBabyToken, loading: authLoading } = useAuth();
+  const { signInWithEmail, signUpWithEmail, signInWithToken, createAccountWithToken, validateBabyToken, loading: authLoading } = useAuth();
   
   const [mode, setMode] = useState<"consultant" | "mother">("consultant");
   const [email, setEmail] = useState("");
@@ -30,6 +33,11 @@ export default function AuthScreen() {
   const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  
+  // Consultant registration
+  const [consultantStep, setConsultantStep] = useState<ConsultantStep>("login");
+  const [consultantName, setConsultantName] = useState("");
+  const [consultantPasswordConfirm, setConsultantPasswordConfirm] = useState("");
 
   // Mother multi-step flow
   const [motherStep, setMotherStep] = useState<MotherStep>("token");
@@ -42,6 +50,7 @@ export default function AuthScreen() {
   const [motherName, setMotherName] = useState("");
   const [motherPassword, setMotherPassword] = useState("");
   const [motherPasswordConfirm, setMotherPasswordConfirm] = useState("");
+  const [motherSignInPassword, setMotherSignInPassword] = useState("");
 
   const handleConsultantLogin = async () => {
     console.log("User tapped Consultant Login button");
@@ -66,6 +75,44 @@ export default function AuthScreen() {
     } catch (err: any) {
       console.error("Consultant login error:", err);
       setError(err.message || "Erro ao fazer login. Verifique suas credenciais.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConsultantRegister = async () => {
+    console.log("User tapped Consultant Register button");
+    setError("");
+
+    if (!consultantName.trim()) {
+      setError("Por favor, informe seu nome");
+      return;
+    }
+
+    if (!email.trim()) {
+      setError("Por favor, informe seu e-mail");
+      return;
+    }
+
+    if (!password.trim() || password.length < 6) {
+      setError("A senha deve ter pelo menos 6 caracteres");
+      return;
+    }
+
+    if (password !== consultantPasswordConfirm) {
+      setError("As senhas não coincidem");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log("Attempting consultant registration with email:", email);
+      await signUpWithEmail(email, password, consultantName.trim());
+      console.log("Consultant registration successful");
+      // Navigation will be handled by AuthContext
+    } catch (err: any) {
+      console.error("Consultant registration error:", err);
+      setError(err.message || "Erro ao criar conta. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -108,7 +155,13 @@ export default function AuthScreen() {
       }
     } catch (err: any) {
       console.error("Token validation error:", err);
-      setError(err.message || "Erro ao validar token. Tente novamente.");
+      const errMsg = err.message || "Erro ao validar token. Tente novamente.";
+      // Check for common error patterns
+      if (errMsg.toLowerCase().includes("not found") || errMsg.toLowerCase().includes("não encontrado")) {
+        setError("Token não encontrado. Verifique com sua consultora.");
+      } else {
+        setError(errMsg);
+      }
     } finally {
       setLoading(false);
     }
@@ -157,15 +210,27 @@ export default function AuthScreen() {
     console.log("User tapped Mother Sign In button");
     setError("");
 
+    if (!motherSignInPassword.trim()) {
+      setError("Por favor, informe sua senha");
+      return;
+    }
+
+    if (!validatedTokenInfo?.motherEmail) {
+      setError("Erro: e-mail da mãe não encontrado. Tente validar o token novamente.");
+      return;
+    }
+
     try {
       setLoading(true);
-      console.log("Attempting mother sign in with token");
-      await signInWithToken(token.trim());
+      
+      // Sign in with email/password using the mother's email from the validated token
+      console.log("Attempting mother sign in with email:", validatedTokenInfo.motherEmail);
+      await signInWithEmail(validatedTokenInfo.motherEmail, motherSignInPassword);
       console.log("Mother sign in successful");
       // Navigation will be handled by AuthContext
     } catch (err: any) {
       console.error("Mother sign in error:", err);
-      setError(err.message || "Token inválido. Verifique com sua consultora.");
+      setError(err.message || "Senha incorreta. Verifique suas credenciais.");
     } finally {
       setLoading(false);
     }
@@ -177,6 +242,16 @@ export default function AuthScreen() {
     setMotherName("");
     setMotherPassword("");
     setMotherPasswordConfirm("");
+    setMotherSignInPassword("");
+    setError("");
+  };
+
+  const handleResetConsultantFlow = () => {
+    setConsultantStep("login");
+    setConsultantName("");
+    setEmail("");
+    setPassword("");
+    setConsultantPasswordConfirm("");
     setError("");
   };
 
@@ -218,6 +293,7 @@ export default function AuthScreen() {
                 setMode("consultant");
                 setError("");
                 handleResetMotherFlow();
+                handleResetConsultantFlow();
               }}
             >
               <IconSymbol
@@ -244,6 +320,7 @@ export default function AuthScreen() {
               onPress={() => {
                 setMode("mother");
                 setError("");
+                handleResetConsultantFlow();
               }}
             >
               <IconSymbol
@@ -277,7 +354,7 @@ export default function AuthScreen() {
           ) : null}
 
           {/* Consultant Login Form */}
-          {isConsultantMode && (
+          {isConsultantMode && consultantStep === "login" && (
             <View style={styles.form}>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>E-mail</Text>
@@ -323,6 +400,115 @@ export default function AuthScreen() {
                     <Text style={styles.loginButtonText}>Entrar como Consultora</Text>
                   </>
                 )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.secondaryLink}
+                onPress={() => {
+                  setConsultantStep("register");
+                  setError("");
+                }}
+              >
+                <Text style={styles.secondaryLinkText}>
+                  Não tem conta? <Text style={styles.secondaryLinkTextBold}>Cadastre-se</Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Consultant Registration Form */}
+          {isConsultantMode && consultantStep === "register" && (
+            <View style={styles.form}>
+              <Text style={styles.stepTitle}>Criar conta de Consultora</Text>
+              <Text style={styles.stepSubtitle}>
+                Preencha os dados abaixo para criar sua conta profissional.
+              </Text>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Nome Completo</Text>
+                <TextInput
+                  style={styles.input}
+                  value={consultantName}
+                  onChangeText={setConsultantName}
+                  placeholder="Seu nome completo"
+                  placeholderTextColor={colors.textSecondary}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>E-mail</Text>
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="seu@email.com"
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Criar Senha</Text>
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Mínimo 6 caracteres"
+                  placeholderTextColor={colors.textSecondary}
+                  secureTextEntry
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Confirmar Senha</Text>
+                <TextInput
+                  style={styles.input}
+                  value={consultantPasswordConfirm}
+                  onChangeText={setConsultantPasswordConfirm}
+                  placeholder="Repita a senha"
+                  placeholderTextColor={colors.textSecondary}
+                  secureTextEntry
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+                onPress={handleConsultantRegister}
+                disabled={loading || authLoading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <IconSymbol
+                      ios_icon_name="person.badge.plus"
+                      android_material_icon_name="person-add"
+                      size={24}
+                      color="#FFF"
+                    />
+                    <Text style={styles.loginButtonText}>Criar Conta</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.backLink}
+                onPress={() => {
+                  setConsultantStep("login");
+                  setError("");
+                }}
+              >
+                <IconSymbol
+                  ios_icon_name="arrow.left"
+                  android_material_icon_name="arrow-back"
+                  size={16}
+                  color={colors.primary}
+                />
+                <Text style={styles.backLinkText}>Já tem conta? Faça login</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -507,8 +693,20 @@ export default function AuthScreen() {
 
               <Text style={styles.stepTitle}>Bem-vinda de volta!</Text>
               <Text style={styles.stepSubtitle}>
-                Sua conta já está configurada. Clique abaixo para entrar.
+                Sua conta já está configurada. Informe sua senha para entrar.
               </Text>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Senha</Text>
+                <TextInput
+                  style={styles.input}
+                  value={motherSignInPassword}
+                  onChangeText={setMotherSignInPassword}
+                  placeholder="Sua senha"
+                  placeholderTextColor={colors.textSecondary}
+                  secureTextEntry
+                />
+              </View>
 
               <TouchableOpacity
                 style={[styles.loginButton, loading && styles.loginButtonDisabled]}
@@ -743,5 +941,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.primary,
     fontWeight: "600",
+  },
+  secondaryLink: {
+    alignItems: "center",
+    marginTop: spacing.lg,
+    padding: spacing.sm,
+  },
+  secondaryLinkText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  secondaryLinkTextBold: {
+    fontWeight: "700",
+    color: colors.primary,
   },
 });
