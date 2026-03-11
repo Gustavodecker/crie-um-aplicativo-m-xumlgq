@@ -376,7 +376,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.removeItem("userRole");
       console.log("[Auth] 🧹 Cleared stored userRole - will be re-determined from API");
       
-      // Set user state IMMEDIATELY
+      // Set user state IMMEDIATELY - this will trigger navigation in _layout.tsx
       if (user) {
         console.log("[Auth] ✅ Setting user from login response:", user.email);
         setUser(user);

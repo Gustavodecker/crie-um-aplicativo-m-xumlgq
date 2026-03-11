@@ -22,8 +22,15 @@ export default function TabLayout() {
     console.log("[Tab Layout] 👤 User state changed:", user ? user.email : "null");
     hasRedirectedRef.current = false;
     roleCheckAttemptRef.current = 0;
-    setUserRole(null);
-    setCheckingRole(true);
+    
+    // 🔥 CRITICAL FIX: Reset role when user changes
+    if (!user) {
+      setUserRole(null);
+      setCheckingRole(false);
+    } else {
+      setUserRole(null);
+      setCheckingRole(true);
+    }
   }, [user]);
 
   // Check user role
@@ -79,7 +86,8 @@ export default function TabLayout() {
 
   // Handle navigation after role is determined
   useEffect(() => {
-    if (!userRole || hasRedirectedRef.current || loading || checkingRole) {
+    // 🔥 CRITICAL FIX: Don't wait for hasRedirectedRef - navigate immediately when role is ready
+    if (!userRole || loading || checkingRole) {
       return;
     }
 
@@ -89,10 +97,13 @@ export default function TabLayout() {
     if (userRole === "mother") {
       const isAlreadyOnMotherDashboard = currentPath.includes("mother-dashboard");
 
-      if (!isAlreadyOnMotherDashboard) {
+      if (!isAlreadyOnMotherDashboard && !hasRedirectedRef.current) {
         console.log("[Tab Layout] 🔄 Navigating mother to dashboard");
         hasRedirectedRef.current = true;
-        router.replace("/(tabs)/(home)/mother-dashboard");
+        // Use setTimeout to ensure navigation happens after render
+        setTimeout(() => {
+          router.replace("/(tabs)/(home)/mother-dashboard");
+        }, 100);
       } else {
         console.log("[Tab Layout] ✅ Mother already on dashboard");
         hasRedirectedRef.current = true;
@@ -101,10 +112,13 @@ export default function TabLayout() {
       const isOnAuthScreen = currentPath.includes("auth");
       const isOnConsultantHome = currentPath === "(tabs)/(home)" || currentPath === "(tabs)/(home)/index";
       
-      if (isOnAuthScreen) {
+      if (isOnAuthScreen && !hasRedirectedRef.current) {
         console.log("[Tab Layout] 🔄 Navigating consultant from auth to home");
         hasRedirectedRef.current = true;
-        router.replace("/(tabs)/(home)");
+        // Use setTimeout to ensure navigation happens after render
+        setTimeout(() => {
+          router.replace("/(tabs)/(home)");
+        }, 100);
       } else if (!isOnConsultantHome) {
         console.log("[Tab Layout] ✅ Consultant on valid screen:", currentPath);
         hasRedirectedRef.current = true;
