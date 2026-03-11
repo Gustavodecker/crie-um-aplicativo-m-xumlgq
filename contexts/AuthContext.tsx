@@ -17,6 +17,16 @@ interface AuthContextType {
   loading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
+  signInWithToken: (token: string) => Promise<void>;
+  createAccountWithToken: (token: string, name: string, password: string) => Promise<void>;
+  validateBabyToken: (token: string) => Promise<{
+    valid: boolean;
+    babyId?: string;
+    babyName?: string;
+    motherEmail?: string;
+    consultantName?: string;
+    accountExists?: boolean;
+  }>;
   signInWithGoogle: () => Promise<void>;
   signInWithApple: () => Promise<void>;
   signInWithGitHub: () => Promise<void>;
@@ -76,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const userRef = useRef<User | null>(null);
   const lastValidationRef = useRef<number>(0);
   const VALIDATION_INTERVAL_MS = 5 * 60 * 1000;
+  const isUploadingRef = useRef(false); // Track if user is uploading
 
   useEffect(() => {
     userRef.current = user;
@@ -98,6 +109,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         console.log("[Auth] 📱 App became active");
         
+        // 🔥 CRITICAL FIX: Don't validate session if user is uploading
+        if (isUploadingRef.current) {
+          console.log("[Auth] ⏭️ Skipping validation - user is uploading");
+          return;
+        }
+        
         if (userRef.current && !isRefreshingRef.current && timeSinceLastValidation > VALIDATION_INTERVAL_MS) {
           console.log("[Auth] 🔍 Triggering background session validation");
           validateSessionSilently();
@@ -116,6 +133,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const validateSessionSilently = async () => {
     if (isRefreshingRef.current) {
       console.log("[Auth] ⏭️ Already refreshing, skipping validation");
+      return;
+    }
+
+    // 🔥 CRITICAL FIX: Don't validate if user is uploading
+    if (isUploadingRef.current) {
+      console.log("[Auth] ⏭️ Skipping validation - user is uploading");
       return;
     }
 
@@ -348,9 +371,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("[Auth] ✅ Token saved and verified");
       
-      // 🔥 CRITICAL FIX: Set user directly from login response
-      // Do NOT call fetchUser() immediately after login
-      // The backend session needs time to propagate
+      // Set user directly from login response
       if (user) {
         setUser(user);
         userRef.current = user;
@@ -358,7 +379,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("[Auth] ✅ Login complete - user is now authenticated");
       } else {
         console.warn("[Auth] ⚠️ No user in login response, will fetch from session");
-        // Only fetch if we didn't get user in response
         await fetchUser();
       }
       
@@ -445,8 +465,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("[Auth] ✅ Token saved and verified");
       
-      // 🔥 CRITICAL FIX: Set user directly from signup response
-      // Do NOT call fetchUser() immediately after signup
+      // Set user directly from signup response
       if (user) {
         setUser(user);
         userRef.current = user;
@@ -454,13 +473,249 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("[Auth] ✅ Signup complete - user is now authenticated");
       } else {
         console.warn("[Auth] ⚠️ No user in signup response, will fetch from session");
-        // Only fetch if we didn't get user in response
         await fetchUser();
       }
       
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign up failed:", error?.message || error);
       throw error;
+    }
+  };
+
+  const signInWithToken = async (babyToken: string) => {
+    try {
+      console.log("[Auth] 🎫 Signing in with baby token");
+      
+      if (!babyToken || babyToken.trim().length === 0) {
+        throw new Error("Token inválido");
+      }
+
+      const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
+      
+      console.log("[Auth] 📡 Calling /api/auth/sign-in/token endpoint");
+      
+      const response = await fetch(`${BACKEND_URL}/api/auth/sign-in/token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: babyToken.trim(),
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[Auth] ❌ Token sign-in failed:", response.status, errorText);
+        
+        let errorMsg = "Token inválido ou expirado";
+        try {
+          const errJson = JSON.parse(errorText);
+          if (errJson.error) errorMsg = errJson.error;
+        } catch {}
+        
+        if (response.status === 404) {
+          throw new Error("Token não encontrado. Verifique com sua consultora.");
+        }
+        throw new Error(errorMsg);
+      }
+      
+      const responseData = await response.json();
+      console.log("[Auth] ✅ Token sign-in response received");
+      console.log("[Auth] 🔍 Response keys:", Object.keys(responseData));
+      
+      // Extract session token from response
+      let sessionToken: string | null = null;
+      let user: User | null = null;
+      
+      if (responseData?.session?.token) {
+        sessionToken = responseData.session.token;
+        console.log("[Auth] 🔑 Session token found at session.token");
+      } else if (responseData?.token) {
+        sessionToken = responseData.token;
+        console.log("[Auth] 🔑 Session token found at token");
+      }
+      
+      if (responseData?.user) {
+        user = responseData.user as User;
+        console.log("[Auth] 👤 User found at user");
+      }
+      
+      if (!sessionToken) {
+        console.error("[Auth] ❌ CRITICAL: No session token in response!");
+        console.error("[Auth] 🔍 Full response:", JSON.stringify(responseData, null, 2));
+        throw new Error("No session token received from server");
+      }
+      
+      // Save the session token (NOT the baby token)
+      console.log("[Auth] 💾 Saving session token to storage (length:", sessionToken.length, ")...");
+      await setBearerToken(sessionToken);
+      
+      // Verify token was saved
+      const savedToken = await getBearerToken();
+      if (!savedToken || savedToken !== sessionToken) {
+        console.error("[Auth] ❌ CRITICAL: Session token not saved correctly!");
+        throw new Error("Failed to save authentication token");
+      }
+      
+      console.log("[Auth] ✅ Session token saved and verified");
+      
+      // Set user directly from response
+      if (user) {
+        setUser(user);
+        userRef.current = user;
+        // Mark user as mother role in AsyncStorage for tab layout routing
+        await AsyncStorage.setItem("userRole", "mother");
+        console.log("[Auth] ✅ User set from token sign-in response:", user.email);
+        console.log("[Auth] ✅ Token sign in complete");
+      } else {
+        console.warn("[Auth] ⚠️ No user in token sign-in response, will fetch from session");
+        await fetchUser();
+      }
+      
+    } catch (error: any) {
+      console.error("[Auth] ❌ Token sign in failed:", error?.message || error);
+      throw error;
+    }
+  };
+
+  const createAccountWithToken = async (babyToken: string, name: string, password: string) => {
+    try {
+      console.log("[Auth] 📝 Creating account with baby token");
+      
+      if (!babyToken || babyToken.trim().length === 0) {
+        throw new Error("Token inválido");
+      }
+      if (!name || name.trim().length === 0) {
+        throw new Error("Nome é obrigatório");
+      }
+      if (!password || password.length < 6) {
+        throw new Error("Senha deve ter pelo menos 6 caracteres");
+      }
+
+      const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
+      
+      console.log("[Auth] 📡 Calling /api/auth/create-account-with-token endpoint");
+      
+      const response = await fetch(`${BACKEND_URL}/api/auth/create-account-with-token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: babyToken.trim(),
+          name: name.trim(),
+          password,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[Auth] ❌ Create account with token failed:", response.status, errorText);
+        
+        let errorMsg = "Erro ao criar conta";
+        try {
+          const errJson = JSON.parse(errorText);
+          if (errJson.error) errorMsg = errJson.error;
+        } catch {}
+        
+        if (response.status === 404) {
+          throw new Error("Token não encontrado. Verifique com sua consultora.");
+        }
+        if (response.status === 409) {
+          throw new Error("Já existe uma conta com este token. Use a opção de login.");
+        }
+        throw new Error(errorMsg);
+      }
+      
+      const responseData = await response.json();
+      console.log("[Auth] ✅ Create account with token response received");
+      
+      // Extract session token from response
+      let sessionToken: string | null = null;
+      let user: User | null = null;
+      
+      if (responseData?.session?.token) {
+        sessionToken = responseData.session.token;
+        console.log("[Auth] 🔑 Session token found at session.token");
+      } else if (responseData?.token) {
+        sessionToken = responseData.token;
+        console.log("[Auth] 🔑 Session token found at token");
+      }
+      
+      if (responseData?.user) {
+        user = responseData.user as User;
+        console.log("[Auth] 👤 User found at user");
+      }
+      
+      if (!sessionToken) {
+        console.error("[Auth] ❌ CRITICAL: No session token in response!");
+        throw new Error("No session token received from server");
+      }
+      
+      // Save the session token
+      console.log("[Auth] 💾 Saving session token to storage...");
+      await setBearerToken(sessionToken);
+      
+      const savedToken = await getBearerToken();
+      if (!savedToken || savedToken !== sessionToken) {
+        console.error("[Auth] ❌ CRITICAL: Session token not saved correctly!");
+        throw new Error("Failed to save authentication token");
+      }
+      
+      console.log("[Auth] ✅ Session token saved and verified");
+      
+      if (user) {
+        setUser(user);
+        userRef.current = user;
+        // Mark user as mother role in AsyncStorage for tab layout routing
+        await AsyncStorage.setItem("userRole", "mother");
+        console.log("[Auth] ✅ User set from create account response:", user.email);
+        console.log("[Auth] ✅ Create account with token complete");
+      } else {
+        console.warn("[Auth] ⚠️ No user in create account response, will fetch from session");
+        await fetchUser();
+      }
+      
+    } catch (error: any) {
+      console.error("[Auth] ❌ Create account with token failed:", error?.message || error);
+      throw error;
+    }
+  };
+
+  const validateBabyToken = async (babyToken: string): Promise<{
+    valid: boolean;
+    babyId?: string;
+    babyName?: string;
+    motherEmail?: string;
+    consultantName?: string;
+    accountExists?: boolean;
+  }> => {
+    try {
+      console.log("[Auth] 🔍 Validating baby token");
+      
+      const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
+      
+      const response = await fetch(`${BACKEND_URL}/api/auth/validate-token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token: babyToken.trim() }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[Auth] ❌ Token validation failed:", response.status, errorText);
+        return { valid: false };
+      }
+      
+      const data = await response.json();
+      console.log("[Auth] ✅ Token validation result:", data);
+      return data;
+    } catch (error: any) {
+      console.error("[Auth] ❌ Token validation error:", error?.message || error);
+      return { valid: false };
     }
   };
 
@@ -521,6 +776,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log("[Auth] ✅ Sign out complete");
   };
 
+  // 🔥 NEW: Export function to pause/resume session validation during uploads
+  const setUploadingState = (isUploading: boolean) => {
+    console.log("[Auth] 📤 Upload state changed:", isUploading);
+    isUploadingRef.current = isUploading;
+  };
+
+  // Expose setUploadingState via context (we'll add it to the context type)
+  (AuthContext as any)._setUploadingState = setUploadingState;
+
   return (
     <AuthContext.Provider
       value={{
@@ -528,6 +792,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         signInWithEmail,
         signUpWithEmail,
+        signInWithToken,
+        createAccountWithToken,
+        validateBabyToken,
         signInWithGoogle,
         signInWithApple,
         signInWithGitHub,
@@ -546,4 +813,12 @@ export function useAuth() {
     throw new Error("useAuth must be used within AuthProvider");
   }
   return context;
+}
+
+// 🔥 NEW: Export helper to pause session validation during uploads
+export function setUploadingState(isUploading: boolean) {
+  const setFn = (AuthContext as any)._setUploadingState;
+  if (setFn) {
+    setFn(isUploading);
+  }
 }

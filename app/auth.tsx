@@ -1,369 +1,747 @@
 
-import { LoadingButton } from "@/components/LoadingButton";
-import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuth } from "@/contexts/AuthContext";
-import { apiPost, apiGet } from "@/utils/api";
-import { LinearGradient } from "expo-linear-gradient";
-import { colors, typography, spacing, shadows } from "@/styles/commonStyles";
+import React, { useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Modal,
-  TouchableOpacity,
-  ImageBackground,
-  Dimensions,
 } from "react-native";
+import { Stack, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import React, { useState } from "react";
+import { colors, spacing, borderRadius, typography, shadows } from "@/styles/commonStyles";
+import { IconSymbol } from "@/components/IconSymbol";
+import { useAuth } from "@/contexts/AuthContext";
 
-type UserRole = "consultant" | "mother";
-
-const styles = StyleSheet.create({
-  backgroundImage: {
-    flex: 1,
-    width: "100%",
-    height: "100%",
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.xl,
-  },
-  logoContainer: {
-    alignItems: "center",
-    marginBottom: spacing.xxl,
-  },
-  appName: {
-    fontSize: 42,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    letterSpacing: 2,
-    textShadowColor: "rgba(0, 0, 0, 0.3)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  tagline: {
-    fontSize: 16,
-    color: "#E5E7EB",
-    marginTop: spacing.sm,
-    textAlign: "center",
-    fontWeight: "300",
-    letterSpacing: 0.5,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 400,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    borderRadius: 24,
-    padding: spacing.xl,
-    ...shadows.large,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: colors.text,
-    marginBottom: spacing.md,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: spacing.xl,
-    textAlign: "center",
-  },
-  inputContainer: {
-    marginBottom: spacing.lg,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  input: {
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    borderRadius: 12,
-    padding: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-  },
-  inputFocused: {
-    borderColor: colors.primary,
-    backgroundColor: "#FFFFFF",
-  },
-  button: {
-    backgroundColor: "#2F4F6F",
-    borderRadius: 18,
-    padding: spacing.lg,
-    alignItems: "center",
-    marginTop: spacing.md,
-    ...shadows.medium,
-  },
-  buttonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
-  switchText: {
-    textAlign: "center",
-    marginTop: spacing.lg,
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  switchLink: {
-    color: colors.primary,
-    fontWeight: "600",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.xl,
-  },
-  modalContent: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    padding: spacing.xl,
-    width: "100%",
-    maxWidth: 400,
-    ...shadows.large,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: colors.error,
-    marginBottom: spacing.md,
-    textAlign: "center",
-  },
-  modalMessage: {
-    fontSize: 16,
-    color: colors.text,
-    marginBottom: spacing.xl,
-    textAlign: "center",
-    lineHeight: 24,
-  },
-  modalButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    padding: spacing.md,
-    alignItems: "center",
-  },
-  modalButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});
+// Mother flow steps
+type MotherStep = "token" | "create-account" | "sign-in";
 
 export default function AuthScreen() {
-  const { signInWithEmail, signUpWithEmail } = useAuth();
+  const router = useRouter();
+  const { signInWithEmail, signInWithToken, createAccountWithToken, validateBabyToken, loading: authLoading } = useAuth();
+  
+  const [mode, setMode] = useState<"consultant" | "mother">("consultant");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errorModalVisible, setErrorModalVisible] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [emailFocused, setEmailFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
-  const [nameFocused, setNameFocused] = useState(false);
-  const router = useRouter();
+  const [error, setError] = useState("");
 
-  const showErrorModal = (msg: string) => {
-    setErrorMessage(msg);
-    setErrorModalVisible(true);
-  };
+  // Mother multi-step flow
+  const [motherStep, setMotherStep] = useState<MotherStep>("token");
+  const [validatedTokenInfo, setValidatedTokenInfo] = useState<{
+    babyName?: string;
+    motherEmail?: string;
+    consultantName?: string;
+    accountExists?: boolean;
+  } | null>(null);
+  const [motherName, setMotherName] = useState("");
+  const [motherPassword, setMotherPassword] = useState("");
+  const [motherPasswordConfirm, setMotherPasswordConfirm] = useState("");
 
-  const handleAuth = async () => {
-    if (!email || !password) {
-      showErrorModal("Por favor, preencha todos os campos.");
+  const handleConsultantLogin = async () => {
+    console.log("User tapped Consultant Login button");
+    setError("");
+
+    if (!email.trim()) {
+      setError("Por favor, informe seu e-mail");
       return;
     }
 
-    if (isSignUp && !name) {
-      showErrorModal("Por favor, informe seu nome.");
+    if (!password.trim()) {
+      setError("Por favor, informe sua senha");
       return;
     }
 
-    setLoading(true);
     try {
-      console.log("[Auth Screen] Starting authentication...");
-      
-      if (isSignUp) {
-        console.log("[Auth Screen] Signing up user:", email);
-        await signUpWithEmail(email, password, name);
-      } else {
-        console.log("[Auth Screen] Signing in user:", email);
-        await signInWithEmail(email, password);
-      }
-
-      console.log("[Auth Screen] ✅ Authentication successful");
-
-      // 🔥 CRITICAL FIX: Determine and store user role immediately after login
-      // This prevents the need to call /api/consultant/profile on every app load
-      console.log("[Auth Screen] 🔍 Determining user role...");
-      
-      try {
-        // Try to fetch consultant profile
-        await apiGet("/api/consultant/profile", { suppressErrorLog: true });
-        console.log("[Auth Screen] ✅ User is a CONSULTANT");
-        await AsyncStorage.setItem("userRole", "consultant");
-        router.replace("/(tabs)/(home)");
-      } catch (error: any) {
-        // If 404, user is a mother
-        if (error.message?.includes("404") || error.message?.includes("Consultant profile not found")) {
-          console.log("[Auth Screen] ✅ User is a MOTHER");
-          await AsyncStorage.setItem("userRole", "mother");
-          router.replace("/(tabs)/(home)/mother-dashboard");
-        } else {
-          // Unknown error, default to mother
-          console.warn("[Auth Screen] ⚠️ Unknown error determining role, defaulting to mother:", error);
-          await AsyncStorage.setItem("userRole", "mother");
-          router.replace("/(tabs)/(home)/mother-dashboard");
-        }
-      }
-    } catch (error: any) {
-      console.error("[Auth Screen] ❌ Authentication failed:", error);
-      showErrorModal(
-        error.message || "Erro ao fazer login. Verifique suas credenciais."
-      );
+      setLoading(true);
+      console.log("Attempting consultant login with email:", email);
+      await signInWithEmail(email, password);
+      console.log("Consultant login successful");
+      // Navigation will be handled by AuthContext
+    } catch (err: any) {
+      console.error("Consultant login error:", err);
+      setError(err.message || "Erro ao fazer login. Verifique suas credenciais.");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleValidateToken = async () => {
+    console.log("User tapped Validate Token button");
+    setError("");
+
+    if (!token.trim()) {
+      setError("Por favor, informe o token fornecido pela consultora");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log("[Auth] Validating baby token...");
+      
+      const result = await validateBabyToken(token.trim());
+      
+      if (!result.valid) {
+        setError("Token inválido. Verifique com sua consultora.");
+        return;
+      }
+      
+      console.log("[Auth] Token valid, accountExists:", result.accountExists);
+      setValidatedTokenInfo({
+        babyName: result.babyName,
+        motherEmail: result.motherEmail,
+        consultantName: result.consultantName,
+        accountExists: result.accountExists,
+      });
+      
+      if (result.accountExists) {
+        // Account already exists - go to sign-in step
+        setMotherStep("sign-in");
+      } else {
+        // New account - go to create account step
+        setMotherStep("create-account");
+      }
+    } catch (err: any) {
+      console.error("Token validation error:", err);
+      setError(err.message || "Erro ao validar token. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateAccount = async () => {
+    console.log("User tapped Create Account button");
+    setError("");
+
+    if (!motherName.trim()) {
+      setError("Por favor, informe seu nome");
+      return;
+    }
+
+    if (!motherPassword.trim() || motherPassword.length < 6) {
+      setError("A senha deve ter pelo menos 6 caracteres");
+      return;
+    }
+
+    if (motherPassword !== motherPasswordConfirm) {
+      setError("As senhas não coincidem");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      console.log("Creating mother account with token");
+      await createAccountWithToken(token.trim(), motherName.trim(), motherPassword);
+      console.log("Mother account created and signed in successfully");
+      // Navigation will be handled by AuthContext
+    } catch (err: any) {
+      console.error("Create account error:", err);
+      if (err.message?.includes("Já existe uma conta")) {
+        // Account already exists, switch to sign-in
+        setMotherStep("sign-in");
+        setError("Conta já existe. Por favor, faça login.");
+      } else {
+        setError(err.message || "Erro ao criar conta. Tente novamente.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMotherSignIn = async () => {
+    console.log("User tapped Mother Sign In button");
+    setError("");
+
+    try {
+      setLoading(true);
+      console.log("Attempting mother sign in with token");
+      await signInWithToken(token.trim());
+      console.log("Mother sign in successful");
+      // Navigation will be handled by AuthContext
+    } catch (err: any) {
+      console.error("Mother sign in error:", err);
+      setError(err.message || "Token inválido. Verifique com sua consultora.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetMotherFlow = () => {
+    setMotherStep("token");
+    setValidatedTokenInfo(null);
+    setMotherName("");
+    setMotherPassword("");
+    setMotherPasswordConfirm("");
+    setError("");
+  };
+
+  const isConsultantMode = mode === "consultant";
+  const isMotherMode = mode === "mother";
+
   return (
-    <ImageBackground
-      source={{ uri: "https://images.unsplash.com/photo-1519689373023-dd07c7988603?w=1200&q=80" }}
-      style={styles.backgroundImage}
-      resizeMode="cover"
-    >
-      <View style={styles.overlay}>
-        <SafeAreaView style={{ flex: 1 }}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={{ flex: 1 }}
-          >
-            <ScrollView
-              contentContainerStyle={styles.container}
-              keyboardShouldPersistTaps="handled"
-            >
-              <View style={styles.logoContainer}>
-                <Text style={styles.appName}>TodaNoite</Text>
-                <Text style={styles.tagline}>
-                  Noites tranquilas para toda a família
-                </Text>
-              </View>
-
-              <View style={styles.card}>
-                <Text style={styles.title}>
-                  {isSignUp ? "Criar Conta" : "Entrar"}
-                </Text>
-                <Text style={styles.subtitle}>
-                  {isSignUp
-                    ? "Preencha os dados para criar sua conta"
-                    : "Acesse sua conta para continuar"}
-                </Text>
-
-                {isSignUp && (
-                  <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Nome</Text>
-                    <TextInput
-                      style={[styles.input, nameFocused && styles.inputFocused]}
-                      placeholder="Seu nome completo"
-                      value={name}
-                      onChangeText={setName}
-                      autoCapitalize="words"
-                      onFocus={() => setNameFocused(true)}
-                      onBlur={() => setNameFocused(false)}
-                    />
-                  </View>
-                )}
-
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>E-mail</Text>
-                  <TextInput
-                    style={[styles.input, emailFocused && styles.inputFocused]}
-                    placeholder="seu@email.com"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    onFocus={() => setEmailFocused(true)}
-                    onBlur={() => setEmailFocused(false)}
-                  />
-                </View>
-
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Senha</Text>
-                  <TextInput
-                    style={[styles.input, passwordFocused && styles.inputFocused]}
-                    placeholder="Sua senha"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    onFocus={() => setPasswordFocused(true)}
-                    onBlur={() => setPasswordFocused(false)}
-                  />
-                </View>
-
-                <LoadingButton
-                  title={isSignUp ? "Criar Conta" : "Entrar"}
-                  onPress={handleAuth}
-                  loading={loading}
-                  style={styles.button}
-                  textStyle={styles.buttonText}
-                />
-
-                <Text style={styles.switchText}>
-                  {isSignUp ? "Já tem uma conta? " : "Não tem uma conta? "}
-                  <Text
-                    style={styles.switchLink}
-                    onPress={() => setIsSignUp(!isSignUp)}
-                  >
-                    {isSignUp ? "Entrar" : "Criar conta"}
-                  </Text>
-                </Text>
-              </View>
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-
-        <Modal
-          visible={errorModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setErrorModalVisible(false)}
+    <SafeAreaView style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
+      
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardView}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Erro</Text>
-              <Text style={styles.modalMessage}>{errorMessage}</Text>
-              <TouchableOpacity
-                style={styles.modalButton}
-                onPress={() => setErrorModalVisible(false)}
+          {/* Header */}
+          <View style={styles.header}>
+            <IconSymbol
+              ios_icon_name="moon.stars.fill"
+              android_material_icon_name="bedtime"
+              size={64}
+              color={colors.primary}
+            />
+            <Text style={styles.title}>Consultoria de Sono</Text>
+            <Text style={styles.subtitle}>Bem-vindo de volta</Text>
+          </View>
+
+          {/* Mode Selector */}
+          <View style={styles.modeSelector}>
+            <TouchableOpacity
+              style={[
+                styles.modeButton,
+                isConsultantMode && styles.modeButtonActive,
+              ]}
+              onPress={() => {
+                setMode("consultant");
+                setError("");
+                handleResetMotherFlow();
+              }}
+            >
+              <IconSymbol
+                ios_icon_name="person.badge.key.fill"
+                android_material_icon_name="admin-panel-settings"
+                size={24}
+                color={isConsultantMode ? "#FFF" : colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.modeButtonText,
+                  isConsultantMode && styles.modeButtonTextActive,
+                ]}
               >
-                <Text style={styles.modalButtonText}>OK</Text>
+                Consultora
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.modeButton,
+                isMotherMode && styles.modeButtonActive,
+              ]}
+              onPress={() => {
+                setMode("mother");
+                setError("");
+              }}
+            >
+              <IconSymbol
+                ios_icon_name="heart.fill"
+                android_material_icon_name="favorite"
+                size={24}
+                color={isMotherMode ? "#FFF" : colors.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.modeButtonText,
+                  isMotherMode && styles.modeButtonTextActive,
+                ]}
+              >
+                Mãe
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Error Message */}
+          {error ? (
+            <View style={styles.errorContainer}>
+              <IconSymbol
+                ios_icon_name="exclamationmark.triangle.fill"
+                android_material_icon_name="warning"
+                size={20}
+                color={colors.error}
+              />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          {/* Consultant Login Form */}
+          {isConsultantMode && (
+            <View style={styles.form}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>E-mail</Text>
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="seu@email.com"
+                  placeholderTextColor={colors.textSecondary}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Senha</Text>
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="••••••••"
+                  placeholderTextColor={colors.textSecondary}
+                  secureTextEntry
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+                onPress={handleConsultantLogin}
+                disabled={loading || authLoading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <IconSymbol
+                      ios_icon_name="arrow.right.circle.fill"
+                      android_material_icon_name="login"
+                      size={24}
+                      color="#FFF"
+                    />
+                    <Text style={styles.loginButtonText}>Entrar como Consultora</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
-          </View>
-        </Modal>
-      </View>
-    </ImageBackground>
+          )}
+
+          {/* Mother Login - Step 1: Token Entry */}
+          {isMotherMode && motherStep === "token" && (
+            <View style={styles.form}>
+              <View style={styles.infoBox}>
+                <IconSymbol
+                  ios_icon_name="info.circle.fill"
+                  android_material_icon_name="info"
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text style={styles.infoText}>
+                  Sua consultora forneceu um token de acesso único. Digite-o abaixo para acessar a rotina do seu bebê.
+                </Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Token de Acesso</Text>
+                <TextInput
+                  style={[styles.input, styles.tokenInput]}
+                  value={token}
+                  onChangeText={setToken}
+                  placeholder="Digite o token fornecido"
+                  placeholderTextColor={colors.textSecondary}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+                onPress={handleValidateToken}
+                disabled={loading || authLoading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <IconSymbol
+                      ios_icon_name="arrow.right.circle.fill"
+                      android_material_icon_name="login"
+                      size={24}
+                      color="#FFF"
+                    />
+                    <Text style={styles.loginButtonText}>Continuar</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.helpBox}>
+                <IconSymbol
+                  ios_icon_name="questionmark.circle"
+                  android_material_icon_name="help"
+                  size={18}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.helpText}>
+                  Não recebeu o token? Entre em contato com sua consultora.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Mother Login - Step 2a: Create Account (new mother) */}
+          {isMotherMode && motherStep === "create-account" && validatedTokenInfo && (
+            <View style={styles.form}>
+              <View style={styles.successBox}>
+                <IconSymbol
+                  ios_icon_name="checkmark.circle.fill"
+                  android_material_icon_name="check-circle"
+                  size={20}
+                  color={colors.success}
+                />
+                <View style={styles.successTextContainer}>
+                  <Text style={styles.successTitle}>Token válido! 🎉</Text>
+                  {validatedTokenInfo.babyName && (
+                    <Text style={styles.successText}>Bebê: {validatedTokenInfo.babyName}</Text>
+                  )}
+                  {validatedTokenInfo.consultantName && (
+                    <Text style={styles.successText}>Consultora: {validatedTokenInfo.consultantName}</Text>
+                  )}
+                </View>
+              </View>
+
+              <Text style={styles.stepTitle}>Criar sua conta</Text>
+              <Text style={styles.stepSubtitle}>
+                Crie uma senha para acessar o app sempre que precisar.
+              </Text>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Seu Nome</Text>
+                <TextInput
+                  style={styles.input}
+                  value={motherName}
+                  onChangeText={setMotherName}
+                  placeholder="Seu nome completo"
+                  placeholderTextColor={colors.textSecondary}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Criar Senha</Text>
+                <TextInput
+                  style={styles.input}
+                  value={motherPassword}
+                  onChangeText={setMotherPassword}
+                  placeholder="Mínimo 6 caracteres"
+                  placeholderTextColor={colors.textSecondary}
+                  secureTextEntry
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Confirmar Senha</Text>
+                <TextInput
+                  style={styles.input}
+                  value={motherPasswordConfirm}
+                  onChangeText={setMotherPasswordConfirm}
+                  placeholder="Repita a senha"
+                  placeholderTextColor={colors.textSecondary}
+                  secureTextEntry
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+                onPress={handleCreateAccount}
+                disabled={loading || authLoading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <IconSymbol
+                      ios_icon_name="person.badge.plus"
+                      android_material_icon_name="person-add"
+                      size={24}
+                      color="#FFF"
+                    />
+                    <Text style={styles.loginButtonText}>Criar Conta e Entrar</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.backLink} onPress={handleResetMotherFlow}>
+                <IconSymbol
+                  ios_icon_name="arrow.left"
+                  android_material_icon_name="arrow-back"
+                  size={16}
+                  color={colors.primary}
+                />
+                <Text style={styles.backLinkText}>Voltar</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Mother Login - Step 2b: Sign In (existing account) */}
+          {isMotherMode && motherStep === "sign-in" && validatedTokenInfo && (
+            <View style={styles.form}>
+              <View style={styles.successBox}>
+                <IconSymbol
+                  ios_icon_name="checkmark.circle.fill"
+                  android_material_icon_name="check-circle"
+                  size={20}
+                  color={colors.success}
+                />
+                <View style={styles.successTextContainer}>
+                  <Text style={styles.successTitle}>Token válido! ✅</Text>
+                  {validatedTokenInfo.babyName && (
+                    <Text style={styles.successText}>Bebê: {validatedTokenInfo.babyName}</Text>
+                  )}
+                  {validatedTokenInfo.motherEmail && (
+                    <Text style={styles.successText}>Conta: {validatedTokenInfo.motherEmail}</Text>
+                  )}
+                </View>
+              </View>
+
+              <Text style={styles.stepTitle}>Bem-vinda de volta!</Text>
+              <Text style={styles.stepSubtitle}>
+                Sua conta já está configurada. Clique abaixo para entrar.
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+                onPress={handleMotherSignIn}
+                disabled={loading || authLoading}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <IconSymbol
+                      ios_icon_name="arrow.right.circle.fill"
+                      android_material_icon_name="login"
+                      size={24}
+                      color="#FFF"
+                    />
+                    <Text style={styles.loginButtonText}>Entrar</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.backLink} onPress={handleResetMotherFlow}>
+                <IconSymbol
+                  ios_icon_name="arrow.left"
+                  android_material_icon_name="arrow-back"
+                  size={16}
+                  color={colors.primary}
+                />
+                <Text style={styles.backLinkText}>Usar outro token</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: spacing.xl,
+    justifyContent: "center",
+  },
+  header: {
+    alignItems: "center",
+    marginBottom: spacing.xxxl,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: colors.text,
+    marginTop: spacing.lg,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  modeSelector: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  modeButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+    borderWidth: 2,
+    borderColor: colors.border,
+    ...shadows.sm,
+  },
+  modeButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  modeButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  modeButtonTextActive: {
+    color: "#FFF",
+  },
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.error + "15",
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.error + "40",
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.error,
+  },
+  form: {
+    gap: spacing.lg,
+  },
+  inputGroup: {
+    gap: spacing.sm,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  input: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    fontSize: 16,
+    color: colors.text,
+    ...shadows.sm,
+  },
+  tokenInput: {
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    fontSize: 18,
+    letterSpacing: 2,
+    textAlign: "center",
+  },
+  loginButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    ...shadows.lg,
+  },
+  loginButtonDisabled: {
+    opacity: 0.6,
+  },
+  loginButtonText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#FFF",
+  },
+  infoBox: {
+    flexDirection: "row",
+    backgroundColor: colors.primary + "15",
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  helpBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    marginTop: spacing.md,
+  },
+  helpText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontStyle: "italic",
+  },
+  successBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: colors.success + "15",
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.success + "40",
+  },
+  successTextContainer: {
+    flex: 1,
+  },
+  successTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.success,
+    marginBottom: spacing.xs,
+  },
+  successText: {
+    fontSize: 13,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  stepTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  stepSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+    lineHeight: 20,
+  },
+  backLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    marginTop: spacing.md,
+    padding: spacing.sm,
+  },
+  backLinkText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: "600",
+  },
+});

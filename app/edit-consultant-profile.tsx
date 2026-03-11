@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, borderRadius, typography, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { apiGet, apiPut, BACKEND_URL, getBearerToken } from "@/utils/api";
+import { setUploadingState } from "@/contexts/AuthContext";
 import * as ImagePicker from "expo-image-picker";
 
 interface ConsultantProfile {
@@ -80,6 +81,10 @@ export default function EditConsultantProfileScreen() {
       }
 
       console.log("[Edit Profile] Opening image picker");
+      
+      // 🔥 CRITICAL FIX: Pause session validation before opening image picker
+      setUploadingState(true);
+      
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: "images",
         allowsEditing: true,
@@ -148,9 +153,6 @@ export default function EditConsultantProfileScreen() {
           });
 
           // CRITICAL FIX: Web vs Native handling
-          // On Web: blob: URIs need to be fetched and converted to File objects
-          // On Native: file:// URIs can be passed directly to FormData
-          
           if (Platform.OS === 'web') {
             // WEB: Fetch the blob and create a File object
             console.log("[Edit Profile] Web platform: Fetching blob from URI");
@@ -186,6 +188,7 @@ export default function EditConsultantProfileScreen() {
             
             console.log("[Edit Profile] FormData prepared with file metadata");
           }
+          
           console.log("[Edit Profile] Uploading to:", `${BACKEND_URL}/api/upload/profile-photo`);
 
           // Use XMLHttpRequest for better multipart support
@@ -251,12 +254,19 @@ export default function EditConsultantProfileScreen() {
           setError(uploadError.message || "Erro ao fazer upload da foto");
         } finally {
           setUploadingPhoto(false);
+          // 🔥 CRITICAL FIX: Resume session validation after upload completes
+          setUploadingState(false);
         }
+      } else {
+        // User cancelled - resume session validation
+        setUploadingState(false);
       }
     } catch (error: any) {
       console.error("[Edit Profile] Error picking image:", error);
       setError(error.message || "Erro ao selecionar imagem");
       setUploadingPhoto(false);
+      // 🔥 CRITICAL FIX: Resume session validation on error
+      setUploadingState(false);
     }
   };
 
