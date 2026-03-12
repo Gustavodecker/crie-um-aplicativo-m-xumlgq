@@ -135,7 +135,7 @@ export function registerMotherRoutes(app: App) {
       const accountId = crypto.randomUUID();
       await app.db.insert(authSchema.account).values({
         id: accountId,
-        accountId: userId,
+        accountId: email,
         providerId: 'credential',
         userId: userId,
         password: hashedPassword,
