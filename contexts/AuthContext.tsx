@@ -193,6 +193,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const errJson = JSON.parse(responseText);
           if (errJson.message) errorMsg = errJson.message;
           if (errJson.error) errorMsg = errJson.error;
+          if (errJson.code === "INVALID_EMAIL_OR_PASSWORD") {
+            errorMsg = "Email ou senha incorretos";
+          }
         } catch (parseErr) {
           if (responseText && responseText.length > 0 && responseText.length < 200) {
             errorMsg = responseText;
@@ -204,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (response.status === 404) {
           errorMsg = "Conta não encontrada. Verifique seu email ou crie uma nova conta.";
         } else if (response.status === 500) {
-          errorMsg = "Erro no servidor. Tente novamente em alguns instantes.";
+          errorMsg = "Erro ao fazer login. Verifique seu email e senha e tente novamente.";
         }
         
         throw new Error(errorMsg);
