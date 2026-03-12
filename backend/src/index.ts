@@ -27,6 +27,24 @@ export const app = await createApplication(schema);
 // Export App type for use in route files
 export type App = typeof app;
 
+// Add middleware to allow requests without Origin header (for mobile apps)
+// This is necessary because mobile apps (React Native/Expo) don't send Origin headers
+// and Better Auth should not reject them based on missing Origin
+app.fastify.addHook('preHandler', async (request, reply) => {
+  // If Origin header is missing, add a permissive one
+  // This allows mobile apps to proceed without Origin validation issues
+  if (!request.headers.origin) {
+    // For requests without Origin (mobile apps), we set a placeholder
+    // The actual security comes from authentication tokens, not Origin
+    request.headers.origin = 'mobile-app';
+  }
+});
+
+app.logger.info(
+  { middleware: 'origin-header-normalization' },
+  'Mobile app middleware enabled - requests without Origin header will be accepted'
+);
+
 // Log session configuration on startup
 app.logger.info(
   {
@@ -52,9 +70,9 @@ app.logger.info(
 // - Cookie caching enabled for performance
 //
 // CORS Configuration for Mobile Apps:
-// - By default Better Auth accepts all origins (["*"])
-// - Mobile apps without Origin header are automatically supported
-// - Proper OPTIONS preflight request handling
+// - Accepts all origins including mobile apps via wildcard ["*"]
+// - Mobile apps (React Native/Expo) don't send Origin header
+// - Middleware adds "mobile-app" origin for requests without Origin header
 // - Authentication is protected by session tokens, not Origin
 //
 // Environment Variables (see .env.example):
@@ -65,11 +83,15 @@ app.logger.info(
 // - COOKIE_DOMAIN: Cross-subdomain cookie domain (default: current domain)
 // - SESSION_STRICT: Enable strict validation (default: false)
 // - SESSION_COOKIE_CACHE: Enable cookie caching (default: true)
-app.withAuth();
+app.withAuth({
+  // Accept all origins including the "mobile-app" placeholder
+  // Mobile apps get "mobile-app" origin from middleware if they don't send Origin header
+  trustedOrigins: ["*", "mobile-app"],
+});
 
 app.logger.info(
-  { defaultOriginHandling: 'all origins accepted', mobileAppsSupported: true },
-  'Better Auth configured with default origin handling - mobile apps without Origin header are supported'
+  { trustedOrigins: ["*", "mobile-app"], mobileMiddleware: 'enabled' },
+  'Better Auth configured for mobile app support - all origins accepted, mobile apps without Origin header are handled by middleware'
 );
 
 // Log successful auth initialization
