@@ -57,7 +57,9 @@ export default function AuthScreen() {
       router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Consultant login error:", err);
-      setError(err?.message || "Erro ao fazer login");
+      const errorMessage = err?.message || "Erro ao fazer login";
+      console.error("Error message:", errorMessage);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -84,7 +86,9 @@ export default function AuthScreen() {
       router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Consultant registration error:", err);
-      setError(err?.message || "Erro ao criar conta");
+      const errorMessage = err?.message || "Erro ao criar conta";
+      console.error("Error message:", errorMessage);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -106,14 +110,21 @@ export default function AuthScreen() {
       router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Mother login error:", err);
-      const errMsg = err?.message || "Erro ao fazer login";
+      const errorMessage = err?.message || "Erro ao fazer login";
+      console.error("Error message:", errorMessage);
+      
       // Provide helpful message for common errors
-      if (errMsg.toLowerCase().includes("invalid") || errMsg.toLowerCase().includes("credentials") || errMsg.toLowerCase().includes("password")) {
+      if (errorMessage.toLowerCase().includes("invalid") || 
+          errorMessage.toLowerCase().includes("credentials") || 
+          errorMessage.toLowerCase().includes("password") ||
+          errorMessage.toLowerCase().includes("incorretos")) {
         setError("Email ou senha incorretos. Verifique seus dados e tente novamente.");
-      } else if (errMsg.toLowerCase().includes("not found") || errMsg.toLowerCase().includes("user")) {
+      } else if (errorMessage.toLowerCase().includes("not found") || 
+                 errorMessage.toLowerCase().includes("user") ||
+                 errorMessage.toLowerCase().includes("não encontrada")) {
         setError("Conta não encontrada. Verifique seu email ou crie uma nova conta com o token da consultora.");
       } else {
-        setError(errMsg);
+        setError(errorMessage);
       }
     } finally {
       setLoading(false);
@@ -144,7 +155,9 @@ export default function AuthScreen() {
       setMotherStep("token-create-account");
     } catch (err: any) {
       console.error("Token validation error:", err);
-      setError(err?.message || "Erro ao validar token");
+      const errorMessage = err?.message || "Erro ao validar token";
+      console.error("Error message:", errorMessage);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -177,7 +190,9 @@ export default function AuthScreen() {
       router.replace("/(tabs)");
     } catch (err: any) {
       console.error("Create account error:", err);
-      setError(err?.message || "Erro ao criar conta");
+      const errorMessage = err?.message || "Erro ao criar conta";
+      console.error("Error message:", errorMessage);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

@@ -220,19 +220,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }),
       });
       
+      const responseText = await response.text();
+      console.log("[Auth] 📥 Response status:", response.status);
+      console.log("[Auth] 📥 Response text:", responseText);
+      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("[Auth] ❌ Login failed:", response.status, errorText);
+        console.error("[Auth] ❌ Login failed:", response.status, responseText);
         let errorMsg = "Erro ao fazer login";
+        
         try {
-          const errJson = JSON.parse(errorText);
+          const errJson = JSON.parse(responseText);
           if (errJson.message) errorMsg = errJson.message;
           if (errJson.error) errorMsg = errJson.error;
-        } catch {}
+        } catch (parseErr) {
+          // If response is not JSON, use the text as error message
+          if (responseText && responseText.length > 0 && responseText.length < 200) {
+            errorMsg = responseText;
+          }
+        }
+        
+        // Provide more specific error messages
+        if (response.status === 401) {
+          errorMsg = "Email ou senha incorretos";
+        } else if (response.status === 404) {
+          errorMsg = "Conta não encontrada. Verifique seu email ou crie uma nova conta.";
+        } else if (response.status === 500) {
+          errorMsg = "Erro no servidor. Tente novamente em alguns instantes.";
+        }
+        
         throw new Error(errorMsg);
       }
       
-      const responseData = await response.json();
+      let responseData: any;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (parseErr) {
+        console.error("[Auth] ❌ Failed to parse response as JSON");
+        throw new Error("Resposta inválida do servidor");
+      }
+      
       console.log("[Auth] ✅ Login response received");
       
       let token: string | null = null;
@@ -255,13 +281,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       if (!token) {
-        console.error("[Auth] ❌ No token in response!");
-        throw new Error("No token received from server");
+        console.error("[Auth] ❌ No token in response! Response data:", JSON.stringify(responseData));
+        throw new Error("Nenhum token recebido do servidor");
       }
       
       if (!user) {
-        console.warn("[Auth] ⚠️ No user in response");
-        throw new Error("No user data received");
+        console.error("[Auth] ❌ No user in response! Response data:", JSON.stringify(responseData));
+        throw new Error("Nenhum dado de usuário recebido");
       }
       
       // CRITICAL: Save token FIRST, then set user state
@@ -311,14 +337,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setUserRole("mother");
               await AsyncStorage.setItem("userRole", "mother");
             }
-          } catch (babyErr) {
-            console.log("[Auth] ℹ️ Could not check baby, defaulting to mother role");
+          } catch (babyErr: any) {
+            console.log("[Auth] ℹ️ Could not check baby:", babyErr?.message, "- defaulting to mother role");
             setUserRole("mother");
             await AsyncStorage.setItem("userRole", "mother");
           }
         }
-      } catch (roleErr) {
-        console.log("[Auth] ℹ️ Could not determine role, defaulting to consultant");
+      } catch (roleErr: any) {
+        console.log("[Auth] ℹ️ Could not determine role:", roleErr?.message, "- defaulting to consultant");
         setUserRole("consultant");
         await AsyncStorage.setItem("userRole", "consultant");
       }
@@ -327,6 +353,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign in failed:", error?.message || error);
+      console.error("[Auth] ❌ Error stack:", error?.stack);
       throw error;
     }
   };
