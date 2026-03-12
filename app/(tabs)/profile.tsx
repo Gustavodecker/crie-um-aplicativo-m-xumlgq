@@ -142,6 +142,9 @@ export default function ProfileScreen() {
 
   // ─── Mother Profile View ───────────────────────────────────────────────────
   if (!isConsultant) {
+    const userNameDisplay = user?.name || "Mamãe";
+    const userEmailDisplay = user?.email || "";
+    
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
         <Stack.Screen
@@ -152,7 +155,11 @@ export default function ProfileScreen() {
             headerTintColor: colors.text,
           }}
         />
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContentMother}>
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={styles.scrollContentMother}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.profileHeader}>
             <View style={styles.avatarContainer}>
               <IconSymbol
@@ -162,8 +169,8 @@ export default function ProfileScreen() {
                 color={colors.secondary}
               />
             </View>
-            <Text style={styles.userName}>{user?.name || "Mamãe"}</Text>
-            <Text style={styles.userEmail}>{user?.email}</Text>
+            <Text style={styles.userName}>{userNameDisplay}</Text>
+            <Text style={styles.userEmail}>{userEmailDisplay}</Text>
             <View style={styles.roleBadge}>
               <Text style={styles.roleBadgeText}>👶 Mãe</Text>
             </View>
@@ -174,7 +181,7 @@ export default function ProfileScreen() {
               <IconSymbol ios_icon_name="envelope.fill" android_material_icon_name="email" size={20} color={colors.primary} />
               <View style={styles.infoTextContainer}>
                 <Text style={styles.infoLabel}>E-mail</Text>
-                <Text style={styles.infoValue}>{user?.email}</Text>
+                <Text style={styles.infoValue}>{userEmailDisplay}</Text>
               </View>
             </View>
           </View>
@@ -196,8 +203,14 @@ export default function ProfileScreen() {
                 console.log("Mother tapped sign out button - opening confirmation modal");
                 setShowSignOutModal(true);
               }}
+              activeOpacity={0.8}
             >
-              <IconSymbol ios_icon_name="arrow.right.square.fill" android_material_icon_name="logout" size={24} color="#FFFFFF" />
+              <IconSymbol 
+                ios_icon_name="arrow.right.square.fill" 
+                android_material_icon_name="logout" 
+                size={24} 
+                color="#FFFFFF" 
+              />
               <Text style={styles.signOutText}>Encerrar Sessão</Text>
             </TouchableOpacity>
           </View>
@@ -224,6 +237,9 @@ export default function ProfileScreen() {
   }
 
   // ─── Consultant Profile View ───────────────────────────────────────────────
+  const consultantNameDisplay = profile?.name || user?.name || "Consultora";
+  const consultantEmailDisplay = user?.email || "";
+  
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <Stack.Screen
@@ -244,8 +260,8 @@ export default function ProfileScreen() {
               color={colors.primary}
             />
           </View>
-          <Text style={styles.userName}>{profile?.name || user?.name || "Consultora"}</Text>
-          <Text style={styles.userEmail}>{user?.email}</Text>
+          <Text style={styles.userName}>{consultantNameDisplay}</Text>
+          <Text style={styles.userEmail}>{consultantEmailDisplay}</Text>
           <View style={[styles.roleBadge, { backgroundColor: colors.primary + "20" }]}>
             <Text style={[styles.roleBadgeText, { color: colors.primary }]}>⭐ Consultora</Text>
           </View>
@@ -398,8 +414,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   scrollView: { flex: 1 },
-  scrollContent: { padding: 16, paddingBottom: 280 },
-  scrollContentMother: { padding: 16, paddingBottom: 280 },
+  scrollContent: { padding: 16, paddingBottom: 120 },
+  scrollContentMother: { padding: 16, paddingBottom: 120 },
   profileHeader: { alignItems: "center", paddingVertical: 32 },
   avatarContainer: { marginBottom: 16 },
   userName: { fontSize: 24, fontWeight: "bold", color: colors.text, marginBottom: 4 },
@@ -423,7 +439,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: "bold", color: colors.text, marginBottom: 12 },
   menuItem: { flexDirection: "row", alignItems: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, marginBottom: 8, gap: 12 },
   menuItemText: { flex: 1, fontSize: 16, color: colors.text },
-  logoutSection: { marginTop: 32, marginBottom: 60 },
+  logoutSection: { marginTop: 24, marginBottom: 40 },
   signOutButton: { 
     flexDirection: "row", 
     alignItems: "center", 
