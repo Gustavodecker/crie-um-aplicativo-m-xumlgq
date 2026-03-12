@@ -12,13 +12,15 @@ import {
   Animated,
   Modal,
   TextInput,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, borderRadius, typography, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { ConsultantProfileCard } from "@/components/ConsultantProfileCard";
-import { apiGet, apiPost } from "@/utils/api";
+import { ConfirmModal } from "@/components/ConfirmModal";
+import { apiGet, apiPost, apiDelete } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -96,6 +98,9 @@ export default function MotherDashboardScreen() {
   const [relinkToken, setRelinkToken] = useState("");
   const [relinkLoading, setRelinkLoading] = useState(false);
   const [relinkError, setRelinkError] = useState("");
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // Fade-in animation
   useEffect(() => {
@@ -302,6 +307,72 @@ export default function MotherDashboardScreen() {
       setRelinkLoading(false);
     }
   }, [relinkToken, loadDashboard]);
+
+  const handleArchiveBaby = useCallback(async () => {
+    if (!baby) return;
+    
+    console.log("[Mother Dashboard] Archiving baby:", baby.id);
+    setActionLoading(true);
+    
+    try {
+      await apiPost(`/api/babies/${baby.id}/archive`, {});
+      console.log("[Mother Dashboard] ✅ Baby archived successfully");
+      
+      Alert.alert(
+        "Bebê Arquivado",
+        "O bebê foi arquivado com sucesso. Você não terá mais acesso aos dados.",
+        [
+          {
+            text: "OK",
+            onPress: async () => {
+              await signOut();
+              router.replace("/auth");
+            }
+          }
+        ]
+      );
+    } catch (err: any) {
+      console.error("[Mother Dashboard] Archive error:", err);
+      const errorMessage = err?.message || "Erro ao arquivar bebê";
+      Alert.alert("Erro", errorMessage);
+    } finally {
+      setActionLoading(false);
+      setShowArchiveModal(false);
+    }
+  }, [baby, signOut, router]);
+
+  const handleDeleteBaby = useCallback(async () => {
+    if (!baby) return;
+    
+    console.log("[Mother Dashboard] Deleting baby:", baby.id);
+    setActionLoading(true);
+    
+    try {
+      await apiDelete(`/api/babies/${baby.id}`);
+      console.log("[Mother Dashboard] ✅ Baby deleted successfully");
+      
+      Alert.alert(
+        "Bebê Excluído",
+        "O bebê foi excluído permanentemente. Todos os dados foram removidos.",
+        [
+          {
+            text: "OK",
+            onPress: async () => {
+              await signOut();
+              router.replace("/auth");
+            }
+          }
+        ]
+      );
+    } catch (err: any) {
+      console.error("[Mother Dashboard] Delete error:", err);
+      const errorMessage = err?.message || "Erro ao excluir bebê";
+      Alert.alert("Erro", errorMessage);
+    } finally {
+      setActionLoading(false);
+      setShowDeleteModal(false);
+    }
+  }, [baby, signOut, router]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -761,7 +832,74 @@ export default function MotherDashboardScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Baby Management Actions */}
+        <View style={styles.managementSection}>
+          <Text style={styles.managementTitle}>Gerenciar Bebê</Text>
+          
+          <TouchableOpacity 
+            style={styles.archiveButton}
+            onPress={() => setShowArchiveModal(true)}
+          >
+            <IconSymbol 
+              ios_icon_name="archivebox.fill" 
+              android_material_icon_name="archive" 
+              size={20} 
+              color={colors.warning} 
+            />
+            <Text style={styles.archiveButtonText}>Arquivar Bebê</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.deleteButton}
+            onPress={() => setShowDeleteModal(true)}
+          >
+            <IconSymbol 
+              ios_icon_name="trash.fill" 
+              android_material_icon_name="delete" 
+              size={20} 
+              color={colors.error} 
+            />
+            <Text style={styles.deleteButtonText}>Excluir Bebê</Text>
+          </TouchableOpacity>
+        </View>
       </Animated.ScrollView>
+
+      {/* Archive Confirmation Modal */}
+      <ConfirmModal
+        visible={showArchiveModal}
+        title="Arquivar Bebê"
+        message={`Tem certeza que deseja arquivar ${baby?.name}? O bebê não aparecerá mais no seu painel e você perderá o acesso aos dados.`}
+        confirmText="Arquivar"
+        cancelText="Cancelar"
+        confirmColor={colors.warning}
+        loading={actionLoading}
+        onConfirm={handleArchiveBaby}
+        onCancel={() => setShowArchiveModal(false)}
+        icon={{
+          ios: "archivebox.fill",
+          android: "archive",
+          color: colors.warning,
+        }}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        visible={showDeleteModal}
+        title="Excluir Bebê"
+        message={`Tem certeza que deseja excluir ${baby?.name}? Esta ação é IRREVERSÍVEL e todos os dados serão permanentemente removidos.`}
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        confirmColor={colors.error}
+        loading={actionLoading}
+        onConfirm={handleDeleteBaby}
+        onCancel={() => setShowDeleteModal(false)}
+        icon={{
+          ios: "trash.fill",
+          android: "delete",
+          color: colors.error,
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1151,5 +1289,45 @@ const styles = StyleSheet.create({
   modalButtonConfirmText: {
     ...typography.button,
     color: "#FFF",
+  },
+  managementSection: {
+    marginTop: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  managementTitle: {
+    ...typography.h4,
+    marginBottom: spacing.md,
+    color: colors.textSecondary,
+  },
+  archiveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    gap: spacing.md,
+  },
+  archiveButtonText: {
+    ...typography.button,
+    color: colors.warning,
+    fontSize: 15,
+  },
+  deleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.error,
+    gap: spacing.md,
+  },
+  deleteButtonText: {
+    ...typography.button,
+    color: colors.error,
+    fontSize: 15,
   },
 });
