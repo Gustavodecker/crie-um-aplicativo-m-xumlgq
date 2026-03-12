@@ -2043,10 +2043,11 @@ describe("API Integration Tests", () => {
     const babyData = await babyRes.json();
     const babyTokenNew = babyData.token;
 
-    const { token: motherToken } = await signUpTestUser();
+    const { token: motherToken1 } = await signUpTestUser();
+    const { token: motherToken2 } = await signUpTestUser();
 
-    // First link
-    await authenticatedApi("/api/mothers/init-with-token", motherToken, {
+    // First mother links to baby
+    await authenticatedApi("/api/mothers/init-with-token", motherToken1, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2054,8 +2055,8 @@ describe("API Integration Tests", () => {
       }),
     });
 
-    // Try to link again (should fail with 409)
-    const res = await authenticatedApi("/api/mothers/init-with-token", motherToken, {
+    // Second mother tries to link to same baby (should fail with 409)
+    const res = await authenticatedApi("/api/mothers/init-with-token", motherToken2, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

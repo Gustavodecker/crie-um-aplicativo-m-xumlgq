@@ -450,29 +450,64 @@ export function registerMotherRoutes(app: App) {
         return reply.status(404).send({ error: 'Invalid token. Baby not found.' });
       }
 
-      // Check if already linked to any mother
+      app.logger.info({ userId: session.user.id, babyId: baby.id, babyMotherUserId: baby.motherUserId }, 'Baby found with token');
+
+      // Check if baby is already linked
       if (baby.motherUserId) {
-        app.logger.warn({ userId: session.user.id, babyId: baby.id, existingMotherUserId: baby.motherUserId }, 'Baby already linked to a mother');
-        return reply.status(409).send({ error: 'This baby is already linked to a mother account' });
+        // Check if baby is linked to the current user
+        if (baby.motherUserId === session.user.id) {
+          app.logger.info({ userId: session.user.id, babyId: baby.id }, 'Baby already linked to current user');
+          return reply.status(200).send({
+            id: baby.id,
+            name: baby.name,
+            birthDate: baby.birthDate,
+            consultantId: baby.consultantId,
+            message: 'Baby already linked to your account',
+          });
+        }
+
+        // Baby is linked to a different user
+        app.logger.warn(
+          { userId: session.user.id, babyId: baby.id, existingMotherUserId: baby.motherUserId },
+          'Baby already linked to another account'
+        );
+        return reply.status(409).send({ error: 'Baby already linked to another account.' });
       }
 
       // Link baby to mother
-      await app.db.update(schema.babies)
-        .set({ motherUserId: session.user.id })
-        .where(eq(schema.babies.id, baby.id));
+      app.logger.info(
+        { userId: session.user.id, babyId: baby.id },
+        'Linking baby to mother'
+      );
 
-      app.logger.info({ userId: session.user.id, babyId: baby.id }, 'Baby linked to mother successfully');
+      const updateResult = await app.db.update(schema.babies)
+        .set({
+          motherUserId: session.user.id,
+          motherEmail: session.user.email,
+        })
+        .where(eq(schema.babies.id, baby.id))
+        .returning();
+
+      if (!updateResult || updateResult.length === 0) {
+        app.logger.error({ userId: session.user.id, babyId: baby.id }, 'Failed to update baby with motherUserId');
+        return reply.status(500).send({ error: 'Failed to link baby to account' });
+      }
+
+      app.logger.info(
+        { userId: session.user.id, babyId: baby.id, motherEmail: session.user.email },
+        'Baby successfully linked to mother'
+      );
 
       return reply.status(200).send({
         id: baby.id,
         name: baby.name,
         birthDate: baby.birthDate,
         consultantId: baby.consultantId,
-        message: 'Mother successfully linked to baby',
+        message: 'Baby successfully linked to your account',
       });
 
     } catch (error) {
-      app.logger.error({ err: error, userId: session.user.id }, 'Error initializing mother with token');
+      app.logger.error({ err: error, userId: session.user.id }, 'Error linking baby to mother');
       return reply.status(500).send({ error: 'Failed to link baby to account' });
     }
   });
