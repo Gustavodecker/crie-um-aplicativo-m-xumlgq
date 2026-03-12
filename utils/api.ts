@@ -2,7 +2,7 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BEARER_TOKEN_KEY, setBearerToken as libSetBearerToken } from "@/lib/auth";
+import { BEARER_TOKEN_KEY, setBearerToken as libSetBearerToken, getBearerToken as libGetBearerToken } from "@/lib/auth";
 
 export { BEARER_TOKEN_KEY };
 
@@ -38,29 +38,7 @@ export const setBearerToken = async (token: string | null): Promise<void> => {
  * @returns Bearer token or null if not found
  */
 export const getBearerToken = async (): Promise<string | null> => {
-  try {
-    if (Platform.OS === "web") {
-      const token = localStorage.getItem(BEARER_TOKEN_KEY);
-      if (token) {
-        console.log("[API] 🔑 Token from localStorage: EXISTS (length:", token.length, ")");
-      } else {
-        console.log("[API] ⚠️ No token in localStorage");
-      }
-      return token;
-    } else {
-      // ✅ CORRECT: Use AsyncStorage.getItem() (returns Promise<string | null>)
-      const token = await AsyncStorage.getItem(BEARER_TOKEN_KEY);
-      if (token) {
-        console.log("[API] 🔑 Token from AsyncStorage: EXISTS (length:", token.length, ")");
-      } else {
-        console.log("[API] ⚠️ No token in AsyncStorage");
-      }
-      return token;
-    }
-  } catch (error) {
-    console.error("[API] ❌ Error retrieving bearer token:", error);
-    return null;
-  }
+  return libGetBearerToken();
 };
 
 interface ApiCallOptions extends RequestInit {
@@ -97,7 +75,7 @@ export const apiCall = async <T = any>(
 
     delete (fetchOptions as any).suppressErrorLog;
 
-    // 🔥 CRITICAL: Always get the token and add to headers
+    // Get the token and add to headers
     const token = await getBearerToken();
 
     // Only add Content-Type header if there's a body

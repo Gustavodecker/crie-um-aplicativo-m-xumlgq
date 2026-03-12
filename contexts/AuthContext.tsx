@@ -1,9 +1,8 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Platform } from "react-native";
-import * as Linking from "expo-linking";
-import { authClient, setBearerToken, clearAuthTokens, getBearerToken } from "@/lib/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { setBearerToken, clearAuthTokens, getBearerToken } from "@/lib/auth";
+import { BACKEND_URL } from "@/utils/api";
 
 interface User {
   id: string;
@@ -25,56 +24,10 @@ interface AuthContextType {
     babyName?: string;
     consultantName?: string;
   }>;
-  signInWithGoogle: () => Promise<void>;
-  signInWithApple: () => Promise<void>;
-  signInWithGitHub: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-function openOAuthPopup(provider: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const popupUrl = `${window.location.origin}/auth-popup?provider=${provider}`;
-    const width = 500;
-    const height = 600;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-
-    const popup = window.open(
-      popupUrl,
-      "oauth-popup",
-      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
-    );
-
-    if (!popup) {
-      reject(new Error("Failed to open popup. Please allow popups."));
-      return;
-    }
-
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === "oauth-success" && event.data?.token) {
-        window.removeEventListener("message", handleMessage);
-        clearInterval(checkClosed);
-        resolve(event.data.token);
-      } else if (event.data?.type === "oauth-error") {
-        window.removeEventListener("message", handleMessage);
-        clearInterval(checkClosed);
-        reject(new Error(event.data.error || "OAuth failed"));
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-
-    const checkClosed = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(checkClosed);
-        window.removeEventListener("message", handleMessage);
-        reject(new Error("Authentication cancelled"));
-      }
-    }, 500);
-  });
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -97,13 +50,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         console.log("[Auth] 🔑 Token found, validating session...");
         
-        const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
-        
         const response = await fetch(`${BACKEND_URL}/api/auth/get-session`, {
           method: "GET",
           headers: {
             "Authorization": `Bearer ${token}`,
-            "Origin": BACKEND_URL,
           },
         });
         
@@ -125,7 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const sessionData = await response.json();
         
         if (sessionData?.user) {
-          console.log("[Auth] ✅ Session valid, user:", sessionData.user.email, "id:", sessionData.user.id);
+          console.log("[Auth] ✅ Session valid, user:", sessionData.user.email);
           setUser(sessionData.user as User);
           
           // Load userRole from storage
@@ -136,52 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } else {
             // Determine role by checking consultant profile AND mother baby
             console.log("[Auth] ℹ️ No userRole in storage, determining role...");
-            try {
-              const profileResponse = await fetch(`${BACKEND_URL}/api/consultant/profile`, {
-                method: "GET",
-                headers: {
-                  "Authorization": `Bearer ${token}`,
-                  "Origin": BACKEND_URL,
-                },
-              });
-              
-              if (profileResponse.ok) {
-                console.log("[Auth] ✅ User is consultant");
-                setUserRole("consultant");
-                await AsyncStorage.setItem("userRole", "consultant");
-              } else {
-                // Not a consultant - check if they have a linked baby (mother)
-                console.log("[Auth] 🔍 No consultant profile, checking if user is mother...");
-                try {
-                  const babyResponse = await fetch(`${BACKEND_URL}/api/mother/baby`, {
-                    method: "GET",
-                    headers: {
-                      "Authorization": `Bearer ${token}`,
-                      "Origin": BACKEND_URL,
-                    },
-                  });
-                  
-                  if (babyResponse.ok) {
-                    console.log("[Auth] ✅ User is mother (has linked baby)");
-                    setUserRole("mother");
-                    await AsyncStorage.setItem("userRole", "mother");
-                  } else {
-                    // Default to mother if no consultant profile found
-                    console.log("[Auth] ℹ️ No baby linked, defaulting to mother role");
-                    setUserRole("mother");
-                    await AsyncStorage.setItem("userRole", "mother");
-                  }
-                } catch (babyErr) {
-                  console.log("[Auth] ℹ️ Could not check baby, defaulting to mother role");
-                  setUserRole("mother");
-                  await AsyncStorage.setItem("userRole", "mother");
-                }
-              }
-            } catch (roleErr) {
-              console.log("[Auth] ℹ️ Could not determine role, defaulting to consultant");
-              setUserRole("consultant");
-              await AsyncStorage.setItem("userRole", "consultant");
-            }
+            await determineUserRole(token);
           }
         } else {
           console.log("[Auth] ⚠️ No user in session response");
@@ -201,17 +106,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeAuth();
   }, []); // Empty dependency array - runs ONLY ONCE
 
+  const determineUserRole = async (token: string) => {
+    try {
+      const consultantResponse = await fetch(`${BACKEND_URL}/api/consultant/profile`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+      
+      if (consultantResponse.ok) {
+        console.log("[Auth] ✅ User is consultant");
+        setUserRole("consultant");
+        await AsyncStorage.setItem("userRole", "consultant");
+      } else {
+        // Not a consultant - check if they have a linked baby (mother)
+        console.log("[Auth] 🔍 No consultant profile, checking if user is mother...");
+        try {
+          const babyResponse = await fetch(`${BACKEND_URL}/api/mother/baby`, {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+            },
+          });
+          
+          if (babyResponse.ok || babyResponse.status === 404) {
+            console.log("[Auth] ✅ User is mother");
+            setUserRole("mother");
+            await AsyncStorage.setItem("userRole", "mother");
+          } else {
+            console.log("[Auth] ℹ️ Defaulting to mother role");
+            setUserRole("mother");
+            await AsyncStorage.setItem("userRole", "mother");
+          }
+        } catch (babyErr: any) {
+          console.log("[Auth] ℹ️ Could not check baby, defaulting to mother role");
+          setUserRole("mother");
+          await AsyncStorage.setItem("userRole", "mother");
+        }
+      }
+    } catch (roleErr: any) {
+      console.log("[Auth] ℹ️ Could not determine role, defaulting to consultant");
+      setUserRole("consultant");
+      await AsyncStorage.setItem("userRole", "consultant");
+    }
+  };
+
   const signInWithEmail = async (email: string, password: string) => {
     try {
       console.log("[Auth] 🔐 Signing in with email:", email);
-      
-      const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
       
       const response = await fetch(`${BACKEND_URL}/api/auth/sign-in/email`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Origin": BACKEND_URL,
         },
         body: JSON.stringify({
           email,
@@ -222,7 +170,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const responseText = await response.text();
       console.log("[Auth] 📥 Response status:", response.status);
-      console.log("[Auth] 📥 Response text:", responseText);
       
       if (!response.ok) {
         console.error("[Auth] ❌ Login failed:", response.status, responseText);
@@ -233,13 +180,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (errJson.message) errorMsg = errJson.message;
           if (errJson.error) errorMsg = errJson.error;
         } catch (parseErr) {
-          // If response is not JSON, use the text as error message
           if (responseText && responseText.length > 0 && responseText.length < 200) {
             errorMsg = responseText;
           }
         }
         
-        // Provide more specific error messages
         if (response.status === 401) {
           errorMsg = "Email ou senha incorretos";
         } else if (response.status === 404) {
@@ -281,12 +226,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       if (!token) {
-        console.error("[Auth] ❌ No token in response! Response data:", JSON.stringify(responseData));
+        console.error("[Auth] ❌ No token in response!");
         throw new Error("Nenhum token recebido do servidor");
       }
       
       if (!user) {
-        console.error("[Auth] ❌ No user in response! Response data:", JSON.stringify(responseData));
+        console.error("[Auth] ❌ No user in response!");
         throw new Error("Nenhum dado de usuário recebido");
       }
       
@@ -294,66 +239,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[Auth] 💾 Saving token...");
       await setBearerToken(token);
       
-      console.log("[Auth] ✅ Setting user:", user.email, "id:", user.id);
+      console.log("[Auth] ✅ Setting user:", user.email);
       setUser(user);
       
-      // Determine role by checking BOTH consultant profile AND mother baby
+      // Determine role
       console.log("[Auth] 🔍 Determining user role...");
-      try {
-        const consultantResponse = await fetch(`${BACKEND_URL}/api/consultant/profile`, {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Origin": BACKEND_URL,
-          },
-        });
-        
-        if (consultantResponse.ok) {
-          console.log("[Auth] ✅ User is consultant (has consultant profile)");
-          setUserRole("consultant");
-          await AsyncStorage.setItem("userRole", "consultant");
-        } else {
-          // Not a consultant - check if they have a linked baby (mother)
-          console.log("[Auth] 🔍 No consultant profile, checking if user is mother...");
-          try {
-            const babyResponse = await fetch(`${BACKEND_URL}/api/mother/baby`, {
-              method: "GET",
-              headers: {
-                "Authorization": `Bearer ${token}`,
-                "Origin": BACKEND_URL,
-              },
-            });
-            
-            if (babyResponse.ok) {
-              console.log("[Auth] ✅ User is mother (has linked baby)");
-              setUserRole("mother");
-              await AsyncStorage.setItem("userRole", "mother");
-            } else if (babyResponse.status === 404) {
-              console.log("[Auth] ⚠️ No baby linked to this account (404) - setting role as mother");
-              setUserRole("mother");
-              await AsyncStorage.setItem("userRole", "mother");
-            } else {
-              console.log("[Auth] ℹ️ Could not determine role from baby check, defaulting to mother");
-              setUserRole("mother");
-              await AsyncStorage.setItem("userRole", "mother");
-            }
-          } catch (babyErr: any) {
-            console.log("[Auth] ℹ️ Could not check baby:", babyErr?.message, "- defaulting to mother role");
-            setUserRole("mother");
-            await AsyncStorage.setItem("userRole", "mother");
-          }
-        }
-      } catch (roleErr: any) {
-        console.log("[Auth] ℹ️ Could not determine role:", roleErr?.message, "- defaulting to consultant");
-        setUserRole("consultant");
-        await AsyncStorage.setItem("userRole", "consultant");
-      }
+      await determineUserRole(token);
       
-      console.log("[Auth] ✅ Login complete - user state updated");
+      console.log("[Auth] ✅ Login complete");
       
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign in failed:", error?.message || error);
-      console.error("[Auth] ❌ Error stack:", error?.stack);
       throw error;
     }
   };
@@ -362,13 +258,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log("[Auth] 📝 Signing up with email:", email);
       
-      const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
-      
       const response = await fetch(`${BACKEND_URL}/api/auth/sign-up/email`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Origin": BACKEND_URL,
         },
         body: JSON.stringify({
           email,
@@ -457,7 +350,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem("userRole", "consultant");
       setUserRole("consultant");
       
-      console.log("[Auth] ✅ Signup complete - user state updated");
+      console.log("[Auth] ✅ Signup complete");
       
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign up failed:", error?.message || error);
@@ -479,15 +372,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Senha deve ter pelo menos 6 caracteres");
       }
 
-      const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
-
-      console.log("[Auth] 📡 Calling /api/mothers/create-account-with-token with token:", babyToken.trim());
+      console.log("[Auth] 📡 Calling /api/mothers/create-account-with-token");
       
       const response = await fetch(`${BACKEND_URL}/api/mothers/create-account-with-token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Origin": BACKEND_URL,
         },
         body: JSON.stringify({
           token: babyToken.trim(),
@@ -552,13 +442,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[Auth] 💾 Saving session token...");
       await setBearerToken(sessionToken);
       
-      console.log("[Auth] ✅ Setting user:", user.email, "id:", user.id);
+      console.log("[Auth] ✅ Setting user:", user.email);
       setUser(user);
       
       await AsyncStorage.setItem("userRole", "mother");
       setUserRole("mother");
       
-      console.log("[Auth] ✅ Create account complete - user state updated");
+      console.log("[Auth] ✅ Create account complete");
       
     } catch (error: any) {
       console.error("[Auth] ❌ Create account with token failed:", error?.message || error);
@@ -574,13 +464,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log("[Auth] 🔍 Validating baby token");
       
-      const BACKEND_URL = await import("@/utils/api").then(m => m.BACKEND_URL);
-      
       const response = await fetch(`${BACKEND_URL}/api/mothers/validate-token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Origin": BACKEND_URL,
         },
         body: JSON.stringify({ token: babyToken.trim() }),
       });
@@ -614,46 +501,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signInWithSocial = async (provider: "google" | "apple" | "github") => {
-    try {
-      console.log("[Auth] 🔗 Signing in with", provider);
-      
-      if (Platform.OS === "web") {
-        const token = await openOAuthPopup(provider);
-        await setBearerToken(token);
-        
-        // Fetch user from session after OAuth
-        const session = await authClient.getSession();
-        if (session?.data?.user) {
-          setUser(session.data.user as User);
-        }
-      } else {
-        const callbackURL = Linking.createURL("/");
-        console.log("[Auth] 📱 Using callback URL:", callbackURL);
-        
-        await authClient.signIn.social({
-          provider,
-          callbackURL,
-        });
-        
-        // Fetch user from session after OAuth
-        const session = await authClient.getSession();
-        if (session?.data?.user) {
-          setUser(session.data.user as User);
-        }
-      }
-      
-      console.log("[Auth] ✅ Social sign in complete");
-    } catch (error: any) {
-      console.error(`[Auth] ❌ ${provider} sign in failed:`, error?.message || error);
-      throw error;
-    }
-  };
-
-  const signInWithGoogle = () => signInWithSocial("google");
-  const signInWithApple = () => signInWithSocial("apple");
-  const signInWithGitHub = () => signInWithSocial("github");
-
   const signOut = async () => {
     console.log("[Auth] 🚪 Signing out");
     
@@ -669,11 +516,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         AsyncStorage.removeItem("motherBabyId").catch(() => {}),
       ]);
       console.log("[Auth] ✅ Local state and tokens cleared");
-      
-      // Try to sign out from backend (non-blocking)
-      authClient.signOut().catch((error: any) => {
-        console.error("[Auth] ⚠️ Backend sign out failed:", error?.message || error);
-      });
       
     } catch (error: any) {
       console.error("[Auth] ⚠️ Error during sign out:", error?.message || error);
@@ -693,9 +535,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUpWithEmail,
         createAccountWithToken,
         validateBabyToken,
-        signInWithGoogle,
-        signInWithApple,
-        signInWithGitHub,
         signOut,
       }}
     >
@@ -715,23 +554,4 @@ export function useAuth() {
 // Export for upload state management
 export function setUploadingState(uploading: boolean) {
   console.log("[Auth] Upload state:", uploading);
-}
-
-/**
- * Helper to check if a user is a mother by verifying they have a linked baby.
- * Returns true if the user has a linked baby, false otherwise.
- */
-export async function checkIfMother(token: string, backendUrl: string): Promise<boolean> {
-  try {
-    const response = await fetch(`${backendUrl}/api/mother/baby`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Origin": backendUrl,
-      },
-    });
-    return response.ok;
-  } catch {
-    return false;
-  }
 }
