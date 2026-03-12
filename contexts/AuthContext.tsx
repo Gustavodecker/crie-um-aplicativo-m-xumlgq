@@ -1,8 +1,26 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 import { setBearerToken, clearAuthTokens, getBearerToken } from "@/lib/auth";
 import { BACKEND_URL } from "@/utils/api";
+
+/**
+ * Build headers for Better Auth endpoints.
+ * Better Auth requires an Origin header for CSRF protection on POST requests.
+ * React Native mobile apps do NOT automatically send Origin headers like browsers do,
+ * so we must add it manually. Without this, Better Auth returns 403 MISSING_OR_NULL_ORIGIN.
+ */
+function buildAuthHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    // Add Origin header so Better Auth CSRF check passes on mobile
+    // Mobile apps don't send Origin automatically, causing 403 errors
+    "Origin": BACKEND_URL,
+    ...extra,
+  };
+  return headers;
+}
 
 interface User {
   id: string;
@@ -54,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           method: "GET",
           headers: {
             "Authorization": `Bearer ${token}`,
+            "Origin": BACKEND_URL,
           },
         });
         
@@ -112,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${token}`,
+          "Origin": BACKEND_URL,
         },
       });
       
@@ -127,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             method: "GET",
             headers: {
               "Authorization": `Bearer ${token}`,
+              "Origin": BACKEND_URL,
             },
           });
           
@@ -158,9 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const response = await fetch(`${BACKEND_URL}/api/auth/sign-in/email`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: buildAuthHeaders(),
         body: JSON.stringify({
           email,
           password,
@@ -260,9 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const response = await fetch(`${BACKEND_URL}/api/auth/sign-up/email`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: buildAuthHeaders(),
         body: JSON.stringify({
           email,
           password,
@@ -329,10 +346,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const profileResponse = await fetch(`${BACKEND_URL}/api/consultants/create-profile`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
-          },
+          headers: buildAuthHeaders({ "Authorization": `Bearer ${token}` }),
           body: JSON.stringify({
             name: name || email.split("@")[0],
           }),
@@ -376,9 +390,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const response = await fetch(`${BACKEND_URL}/api/mothers/create-account-with-token`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: buildAuthHeaders(),
         body: JSON.stringify({
           token: babyToken.trim(),
           email: email.trim(),
@@ -466,9 +478,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       const response = await fetch(`${BACKEND_URL}/api/mothers/validate-token`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: buildAuthHeaders(),
         body: JSON.stringify({ token: babyToken.trim() }),
       });
       

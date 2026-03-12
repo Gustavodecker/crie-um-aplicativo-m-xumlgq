@@ -82,10 +82,15 @@ export const apiCall = async <T = any>(
     if (options?.body) {
       fetchOptions.headers = {
         "Content-Type": "application/json",
+        // Add Origin header so Better Auth CSRF check passes on mobile.
+        // React Native apps don't send Origin automatically, causing 403 MISSING_OR_NULL_ORIGIN.
+        "Origin": BACKEND_URL,
         ...options?.headers,
       };
     } else {
       fetchOptions.headers = {
+        // Add Origin header for all requests (needed for Better Auth session validation)
+        "Origin": BACKEND_URL,
         ...options?.headers,
       };
     }
