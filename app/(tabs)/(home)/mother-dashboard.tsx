@@ -11,14 +11,13 @@ import {
   Image,
   Animated,
   Modal,
-  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, borderRadius, typography, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { ConsultantProfileCard } from "@/components/ConsultantProfileCard";
-import { apiGet, apiPost } from "@/utils/api";
+import { apiGet } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -93,9 +92,6 @@ export default function MotherDashboardScreen() {
   const [error, setError] = useState<string | null>(null);
   const [noBabyLinked, setNoBabyLinked] = useState(false);
   const [showRelinkModal, setShowRelinkModal] = useState(false);
-  const [relinkToken, setRelinkToken] = useState("");
-  const [relinkLoading, setRelinkLoading] = useState(false);
-  const [relinkError, setRelinkError] = useState("");
 
   // Fade-in animation
   useEffect(() => {
@@ -248,60 +244,13 @@ export default function MotherDashboardScreen() {
   }, []);
 
   const handleRelink = useCallback(async () => {
-    if (!relinkToken.trim()) {
-      setRelinkError("Por favor, insira o token");
-      return;
-    }
-    
-    setRelinkLoading(true);
-    setRelinkError("");
-    
-    try {
-      console.log("[Mother Dashboard] Attempting to re-link baby with token:", relinkToken.substring(0, 4) + "...");
-      console.log("[Mother Dashboard] Making request to /api/mothers/init-with-token");
-
-      const data = await apiPost<{ id: string; name: string; birthDate: string; consultantId: string; message?: string }>(
-        "/api/mothers/init-with-token",
-        { token: relinkToken.trim() }
-      );
-
-      console.log("[Mother Dashboard] ✅ Re-link successful! Baby:", data.name, "Message:", data.message);
-
-      // Handle "already linked to your account" case (200 with message)
-      if (data.message?.toLowerCase().includes("already linked to your account") ||
-          data.message?.toLowerCase().includes("já vinculado à sua conta")) {
-        console.log("[Mother Dashboard] Baby was already linked to this account - reloading dashboard");
-      }
-
-      setShowRelinkModal(false);
-      setRelinkToken("");
-      setNoBabyLinked(false);
-      setError(null);
-      // Reload dashboard
-      setLoading(true);
-      await loadDashboard();
-    } catch (err: any) {
-      console.error("[Mother Dashboard] Re-link error:", err);
-      const errorMessage: string = err?.message || "";
-
-      if (errorMessage.includes("Baby already linked to another account") ||
-          errorMessage.includes("already linked to another")) {
-        setRelinkError("Este bebê já está vinculado a outra conta. Solicite um novo token à sua consultora.");
-      } else if (errorMessage.includes("Invalid token") || errorMessage.includes("Baby not found")) {
-        setRelinkError("Token inválido ou não encontrado. Verifique o token com sua consultora.");
-      } else if (errorMessage.includes("Authentication token not found") ||
-                 errorMessage.includes("401") ||
-                 errorMessage.toLowerCase().includes("unauthorized")) {
-        setRelinkError("Sessão expirada. Por favor, faça login novamente.");
-      } else if (errorMessage.includes("Network") || errorMessage.includes("fetch")) {
-        setRelinkError("Erro de conexão. Verifique sua internet e tente novamente.");
-      } else {
-        setRelinkError(errorMessage || "Erro ao vincular bebê. Tente novamente.");
-      }
-    } finally {
-      setRelinkLoading(false);
-    }
-  }, [relinkToken, loadDashboard]);
+    // In the new flow, re-linking is done by signing out and using the first-access token flow.
+    // Direct the user to sign out.
+    console.log("[Mother Dashboard] User chose to sign out and use first-access flow");
+    setShowRelinkModal(false);
+    await signOut();
+    router.replace("/auth");
+  }, [signOut, router]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -341,38 +290,27 @@ export default function MotherDashboardScreen() {
           {noBabyLinked ? (
             <>
               <Text style={[styles.errorText, { fontSize: 14, marginTop: spacing.md, lineHeight: 22 }]}>
-                Sua conta não está vinculada a nenhum bebê. Isso pode acontecer se:
-              </Text>
-              <Text style={[styles.errorText, { fontSize: 13, marginTop: spacing.sm, lineHeight: 20, textAlign: "left", paddingHorizontal: spacing.lg }]}>
-                • Sua conta foi criada antes do bebê ser cadastrado{"\n"}
-                • O token usado na criação da conta expirou{"\n"}
-                • Houve um erro no processo de vinculação
+                Sua conta não está vinculada a nenhum bebê.
               </Text>
               <Text style={[styles.errorText, { fontSize: 14, marginTop: spacing.md, fontWeight: "600" }]}>
-                Solução: Solicite um novo token à sua consultora e clique no botão abaixo.
+                Solicite um token à sua consultora e use a opção "Primeiro acesso" na tela de login.
               </Text>
               <TouchableOpacity 
                 style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.lg }]} 
-                onPress={() => setShowRelinkModal(true)}
-              >
-                <IconSymbol 
-                  ios_icon_name="link.circle.fill" 
-                  android_material_icon_name="link" 
-                  size={20} 
-                  color="#FFF" 
-                  style={{ marginRight: spacing.sm }}
-                />
-                <Text style={styles.retryButtonText}>Vincular com Token</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.retryButton, { backgroundColor: colors.backgroundAlt, marginTop: spacing.md, borderWidth: 1, borderColor: colors.border }]} 
                 onPress={async () => {
-                  console.log("[Mother Dashboard] User chose to sign out and recreate account");
+                  console.log("[Mother Dashboard] User chose to sign out and use first-access flow");
                   await signOut();
                   router.replace("/auth");
                 }}
               >
-                <Text style={[styles.retryButtonText, { color: colors.text }]}>Sair e Recriar Conta</Text>
+                <IconSymbol 
+                  ios_icon_name="arrow.right.circle.fill" 
+                  android_material_icon_name="login" 
+                  size={20} 
+                  color="#FFF" 
+                  style={{ marginRight: spacing.sm }}
+                />
+                <Text style={styles.retryButtonText}>Sair e Usar Token</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -402,49 +340,25 @@ export default function MotherDashboardScreen() {
         >
           <View style={styles.modalOverlay}>
             <View style={styles.modalContainer}>
-              <Text style={styles.modalTitle}>Vincular Bebê</Text>
+              <Text style={styles.modalTitle}>Bebê não vinculado</Text>
               <Text style={styles.modalSubtitle}>
-                Sua conta não está vinculada a nenhum bebê. Solicite um novo token à sua consultora e insira abaixo para vincular.
+                Sua conta não está vinculada a nenhum bebê. Para vincular, você precisa sair e usar o token fornecido pela sua consultora no primeiro acesso.
               </Text>
-              
-              {relinkError ? (
-                <View style={styles.modalError}>
-                  <Text style={styles.modalErrorText}>{relinkError}</Text>
-                </View>
-              ) : null}
-              
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Token do bebê"
-                placeholderTextColor={colors.textSecondary}
-                value={relinkToken}
-                onChangeText={setRelinkToken}
-                autoCapitalize="characters"
-                editable={!relinkLoading}
-              />
               
               <View style={styles.modalButtons}>
                 <TouchableOpacity
                   style={[styles.modalButton, styles.modalButtonCancel]}
                   onPress={() => {
                     setShowRelinkModal(false);
-                    setRelinkToken("");
-                    setRelinkError("");
                   }}
-                  disabled={relinkLoading}
                 >
-                  <Text style={styles.modalButtonCancelText}>Cancelar</Text>
+                  <Text style={styles.modalButtonCancelText}>Fechar</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonConfirm, relinkLoading && { opacity: 0.6 }]}
+                  style={[styles.modalButton, styles.modalButtonConfirm]}
                   onPress={handleRelink}
-                  disabled={relinkLoading}
                 >
-                  {relinkLoading ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <Text style={styles.modalButtonConfirmText}>Vincular</Text>
-                  )}
+                  <Text style={styles.modalButtonConfirmText}>Sair e Vincular</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1099,29 +1013,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: spacing.lg,
     lineHeight: 22,
-  },
-  modalError: {
-    backgroundColor: "#FEE2E2",
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  modalErrorText: {
-    color: colors.error,
-    fontSize: 14,
-    textAlign: "center",
-  },
-  modalInput: {
-    backgroundColor: colors.background,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.lg,
-    textAlign: "center",
-    letterSpacing: 2,
   },
   modalButtons: {
     flexDirection: "row",

@@ -248,6 +248,18 @@ export default function RegisterBabyScreen() {
                 keyboardType="phone-pad"
               />
             </View>
+
+            <View style={styles.infoBox}>
+              <IconSymbol
+                ios_icon_name="info.circle"
+                android_material_icon_name="info"
+                size={20}
+                color={colors.primary}
+              />
+              <Text style={styles.infoText}>
+                O email da mãe será cadastrado por ela no primeiro acesso usando o token.
+              </Text>
+            </View>
           </View>
 
           <View style={styles.section}>
@@ -462,6 +474,21 @@ const styles = StyleSheet.create({
   dateButtonText: {
     fontSize: 16,
     color: colors.text,
+  },
+  infoBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: colors.primary + "15",
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.text,
+    lineHeight: 18,
   },
   buttonContainer: {
     marginTop: spacing.lg,
