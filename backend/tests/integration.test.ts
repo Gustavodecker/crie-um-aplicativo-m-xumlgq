@@ -2003,6 +2003,129 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 409);
   });
 
+  // ===== Mother Test Login =====
+
+  test("Test mother login with valid credentials", async () => {
+    // Create a baby first
+    const uniqueId = crypto.randomUUID();
+    const babyRes = await authenticatedApi("/api/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby for Test Login",
+        birthDate: "2024-06-15",
+        motherName: "Test Mother",
+        motherPhone: "+1234567890",
+      }),
+    });
+    const babyData = await babyRes.json();
+
+    // Register a mother with this baby
+    const testEmail = `test-login+${uniqueId}@example.com`;
+    const testPassword = "TestPassword123!";
+    await api("/api/mother/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyCode: babyData.token,
+        email: testEmail,
+        senha: testPassword,
+      }),
+    });
+
+    // Test login with correct credentials
+    const res = await api("/api/mother/test-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: testEmail,
+        senha: testPassword,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.accountFound).toBe(true);
+    expect(data.userFound).toBe(true);
+    expect(data.passwordMatches).toBe(true);
+  });
+
+  test("Test mother login with wrong password", async () => {
+    // Create a baby first
+    const uniqueId = crypto.randomUUID();
+    const babyRes = await authenticatedApi("/api/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby for Wrong Password Test",
+        birthDate: "2024-06-15",
+        motherName: "Test Mother",
+        motherPhone: "+1234567890",
+      }),
+    });
+    const babyData = await babyRes.json();
+
+    // Register a mother
+    const testEmail = `test-login-wrong+${uniqueId}@example.com`;
+    const testPassword = "CorrectPassword123!";
+    await api("/api/mother/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyCode: babyData.token,
+        email: testEmail,
+        senha: testPassword,
+      }),
+    });
+
+    // Test login with wrong password
+    const res = await api("/api/mother/test-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: testEmail,
+        senha: "WrongPassword123!",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.accountFound).toBe(true);
+    expect(data.passwordMatches).toBe(false);
+  });
+
+  test("Test mother login with nonexistent email returns 404", async () => {
+    const res = await api("/api/mother/test-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "nonexistent-mother@example.com",
+        senha: "AnyPassword123!",
+      }),
+    });
+    await expectStatus(res, 404);
+  });
+
+  test("Test mother login without email returns 400", async () => {
+    const res = await api("/api/mother/test-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        senha: "Password123!",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Test mother login without password returns 400", async () => {
+    const res = await api("/api/mother/test-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "test@example.com",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ===== Mother Baby Access =====
 
   test("Get baby linked to mother", async () => {
