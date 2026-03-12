@@ -28,21 +28,23 @@ export const app = await createApplication(schema);
 export type App = typeof app;
 
 // Add middleware to allow requests without Origin header (for mobile apps)
-// This is necessary because mobile apps (React Native/Expo) don't send Origin headers
-// and Better Auth should not reject them based on missing Origin
-app.fastify.addHook('preHandler', async (request, reply) => {
-  // If Origin header is missing, add a permissive one
-  // This allows mobile apps to proceed without Origin validation issues
+// This hook executes EARLY (before auth processing) to ensure mobile apps are handled
+// Mobile apps (React Native/Expo) don't send Origin headers - this is normal and expected
+app.fastify.addHook('onRequest', async (request, reply) => {
+  // Mobile apps (React Native/Expo) do NOT send Origin headers
+  // This is standard behavior for native apps and should NOT be treated as an error
+
+  // For any request without Origin header, set it to wildcard
+  // This allows mobile clients to authenticate via tokens
+  // Security is maintained by authenticated sessions, NOT by Origin header
   if (!request.headers.origin) {
-    // For requests without Origin (mobile apps), we set a placeholder
-    // The actual security comes from authentication tokens, not Origin
-    request.headers.origin = 'mobile-app';
+    request.headers.origin = '*';
   }
 });
 
 app.logger.info(
-  { middleware: 'origin-header-normalization' },
-  'Mobile app middleware enabled - requests without Origin header will be accepted'
+  { middleware: 'onRequest-mobile-app-handler' },
+  'Mobile app support enabled - requests without Origin header are accepted (onRequest hook)'
 );
 
 // Log session configuration on startup
@@ -72,7 +74,7 @@ app.logger.info(
 // CORS Configuration for Mobile Apps:
 // - Accepts all origins including mobile apps via wildcard ["*"]
 // - Mobile apps (React Native/Expo) don't send Origin header
-// - Middleware adds "mobile-app" origin for requests without Origin header
+// - Fastify onRequest hook adds "*" origin for requests without Origin header
 // - Authentication is protected by session tokens, not Origin
 //
 // Environment Variables (see .env.example):
@@ -84,14 +86,16 @@ app.logger.info(
 // - SESSION_STRICT: Enable strict validation (default: false)
 // - SESSION_COOKIE_CACHE: Enable cookie caching (default: true)
 app.withAuth({
-  // Accept all origins including the "mobile-app" placeholder
-  // Mobile apps get "mobile-app" origin from middleware if they don't send Origin header
-  trustedOrigins: ["*", "mobile-app"],
+  // Accept requests from all origins
+  // Mobile apps without Origin header get "*" from middleware
+  // This allows both web and mobile clients to authenticate
+  // Security is maintained by authentication tokens, not Origin header
+  trustedOrigins: ["*"],
 });
 
 app.logger.info(
-  { trustedOrigins: ["*", "mobile-app"], mobileMiddleware: 'enabled' },
-  'Better Auth configured for mobile app support - all origins accepted, mobile apps without Origin header are handled by middleware'
+  { trustedOrigins: ["*"], mobileSupport: 'enabled' },
+  'Better Auth configured for all origins - mobile apps (React Native/Expo) without Origin header are fully supported'
 );
 
 // Log successful auth initialization
