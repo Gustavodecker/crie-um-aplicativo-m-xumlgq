@@ -18,7 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, borderRadius, typography, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
 import { ConsultantProfileCard } from "@/components/ConsultantProfileCard";
-import { apiGet, BACKEND_URL, getBearerToken } from "@/utils/api";
+import { apiGet, apiPost } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -258,44 +258,21 @@ export default function MotherDashboardScreen() {
     
     try {
       console.log("[Mother Dashboard] Attempting to re-link baby with token:", relinkToken.substring(0, 4) + "...");
-      const authToken = await getBearerToken();
-      
-      if (!authToken) {
-        console.error("[Mother Dashboard] No auth token found");
-        setRelinkError("Sessão expirada. Por favor, faça login novamente.");
-        return;
-      }
-      
       console.log("[Mother Dashboard] Making request to /api/mothers/init-with-token");
-      const response = await fetch(`${BACKEND_URL}/api/mothers/init-with-token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`,
-          "Origin": BACKEND_URL,
-        },
-        body: JSON.stringify({ token: relinkToken.trim() }),
-      });
-      
-      console.log("[Mother Dashboard] Re-link response status:", response.status);
-      const data = await response.json();
-      console.log("[Mother Dashboard] Re-link response data:", data);
-      
-      if (!response.ok) {
-        console.error("[Mother Dashboard] Re-link failed:", response.status, data);
-        if (response.status === 409) {
-          setRelinkError("Este token já foi utilizado. Solicite um novo token à sua consultora.");
-        } else if (response.status === 404) {
-          setRelinkError("Token inválido ou não encontrado. Verifique o token com sua consultora.");
-        } else if (response.status === 401) {
-          setRelinkError("Sessão expirada. Por favor, faça login novamente.");
-        } else {
-          setRelinkError(data.error || "Erro ao vincular bebê. Tente novamente.");
-        }
-        return;
+
+      const data = await apiPost<{ id: string; name: string; birthDate: string; consultantId: string; message?: string }>(
+        "/api/mothers/init-with-token",
+        { token: relinkToken.trim() }
+      );
+
+      console.log("[Mother Dashboard] ✅ Re-link successful! Baby:", data.name, "Message:", data.message);
+
+      // Handle "already linked to your account" case (200 with message)
+      if (data.message?.toLowerCase().includes("already linked to your account") ||
+          data.message?.toLowerCase().includes("já vinculado à sua conta")) {
+        console.log("[Mother Dashboard] Baby was already linked to this account - reloading dashboard");
       }
-      
-      console.log("[Mother Dashboard] ✅ Re-link successful! Baby:", data.name);
+
       setShowRelinkModal(false);
       setRelinkToken("");
       setNoBabyLinked(false);
@@ -305,7 +282,22 @@ export default function MotherDashboardScreen() {
       await loadDashboard();
     } catch (err: any) {
       console.error("[Mother Dashboard] Re-link error:", err);
-      setRelinkError(err?.message || "Erro de conexão. Verifique sua internet e tente novamente.");
+      const errorMessage: string = err?.message || "";
+
+      if (errorMessage.includes("Baby already linked to another account") ||
+          errorMessage.includes("already linked to another")) {
+        setRelinkError("Este bebê já está vinculado a outra conta. Solicite um novo token à sua consultora.");
+      } else if (errorMessage.includes("Invalid token") || errorMessage.includes("Baby not found")) {
+        setRelinkError("Token inválido ou não encontrado. Verifique o token com sua consultora.");
+      } else if (errorMessage.includes("Authentication token not found") ||
+                 errorMessage.includes("401") ||
+                 errorMessage.toLowerCase().includes("unauthorized")) {
+        setRelinkError("Sessão expirada. Por favor, faça login novamente.");
+      } else if (errorMessage.includes("Network") || errorMessage.includes("fetch")) {
+        setRelinkError("Erro de conexão. Verifique sua internet e tente novamente.");
+      } else {
+        setRelinkError(errorMessage || "Erro ao vincular bebê. Tente novamente.");
+      }
     } finally {
       setRelinkLoading(false);
     }
