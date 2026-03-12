@@ -456,9 +456,18 @@ export function registerMotherRoutes(app: App) {
       'Fetching linked baby for mother'
     );
 
-    const baby = await app.db.query.babies.findFirst({
+    // Find all babies linked to this mother, then sort by creation date
+    // This ensures predictable ordering if multiple babies are linked
+    const babies = await app.db.query.babies.findMany({
       where: eq(schema.babies.motherUserId, sessionUserId),
     });
+
+    // Sort by creation time (oldest first) and get the first one
+    const baby = babies.length > 0
+      ? babies.sort((a: any, b: any) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        )[0]
+      : null;
 
     if (!baby) {
       // Log detailed diagnostic info

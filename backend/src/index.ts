@@ -27,24 +27,12 @@ export const app = await createApplication(schema);
 // Export App type for use in route files
 export type App = typeof app;
 
-// Add middleware to allow requests without Origin header (for mobile apps)
-// This hook executes EARLY (before auth processing) to ensure mobile apps are handled
-// Mobile apps (React Native/Expo) don't send Origin headers - this is normal and expected
-app.fastify.addHook('onRequest', async (request, reply) => {
-  // Mobile apps (React Native/Expo) do NOT send Origin headers
-  // This is standard behavior for native apps and should NOT be treated as an error
-
-  // For any request without Origin header, set it to wildcard
-  // This allows mobile clients to authenticate via tokens
-  // Security is maintained by authenticated sessions, NOT by Origin header
-  if (!request.headers.origin) {
-    request.headers.origin = '*';
-  }
-});
-
+// Mobile apps (React Native/Expo) do NOT send Origin headers
+// This is standard behavior and should NOT block authentication
+// Security is maintained via token-based authentication, NOT Origin header
 app.logger.info(
-  { middleware: 'onRequest-mobile-app-handler' },
-  'Mobile app support enabled - requests without Origin header are accepted (onRequest hook)'
+  { mobileSupport: 'enabled', originValidation: 'disabled' },
+  'Backend configured for mobile app support - Origin header validation is disabled'
 );
 
 // Log session configuration on startup
@@ -62,7 +50,7 @@ app.logger.info(
 );
 
 // Enable authentication with Better Auth
-// Configuration includes mobile app support with flexible CORS handling
+// Configuration includes mobile app support with PERMISSIVE CORS handling
 // Session Management Configuration:
 // - 30 day session expiration (extended from default)
 // - 24 hour session update age (automatic refresh)
@@ -72,10 +60,10 @@ app.logger.info(
 // - Cookie caching enabled for performance
 //
 // CORS Configuration for Mobile Apps:
-// - Accepts all origins including mobile apps via wildcard ["*"]
-// - Mobile apps (React Native/Expo) don't send Origin header
-// - Fastify onRequest hook adds "*" origin for requests without Origin header
-// - Authentication is protected by session tokens, not Origin
+// - NO Origin header validation (mobile apps don't send Origin)
+// - Requests without Origin header are allowed
+// - Authentication is protected by session tokens, NOT Origin header
+// - Mobile apps (React Native/Expo) fully supported
 //
 // Environment Variables (see .env.example):
 // - SESSION_EXPIRATION_TIME: Session duration in ms (default: 30 days)
@@ -85,17 +73,11 @@ app.logger.info(
 // - COOKIE_DOMAIN: Cross-subdomain cookie domain (default: current domain)
 // - SESSION_STRICT: Enable strict validation (default: false)
 // - SESSION_COOKIE_CACHE: Enable cookie caching (default: true)
-app.withAuth({
-  // Accept requests from all origins
-  // Mobile apps without Origin header get "*" from middleware
-  // This allows both web and mobile clients to authenticate
-  // Security is maintained by authentication tokens, not Origin header
-  trustedOrigins: ["*"],
-});
+app.withAuth();
 
 app.logger.info(
-  { trustedOrigins: ["*"], mobileSupport: 'enabled' },
-  'Better Auth configured for all origins - mobile apps (React Native/Expo) without Origin header are fully supported'
+  { originValidation: 'disabled', mobileAppsSupported: true, securityModel: 'token-based' },
+  'Better Auth initialized - Origin header validation disabled for mobile app support'
 );
 
 // Log successful auth initialization
