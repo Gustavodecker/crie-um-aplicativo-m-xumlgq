@@ -157,32 +157,70 @@ export function registerMotherRoutes(app: App) {
         'Updating baby with mother information'
       );
 
-      await app.db.update(schema.babies)
+      const updateResult = await app.db.update(schema.babies)
         .set({
           motherUserId: userId,
           motherEmail: email,
           token: null,
         })
-        .where(eq(schema.babies.id, baby.id));
+        .where(eq(schema.babies.id, baby.id))
+        .returning();
 
-      app.logger.info({ babyId: baby.id, userId }, 'Baby updated with mother information');
-
-      // VERIFICATION: Confirm the update persisted
-      const verifiedBaby = await app.db.query.babies.findFirst({
-        where: eq(schema.babies.id, baby.id),
-      });
-
-      if (!verifiedBaby || verifiedBaby.motherUserId !== userId) {
+      if (!updateResult || updateResult.length === 0) {
         app.logger.error(
-          { babyId: baby.id, expectedMotherUserId: userId, actualMotherUserId: verifiedBaby?.motherUserId },
-          'CRITICAL: Baby update failed'
+          { babyId: baby.id, userId },
+          'CRITICAL: Baby update returned no rows'
         );
         return reply.status(500).send({ error: 'Failed to link baby to account' });
       }
 
+      const updatedBaby = updateResult[0];
       app.logger.info(
-        { babyId: baby.id, motherUserId: verifiedBaby.motherUserId, token: verifiedBaby.token },
-        'Baby association verified - token invalidated'
+        {
+          babyId: updatedBaby.id,
+          userId,
+          motherUserId: updatedBaby.motherUserId,
+          motherEmail: updatedBaby.motherEmail,
+          token: updatedBaby.token
+        },
+        'Baby updated with mother information - verifying persistence'
+      );
+
+      // VERIFICATION: Confirm the update persisted by re-querying
+      const verifiedBaby = await app.db.query.babies.findFirst({
+        where: eq(schema.babies.id, baby.id),
+      });
+
+      if (!verifiedBaby) {
+        app.logger.error(
+          { babyId: baby.id },
+          'CRITICAL: Baby not found after update'
+        );
+        return reply.status(500).send({ error: 'Failed to verify baby update' });
+      }
+
+      if (verifiedBaby.motherUserId !== userId) {
+        app.logger.error(
+          {
+            babyId: baby.id,
+            expectedMotherUserId: userId,
+            actualMotherUserId: verifiedBaby.motherUserId,
+            updatedBabyMotherUserId: updatedBaby.motherUserId
+          },
+          'CRITICAL: Baby motherUserId mismatch - update did not persist correctly'
+        );
+        return reply.status(500).send({ error: 'Failed to link baby to account - data verification failed' });
+      }
+
+      app.logger.info(
+        {
+          babyId: verifiedBaby.id,
+          motherUserId: verifiedBaby.motherUserId,
+          motherEmail: verifiedBaby.motherEmail,
+          token: verifiedBaby.token,
+          verified: true
+        },
+        'Baby association verified - baby correctly linked to mother'
       );
 
       // Create session for the newly created user
@@ -241,16 +279,50 @@ export function registerMotherRoutes(app: App) {
         );
       }
 
+      // Final verification: re-query the user and baby to ensure everything is saved correctly
+      const finalUser = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.id, userId),
+      });
+
+      const finalBaby = await app.db.query.babies.findFirst({
+        where: eq(schema.babies.id, baby.id),
+      });
+
       app.logger.info(
         {
           userId,
+          userEmail: finalUser?.email,
           babyId: baby.id,
+          babyMotherUserId: finalBaby?.motherUserId,
+          babyMotherEmail: finalBaby?.motherEmail,
           sessionId,
-          motherEmail: email,
-          babyMotherUserId: verifiedBaby.motherUserId
+          sessionToken: sessionToken.substring(0, 10) + '...',
+          allFieldsCorrect:
+            finalUser?.id === userId &&
+            finalUser?.email === email &&
+            finalBaby?.motherUserId === userId &&
+            finalBaby?.motherEmail === email
         },
-        'Mother account created and session verified - baby linked successfully'
+        'Mother account creation complete - all data verified'
       );
+
+      if (!finalUser || finalUser.id !== userId) {
+        app.logger.error(
+          { userId, finalUserId: finalUser?.id },
+          'WARNING: Final user verification failed - user not found'
+        );
+      }
+
+      if (!finalBaby || finalBaby.motherUserId !== userId) {
+        app.logger.error(
+          {
+            babyId: baby.id,
+            expectedMotherUserId: userId,
+            actualMotherUserId: finalBaby?.motherUserId
+          },
+          'WARNING: Final baby verification failed - motherUserId not set'
+        );
+      }
 
       return reply.status(201).send({
         token: sessionToken,
