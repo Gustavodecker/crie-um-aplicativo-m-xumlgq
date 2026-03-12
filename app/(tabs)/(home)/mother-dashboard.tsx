@@ -206,6 +206,11 @@ export default function MotherDashboardScreen() {
 
     } catch (error: any) {
       console.error("[Mother Dashboard] Error loading dashboard:", error);
+      console.log("[Mother Dashboard] Error details:", {
+        message: error.message,
+        status: error.status,
+        response: error.response
+      });
       
       if (!isMountedRef.current) return;
       
@@ -216,9 +221,17 @@ export default function MotherDashboardScreen() {
         errorMessage = "Sessão expirada. Por favor, faça login novamente.";
       } else if (error.message?.includes("401") || error.message?.toLowerCase().includes("unauthorized")) {
         errorMessage = "Não autorizado. Por favor, faça login novamente.";
-      } else if (error.message?.includes("No baby linked") || error.message?.includes("404")) {
+      } else if (
+        error.message?.includes("No baby linked") || 
+        error.message?.includes("No baby") ||
+        error.message?.includes("404") || 
+        error.status === 404 ||
+        (error.response && error.response.status === 404)
+      ) {
+        console.log("[Mother Dashboard] 404 detected - baby not linked, showing re-link modal");
         setNoBabyLinked(true);
-        errorMessage = "Nenhum bebê vinculado à sua conta.";
+        setShowRelinkModal(true); // Automatically show the modal
+        errorMessage = "Seu bebê não está vinculado à sua conta. Solicite um novo token à sua consultora.";
       } else if (error.message?.includes("Network") || error.message?.includes("fetch")) {
         errorMessage = "Erro de conexão. Verifique sua internet.";
       } else if (error.message) {
@@ -244,43 +257,55 @@ export default function MotherDashboardScreen() {
     setRelinkError("");
     
     try {
-      console.log("[Mother Dashboard] Attempting to re-link baby with token");
+      console.log("[Mother Dashboard] Attempting to re-link baby with token:", relinkToken.substring(0, 4) + "...");
       const authToken = await getBearerToken();
       
+      if (!authToken) {
+        console.error("[Mother Dashboard] No auth token found");
+        setRelinkError("Sessão expirada. Por favor, faça login novamente.");
+        return;
+      }
+      
+      console.log("[Mother Dashboard] Making request to /api/mothers/init-with-token");
       const response = await fetch(`${BACKEND_URL}/api/mothers/init-with-token`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${authToken}`,
+          "Origin": BACKEND_URL,
         },
         body: JSON.stringify({ token: relinkToken.trim() }),
       });
       
+      console.log("[Mother Dashboard] Re-link response status:", response.status);
       const data = await response.json();
+      console.log("[Mother Dashboard] Re-link response data:", data);
       
       if (!response.ok) {
         console.error("[Mother Dashboard] Re-link failed:", response.status, data);
         if (response.status === 409) {
-          setRelinkError("Este token já foi utilizado por outra conta.");
+          setRelinkError("Este token já foi utilizado. Solicite um novo token à sua consultora.");
         } else if (response.status === 404) {
-          setRelinkError("Token inválido. Verifique com sua consultora.");
+          setRelinkError("Token inválido ou não encontrado. Verifique o token com sua consultora.");
+        } else if (response.status === 401) {
+          setRelinkError("Sessão expirada. Por favor, faça login novamente.");
         } else {
-          setRelinkError(data.error || "Erro ao vincular bebê");
+          setRelinkError(data.error || "Erro ao vincular bebê. Tente novamente.");
         }
         return;
       }
       
-      console.log("[Mother Dashboard] Re-link successful:", data);
+      console.log("[Mother Dashboard] ✅ Re-link successful! Baby:", data.name);
       setShowRelinkModal(false);
       setRelinkToken("");
       setNoBabyLinked(false);
       setError(null);
       // Reload dashboard
       setLoading(true);
-      loadDashboard();
+      await loadDashboard();
     } catch (err: any) {
       console.error("[Mother Dashboard] Re-link error:", err);
-      setRelinkError(err?.message || "Erro ao vincular bebê");
+      setRelinkError(err?.message || "Erro de conexão. Verifique sua internet e tente novamente.");
     } finally {
       setRelinkLoading(false);
     }
@@ -323,24 +348,39 @@ export default function MotherDashboardScreen() {
           
           {noBabyLinked ? (
             <>
-              <Text style={[styles.errorText, { fontSize: 13, marginTop: spacing.sm }]}>
-                Isso pode acontecer se sua conta foi criada com uma versão anterior do aplicativo. 
-                Solicite um novo token à sua consultora para vincular seu bebê.
+              <Text style={[styles.errorText, { fontSize: 14, marginTop: spacing.md, lineHeight: 22 }]}>
+                Sua conta não está vinculada a nenhum bebê. Isso pode acontecer se:
+              </Text>
+              <Text style={[styles.errorText, { fontSize: 13, marginTop: spacing.sm, lineHeight: 20, textAlign: "left", paddingHorizontal: spacing.lg }]}>
+                • Sua conta foi criada antes do bebê ser cadastrado{"\n"}
+                • O token usado na criação da conta expirou{"\n"}
+                • Houve um erro no processo de vinculação
+              </Text>
+              <Text style={[styles.errorText, { fontSize: 14, marginTop: spacing.md, fontWeight: "600" }]}>
+                Solução: Solicite um novo token à sua consultora e clique no botão abaixo.
               </Text>
               <TouchableOpacity 
                 style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.lg }]} 
                 onPress={() => setShowRelinkModal(true)}
               >
+                <IconSymbol 
+                  ios_icon_name="link.circle.fill" 
+                  android_material_icon_name="link" 
+                  size={20} 
+                  color="#FFF" 
+                  style={{ marginRight: spacing.sm }}
+                />
                 <Text style={styles.retryButtonText}>Vincular com Token</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.retryButton, { backgroundColor: colors.secondary, marginTop: spacing.md }]} 
+                style={[styles.retryButton, { backgroundColor: colors.backgroundAlt, marginTop: spacing.md, borderWidth: 1, borderColor: colors.border }]} 
                 onPress={async () => {
+                  console.log("[Mother Dashboard] User chose to sign out and recreate account");
                   await signOut();
                   router.replace("/auth");
                 }}
               >
-                <Text style={styles.retryButtonText}>Sair e Recriar Conta</Text>
+                <Text style={[styles.retryButtonText, { color: colors.text }]}>Sair e Recriar Conta</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -372,7 +412,7 @@ export default function MotherDashboardScreen() {
             <View style={styles.modalContainer}>
               <Text style={styles.modalTitle}>Vincular Bebê</Text>
               <Text style={styles.modalSubtitle}>
-                Insira o token fornecido pela sua consultora para vincular seu bebê à sua conta.
+                Sua conta não está vinculada a nenhum bebê. Solicite um novo token à sua consultora e insira abaixo para vincular.
               </Text>
               
               {relinkError ? (
@@ -777,6 +817,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
     justifyContent: "center",
     alignItems: "center",
+    flexDirection: "row",
     ...shadows.md,
   },
   retryButtonText: {
