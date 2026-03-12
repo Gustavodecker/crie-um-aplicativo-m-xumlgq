@@ -5,6 +5,44 @@ import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
 import bcrypt from 'bcrypt';
 
+/**
+ * Mother Routes
+ *
+ * POST /api/mother/register - Register mother with email, password, and baby code
+ *   - Creates user in auth.user table
+ *   - Creates account in auth.account table with credential provider
+ *   - Links baby to mother via motherUserId
+ *   - Returns session token for immediate login
+ *   - Account is compatible with Better Auth's standard /api/auth/sign-in/email endpoint
+ *
+ * POST /api/mother/test-login - Debug endpoint to test authentication (TEMPORARY)
+ *   - Verifies account can be found by email
+ *   - Tests password verification independently of Better Auth
+ *   - Returns detailed account information
+ *   - Use this to debug: "account not found" vs "password mismatch" vs "user mismatch"
+ *
+ * GET /api/mother/baby - Get baby linked to authenticated mother
+ *   - Requires authentication (session token)
+ *   - Returns baby object with age and active contract info
+ *
+ * Authentication Flow for Mothers:
+ *   1. Mother registers via POST /api/mother/register with email, password, baby code
+ *   2. Account created with accountId=email, providerId='credential'
+ *   3. Password hashed with bcrypt (10 salt rounds)
+ *   4. Session token returned immediately (no email verification needed)
+ *   5. Mother can login via POST /api/auth/sign-in/email with email + password
+ *   6. Better Auth verifies password using bcrypt.compare()
+ *   7. Session created and returned
+ *
+ * Debugging Mother Login Issues:
+ *   1. Check registration logs for "Mother registration successful"
+ *   2. Use POST /api/mother/test-login to verify:
+ *      - Account exists (accountFound=true)
+ *      - User exists (userFound=true)
+ *      - Password matches (passwordMatches=true)
+ *   3. If any of above is false, check the actual database values using the account details returned
+ */
+
 export function registerMotherRoutes(app: App) {
   const requireAuth = app.requireAuth();
 
@@ -131,12 +169,56 @@ export function registerMotherRoutes(app: App) {
       );
 
       // Step 5: Hash password using bcrypt
+      app.logger.debug(
+        {
+          userId,
+          providedPasswordLength: senha.length,
+          saltRounds: 10,
+          algorithm: 'bcrypt',
+        },
+        'Starting password hashing'
+      );
+
       const hashedPassword = await bcrypt.hash(senha, 10);
-      app.logger.debug({ userId }, 'Password hashed successfully');
+
+      app.logger.debug(
+        {
+          userId,
+          hashedPasswordLength: hashedPassword.length,
+          hashedPasswordAlgorithm: hashedPassword.substring(0, 4), // Should be $2a or $2b or $2y
+          hashCorrectFormat: hashedPassword.startsWith('$2'),
+        },
+        'Password hashed successfully - verifying format'
+      );
+
+      // Verify the hash is valid by testing it immediately
+      const hashVerification = await bcrypt.compare(senha, hashedPassword);
+      if (!hashVerification) {
+        app.logger.error(
+          { userId, hashedPasswordLength: hashedPassword.length },
+          'CRITICAL: Password hash verification failed immediately after hashing'
+        );
+        return reply.status(500).send({ error: 'Failed to create password hash' });
+      }
+
+      app.logger.debug({ userId }, 'Password hash verified successfully');
 
       // Step 6: Create account record with hashed password
       const accountId = crypto.randomUUID();
-      await app.db.insert(authSchema.account).values({
+
+      app.logger.info(
+        {
+          userId,
+          accountId,
+          email,
+          providerId: 'credential',
+          hashedPasswordLength: hashedPassword.length,
+          hashedPasswordPreview: hashedPassword.substring(0, 20) + '...',
+        },
+        'Creating account record for mother'
+      );
+
+      const createdAccount = await app.db.insert(authSchema.account).values({
         id: accountId,
         accountId: email,
         providerId: 'credential',
@@ -150,9 +232,45 @@ export function registerMotherRoutes(app: App) {
         scope: null,
         createdAt: new Date(),
         updatedAt: new Date(),
+      }).returning();
+
+      app.logger.info(
+        {
+          accountId: createdAccount[0]?.id,
+          accountAccountId: createdAccount[0]?.accountId,
+          userId: createdAccount[0]?.userId,
+          providerId: createdAccount[0]?.providerId,
+          passwordStored: !!createdAccount[0]?.password,
+        },
+        'Account created successfully - verifying stored values'
+      );
+
+      // Verify the account was created with correct data
+      const verifiedAccount = await app.db.query.account.findFirst({
+        where: eq(authSchema.account.id, accountId),
       });
 
-      app.logger.debug({ userId, accountId }, 'Account created for mother with hashed password');
+      if (!verifiedAccount) {
+        app.logger.error(
+          { accountId, userId },
+          'CRITICAL: Account not found after insertion'
+        );
+        return reply.status(500).send({ error: 'Failed to create account' });
+      }
+
+      app.logger.info(
+        {
+          accountId: verifiedAccount.id,
+          storedAccountId: verifiedAccount.accountId,
+          storedUserId: verifiedAccount.userId,
+          storedProviderId: verifiedAccount.providerId,
+          passwordLength: verifiedAccount.password?.length || 0,
+          accountIdMatches: verifiedAccount.accountId === email,
+          providerIdMatches: verifiedAccount.providerId === 'credential',
+          userIdMatches: verifiedAccount.userId === userId,
+        },
+        'Account verification complete'
+      );
 
       // Step 7: Update baby with motherUserId and motherEmail
       app.logger.info(
@@ -323,6 +441,17 @@ export function registerMotherRoutes(app: App) {
       }
 
       // Step 9: Return success with user data
+      app.logger.info(
+        {
+          userId,
+          email,
+          babyId: baby.id,
+          sessionToken: sessionToken.substring(0, 20) + '...',
+          readyForLogin: true,
+        },
+        'Mother registration successful - account created and ready for authentication'
+      );
+
       return reply.status(201).send({
         token: sessionToken,
         user: {
@@ -333,8 +462,134 @@ export function registerMotherRoutes(app: App) {
       });
 
     } catch (error) {
-      app.logger.error({ err: error, email }, 'Error registering mother');
+      app.logger.error(
+        {
+          err: error,
+          email,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          errorStack: error instanceof Error ? error.stack : undefined,
+        },
+        'Error registering mother'
+      );
       return reply.status(500).send({ error: 'Falha ao registrar conta' });
+    }
+  });
+
+  // POST /api/mother/test-login - Debug endpoint to test mother authentication (TEMPORARY)
+  app.fastify.post('/api/mother/test-login', {
+    schema: {
+      description: 'Test mother login by verifying account can be found and password verified',
+      tags: ['mother', 'debug'],
+      body: {
+        type: 'object',
+        required: ['email', 'senha'],
+        properties: {
+          email: { type: 'string', format: 'email' },
+          senha: { type: 'string' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+            accountFound: { type: 'boolean' },
+            userFound: { type: 'boolean' },
+            passwordMatches: { type: 'boolean' },
+            accountDetails: { type: 'object' },
+          },
+        },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Body: { email: string; senha: string } }>, reply: FastifyReply) => {
+    const { email, senha } = request.body;
+
+    app.logger.info({ email }, 'Testing mother login - finding account');
+
+    try {
+      // Try to find account by accountId (email) - the way Better Auth should find it
+      const account = await app.db.query.account.findFirst({
+        where: eq(authSchema.account.accountId, email),
+      });
+
+      app.logger.info(
+        {
+          email,
+          accountFound: !!account,
+          accountId: account?.id,
+          providerId: account?.providerId,
+          passwordStored: !!account?.password,
+        },
+        'Account lookup result'
+      );
+
+      if (!account) {
+        app.logger.warn({ email }, 'No account found for email');
+        return reply.status(404).send({
+          message: 'Account not found',
+          accountFound: false,
+          userFound: false,
+          passwordMatches: false,
+        });
+      }
+
+      // Verify the user exists
+      const user = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.id, account.userId),
+      });
+
+      app.logger.info(
+        {
+          email,
+          userId: account.userId,
+          userFound: !!user,
+          userName: user?.name,
+        },
+        'User lookup result'
+      );
+
+      if (!user) {
+        return reply.status(404).send({
+          message: 'User not found for account',
+          accountFound: true,
+          userFound: false,
+          passwordMatches: false,
+        });
+      }
+
+      // Try to verify password
+      const passwordMatches = await bcrypt.compare(senha, account.password || '');
+
+      app.logger.info(
+        {
+          email,
+          passwordMatches,
+          storedPasswordLength: account.password?.length || 0,
+          providedPasswordLength: senha.length,
+          accountProviderId: account.providerId,
+        },
+        'Password verification result'
+      );
+
+      return reply.status(200).send({
+        message: 'Test login debug result',
+        accountFound: true,
+        userFound: true,
+        passwordMatches,
+        accountDetails: {
+          accountId: account.id,
+          accountAccountId: account.accountId,
+          providerId: account.providerId,
+          userId: account.userId,
+          userName: user.name,
+          userEmail: user.email,
+        },
+      });
+
+    } catch (error) {
+      app.logger.error({ err: error, email }, 'Error testing mother login');
+      return reply.status(500).send({ error: 'Test login failed' });
     }
   });
 
