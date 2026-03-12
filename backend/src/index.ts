@@ -52,10 +52,10 @@ app.logger.info(
 // - Cookie caching enabled for performance
 //
 // CORS Configuration for Mobile Apps:
-// - Accept requests from all origins (including mobile apps without standard Origin header)
-// - Support mobile app deep linking schemes (myapp://)
+// - By default Better Auth accepts all origins (["*"])
+// - Mobile apps without Origin header are automatically supported
 // - Proper OPTIONS preflight request handling
-// - Mobile apps may not send Origin header, so we accept all sources
+// - Authentication is protected by session tokens, not Origin
 //
 // Environment Variables (see .env.example):
 // - SESSION_EXPIRATION_TIME: Session duration in ms (default: 30 days)
@@ -65,16 +65,11 @@ app.logger.info(
 // - COOKIE_DOMAIN: Cross-subdomain cookie domain (default: current domain)
 // - SESSION_STRICT: Enable strict validation (default: false)
 // - SESSION_COOKIE_CACHE: Enable cookie caching (default: true)
-app.withAuth({
-  // Trust all origins to support mobile apps and other clients
-  // Mobile apps may not send standard Origin headers, so we accept requests from anywhere
-  // This is safe because authentication is still protected by session tokens
-  trustedOrigins: ["*"],
-});
+app.withAuth();
 
 app.logger.info(
-  { trustedOrigins: ["*"] },
-  'CORS configured for mobile app support - accepting requests from all origins'
+  { defaultOriginHandling: 'all origins accepted', mobileAppsSupported: true },
+  'Better Auth configured with default origin handling - mobile apps without Origin header are supported'
 );
 
 // Log successful auth initialization
