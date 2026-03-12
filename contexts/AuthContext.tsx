@@ -36,12 +36,7 @@ interface AuthContextType {
   setUser: (user: User | null) => void;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
-  createAccountWithToken: (token: string, email: string, password: string) => Promise<void>;
-  validateBabyToken: (token: string) => Promise<{
-    valid: boolean;
-    babyName?: string;
-    consultantName?: string;
-  }>;
+  registerMother: (email: string, password: string, babyCode: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -372,12 +367,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const createAccountWithToken = async (babyToken: string, email: string, password: string) => {
+  const registerMother = async (email: string, password: string, babyCode: string) => {
     try {
-      console.log("[Auth] 📝 Creating account with baby token");
+      console.log("[Auth] 📝 Registering mother with baby code");
       
-      if (!babyToken || babyToken.trim().length === 0) {
-        throw new Error("Token inválido");
+      if (!babyCode || babyCode.trim().length === 0) {
+        throw new Error("Código do bebê é obrigatório");
       }
       if (!email || email.trim().length === 0) {
         throw new Error("Email é obrigatório");
@@ -386,15 +381,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Senha deve ter pelo menos 6 caracteres");
       }
 
-      console.log("[Auth] 📡 Calling /api/mothers/create-account-with-token");
+      console.log("[Auth] 📡 Calling /api/mother/register");
       
-      const response = await fetch(`${BACKEND_URL}/api/mothers/create-account-with-token`, {
+      const response = await fetch(`${BACKEND_URL}/api/mother/register`, {
         method: "POST",
         headers: buildAuthHeaders(),
         body: JSON.stringify({
-          token: babyToken.trim(),
           email: email.trim(),
-          password,
+          senha: password,
+          babyCode: babyCode.trim(),
         }),
       });
       
@@ -407,21 +402,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       if (!response.ok) {
-        console.error("[Auth] ❌ Create account with token failed:", response.status, responseText);
+        console.error("[Auth] ❌ Mother registration failed:", response.status, responseText);
         
         let errorMsg = "Erro ao criar conta";
         if (responseData?.error) errorMsg = responseData.error;
         
         if (response.status === 404) {
-          throw new Error("Token não encontrado. Verifique com sua consultora.");
+          throw new Error("Código não encontrado. Verifique com sua consultora.");
         }
         if (response.status === 409) {
+          if (errorMsg.toLowerCase().includes("código") || errorMsg.toLowerCase().includes("utilizado")) {
+            throw new Error("Este código já foi utilizado.");
+          }
           throw new Error("Já existe uma conta com este email. Use a opção de login.");
         }
         throw new Error(errorMsg);
       }
       
-      console.log("[Auth] ✅ Create account with token response received");
+      console.log("[Auth] ✅ Mother registration response received");
       
       let sessionToken: string | null = null;
       let user: User | null = null;
@@ -447,7 +445,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (!user) {
         console.warn("[Auth] ⚠️ No user in response");
-        throw new Error("No user data received");
+        throw new Error("Dados do usuário não recebidos");
       }
       
       // CRITICAL: Save token FIRST, then set user state
@@ -460,53 +458,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem("userRole", "mother");
       setUserRole("mother");
       
-      console.log("[Auth] ✅ Create account complete");
+      console.log("[Auth] ✅ Mother registration complete");
       
     } catch (error: any) {
-      console.error("[Auth] ❌ Create account with token failed:", error?.message || error);
-      throw error;
-    }
-  };
-
-  const validateBabyToken = async (babyToken: string): Promise<{
-    valid: boolean;
-    babyName?: string;
-    consultantName?: string;
-  }> => {
-    try {
-      console.log("[Auth] 🔍 Validating baby token");
-      
-      const response = await fetch(`${BACKEND_URL}/api/mothers/validate-token`, {
-        method: "POST",
-        headers: buildAuthHeaders(),
-        body: JSON.stringify({ token: babyToken.trim() }),
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("[Auth] ❌ Token validation failed:", response.status, errorText);
-        
-        if (response.status === 404) {
-          return { valid: false };
-        }
-        
-        let errorMsg = "Token inválido";
-        try {
-          const errJson = JSON.parse(errorText);
-          if (errJson.error) errorMsg = errJson.error;
-        } catch {}
-        throw new Error(errorMsg);
-      }
-      
-      const data = await response.json();
-      console.log("[Auth] ✅ Token validation result:", data);
-      return {
-        valid: data.valid,
-        babyName: data.babyName,
-        consultantName: data.consultantName,
-      };
-    } catch (error: any) {
-      console.error("[Auth] ❌ Token validation error:", error?.message || error);
+      console.error("[Auth] ❌ Mother registration failed:", error?.message || error);
       throw error;
     }
   };
@@ -543,8 +498,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser,
         signInWithEmail,
         signUpWithEmail,
-        createAccountWithToken,
-        validateBabyToken,
+        registerMother,
         signOut,
       }}
     >

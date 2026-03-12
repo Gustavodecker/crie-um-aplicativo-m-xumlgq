@@ -17,7 +17,7 @@ import { colors, spacing, borderRadius, typography, shadows } from "@/styles/com
 import { IconSymbol } from "@/components/IconSymbol";
 import { useAuth } from "@/contexts/AuthContext";
 
-type MotherStep = "choose" | "login" | "token-validate" | "token-create-account";
+type MotherStep = "choose" | "login" | "register";
 type ConsultantStep = "login" | "register";
 
 export default function AuthScreen() {
@@ -28,18 +28,13 @@ export default function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [babyToken, setBabyToken] = useState("");
+  const [babyCode, setBabyCode] = useState("");
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   
-  const [tokenValidationResult, setTokenValidationResult] = useState<{
-    babyName?: string;
-    consultantName?: string;
-  } | null>(null);
-  
   const router = useRouter();
-  const { signInWithEmail, signUpWithEmail, createAccountWithToken, validateBabyToken } = useAuth();
+  const { signInWithEmail, signUpWithEmail, registerMother } = useAuth();
 
   const handleConsultantLogin = async () => {
     if (!email || !password) {
@@ -131,40 +126,8 @@ export default function AuthScreen() {
     }
   };
 
-  const handleValidateToken = async () => {
-    if (!babyToken.trim()) {
-      setError("Por favor, insira o token");
-      return;
-    }
-    
-    setLoading(true);
-    setError("");
-    
-    try {
-      console.log("Validating baby token");
-      const result = await validateBabyToken(babyToken);
-      
-      if (!result.valid) {
-        setError("Token inválido. Verifique com sua consultora.");
-        setLoading(false);
-        return;
-      }
-      
-      console.log("Token validation result:", result);
-      setTokenValidationResult(result);
-      setMotherStep("token-create-account");
-    } catch (err: any) {
-      console.error("Token validation error:", err);
-      const errorMessage = err?.message || "Erro ao validar token";
-      console.error("Error message:", errorMessage);
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreateAccount = async () => {
-    if (!email.trim() || !password) {
+  const handleMotherRegister = async () => {
+    if (!email.trim() || !password || !babyCode.trim()) {
       setError("Por favor, preencha todos os campos");
       return;
     }
@@ -184,12 +147,12 @@ export default function AuthScreen() {
     setError("");
     
     try {
-      console.log("Creating mother account with token and email");
-      await createAccountWithToken(babyToken, email.trim(), password);
-      console.log("Mother account created successfully");
+      console.log("Registering mother with baby code");
+      await registerMother(email.trim(), password, babyCode.trim());
+      console.log("Mother registration successful");
       router.replace("/(tabs)");
     } catch (err: any) {
-      console.error("Create account error:", err);
+      console.error("Mother registration error:", err);
       const errorMessage = err?.message || "Erro ao criar conta";
       console.error("Error message:", errorMessage);
       setError(errorMessage);
@@ -200,12 +163,11 @@ export default function AuthScreen() {
 
   const handleResetMotherFlow = () => {
     setMotherStep("choose");
-    setBabyToken("");
+    setBabyCode("");
     setEmail("");
     setName("");
     setPassword("");
     setError("");
-    setTokenValidationResult(null);
   };
 
   const handleResetConsultantFlow = () => {
@@ -456,8 +418,8 @@ export default function AuthScreen() {
                     <TouchableOpacity
                       style={styles.choiceButton}
                       onPress={() => {
-                        console.log("Mother chose: First access with token");
-                        setMotherStep("token-validate");
+                        console.log("Mother chose: First access - register");
+                        setMotherStep("register");
                       }}
                     >
                       <View style={styles.choiceIconContainer}>
@@ -470,7 +432,7 @@ export default function AuthScreen() {
                       </View>
                       <View style={styles.choiceTextContainer}>
                         <Text style={styles.choiceTitle}>Primeiro acesso</Text>
-                        <Text style={styles.choiceSubtitle}>Tenho um token da consultora</Text>
+                        <Text style={styles.choiceSubtitle}>Tenho um código da consultora</Text>
                       </View>
                       <IconSymbol
                         ios_icon_name="chevron.right"
@@ -543,10 +505,10 @@ export default function AuthScreen() {
                       <Text style={styles.linkText}>Voltar</Text>
                     </TouchableOpacity>
                   </>
-                ) : motherStep === "token-validate" ? (
+                ) : (
                   <>
                     <Text style={styles.instructionText}>
-                      Insira o token fornecido pela sua consultora
+                      Crie sua conta com o código fornecido pela consultora
                     </Text>
 
                     <View style={styles.inputContainer}>
@@ -558,48 +520,14 @@ export default function AuthScreen() {
                       />
                       <TextInput
                         style={styles.input}
-                        placeholder="Token do bebê"
+                        placeholder="Código do bebê"
                         placeholderTextColor={colors.textSecondary}
-                        value={babyToken}
-                        onChangeText={setBabyToken}
+                        value={babyCode}
+                        onChangeText={setBabyCode}
                         autoCapitalize="characters"
                         editable={!loading}
                       />
                     </View>
-
-                    <TouchableOpacity
-                      style={[styles.button, loading && styles.buttonDisabled]}
-                      onPress={handleValidateToken}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <ActivityIndicator color="#FFFFFF" />
-                      ) : (
-                        <Text style={styles.buttonText}>Validar Token</Text>
-                      )}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.linkButton}
-                      onPress={handleResetMotherFlow}
-                      disabled={loading}
-                    >
-                      <Text style={styles.linkText}>Voltar</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <View style={styles.welcomeBox}>
-                      <Text style={styles.welcomeText}>
-                        Olá! Você foi cadastrada pela consultora{" "}
-                        <Text style={styles.welcomeBold}>{tokenValidationResult?.consultantName}</Text>
-                      </Text>
-                      <Text style={styles.welcomeText}>
-                        Bebê: <Text style={styles.welcomeBold}>{tokenValidationResult?.babyName}</Text>
-                      </Text>
-                    </View>
-
-                    <Text style={styles.instructionText}>Crie sua conta para acessar</Text>
 
                     <View style={styles.inputContainer}>
                       <IconSymbol
@@ -640,7 +568,7 @@ export default function AuthScreen() {
 
                     <TouchableOpacity
                       style={[styles.button, loading && styles.buttonDisabled]}
-                      onPress={handleCreateAccount}
+                      onPress={handleMotherRegister}
                       disabled={loading}
                     >
                       {loading ? (
