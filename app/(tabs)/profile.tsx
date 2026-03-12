@@ -193,11 +193,11 @@ export default function ProfileScreen() {
             <TouchableOpacity
               style={styles.signOutButton}
               onPress={() => {
-                console.log("Mother tapped sign out button");
+                console.log("Mother tapped sign out button - opening confirmation modal");
                 setShowSignOutModal(true);
               }}
             >
-              <IconSymbol ios_icon_name="arrow.right.square.fill" android_material_icon_name="logout" size={24} color={colors.error} />
+              <IconSymbol ios_icon_name="arrow.right.square.fill" android_material_icon_name="logout" size={24} color="#FFFFFF" />
               <Text style={styles.signOutText}>Encerrar Sessão</Text>
             </TouchableOpacity>
           </View>
@@ -317,7 +317,7 @@ export default function ProfileScreen() {
               setShowSignOutModal(true);
             }}
           >
-            <IconSymbol ios_icon_name="arrow.right.square.fill" android_material_icon_name="logout" size={24} color={colors.error} />
+            <IconSymbol ios_icon_name="arrow.right.square.fill" android_material_icon_name="logout" size={24} color="#FFFFFF" />
             <Text style={styles.signOutText}>Encerrar Sessão</Text>
           </TouchableOpacity>
         </View>
@@ -424,8 +424,21 @@ const styles = StyleSheet.create({
   menuItem: { flexDirection: "row", alignItems: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, marginBottom: 8, gap: 12 },
   menuItemText: { flex: 1, fontSize: 16, color: colors.text },
   logoutSection: { marginTop: 32, marginBottom: 60 },
-  signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderRadius: 12, padding: 16, gap: 8, borderWidth: 1, borderColor: colors.error },
-  signOutText: { fontSize: 16, fontWeight: "600", color: colors.error },
+  signOutButton: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "center", 
+    backgroundColor: colors.error, 
+    borderRadius: 12, 
+    padding: 18, 
+    gap: 10,
+    shadowColor: colors.error,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  signOutText: { fontSize: 17, fontWeight: "700", color: "#FFFFFF" },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
   slideModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
