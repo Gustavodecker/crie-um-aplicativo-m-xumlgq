@@ -45,6 +45,46 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Fetch the requirePasswordChange flag from GET /api/user/flags.
+ * Falls back to the persisted AsyncStorage value if the request fails.
+ */
+async function fetchRequirePasswordChangeFlag(token: string): Promise<boolean> {
+  try {
+    console.log("[Auth] 🌐 Fetching /api/user/flags...");
+    const flagsResponse = await fetch(`${BACKEND_URL}/api/user/flags`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Origin": BACKEND_URL,
+      },
+    });
+
+    if (!flagsResponse.ok) {
+      console.warn("[Auth] ⚠️ /api/user/flags returned", flagsResponse.status, "— falling back to AsyncStorage");
+      const stored = await AsyncStorage.getItem(REQUIRE_PASSWORD_CHANGE_KEY);
+      return stored === "true";
+    }
+
+    const flagsData = await flagsResponse.json();
+    const requirePasswordChange = !!flagsData?.requirePasswordChange;
+    console.log("[Auth] ✅ /api/user/flags requirePasswordChange:", requirePasswordChange);
+
+    // Persist so it survives app restarts / offline launches
+    if (requirePasswordChange) {
+      await AsyncStorage.setItem(REQUIRE_PASSWORD_CHANGE_KEY, "true");
+    } else {
+      await AsyncStorage.removeItem(REQUIRE_PASSWORD_CHANGE_KEY);
+    }
+
+    return requirePasswordChange;
+  } catch (err: any) {
+    console.warn("[Auth] ⚠️ Error fetching /api/user/flags:", err?.message, "— falling back to AsyncStorage");
+    const stored = await AsyncStorage.getItem(REQUIRE_PASSWORD_CHANGE_KEY);
+    return stored === "true";
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -94,15 +134,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (sessionData?.user) {
           console.log("[Auth] ✅ Session valid, user:", sessionData.user.email);
 
-          // Restore requirePasswordChange flag from persistent storage
-          const storedRequirePasswordChange = await AsyncStorage.getItem(REQUIRE_PASSWORD_CHANGE_KEY);
-          const requirePasswordChange = storedRequirePasswordChange === "true";
+          // Fetch fresh requirePasswordChange flag from backend
+          const requirePasswordChange = await fetchRequirePasswordChangeFlag(token);
           const restoredUser: User = {
             ...(sessionData.user as User),
             requirePasswordChange,
           };
           setUser(restoredUser);
-          console.log("[Auth] 🔑 requirePasswordChange restored:", requirePasswordChange);
+          console.log("[Auth] 🔑 requirePasswordChange (from /api/user/flags):", requirePasswordChange);
           
           // Load userRole from storage
           const storedRole = await AsyncStorage.getItem("userRole");
@@ -268,14 +307,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[Auth] 💾 Saving token...");
       await setBearerToken(token);
 
-      // Persist requirePasswordChange flag so it survives app restarts
-      const requirePasswordChange = !!(user as any).requirePasswordChange;
-      console.log("[Auth] 🔑 requirePasswordChange from login response:", requirePasswordChange);
-      if (requirePasswordChange) {
-        await AsyncStorage.setItem(REQUIRE_PASSWORD_CHANGE_KEY, "true");
-      } else {
-        await AsyncStorage.removeItem(REQUIRE_PASSWORD_CHANGE_KEY);
-      }
+      // Fetch fresh requirePasswordChange flag from backend (source of truth)
+      const requirePasswordChange = await fetchRequirePasswordChangeFlag(token);
 
       console.log("[Auth] ✅ Setting user:", user.email);
       setUser({ ...user, requirePasswordChange });
