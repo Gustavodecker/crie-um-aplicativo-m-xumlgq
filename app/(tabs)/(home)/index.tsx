@@ -180,7 +180,6 @@ export default function ConsultantDashboardScreen() {
   }>({ visible: false, babyId: "", babyName: "" });
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [consultantProfile, setConsultantProfile] = useState<ConsultantProfile | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
 
   const loadConsultantProfile = useCallback(async () => {
     try {
@@ -1030,8 +1029,118 @@ export default function ConsultantDashboardScreen() {
 
   const activeBabies = babies.filter((baby) => !baby.archived);
   const archivedBabies = babies.filter((baby) => baby.archived);
-  const displayedBabies = showArchived ? archivedBabies : activeBabies;
-  const babyCount = showArchived ? archivedBabies.length : activeBabies.length;
+
+  const renderBabyCard = (baby: Baby) => {
+    let contractStatus = "Sem contrato";
+    let contractColor = colors.textSecondary;
+
+    if (baby.activeContract) {
+      const status = baby.activeContract.status;
+      if (status === "active") {
+        contractStatus = "Vigente";
+        contractColor = colors.success;
+      } else if (status === "paused") {
+        contractStatus = "Em Pausa";
+        contractColor = colors.warning;
+      } else if (status === "completed") {
+        contractStatus = "Concluído";
+        contractColor = colors.textSecondary;
+      }
+    }
+
+    const isLoadingAction = actionLoadingId === baby.id;
+
+    return (
+      <TouchableOpacity
+        key={baby.id}
+        style={styles.babyCard}
+        onPress={() => handleSelectBaby(baby)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.babyCardContent}>
+          <View style={styles.babyIcon}>
+            <IconSymbol
+              ios_icon_name="person.circle"
+              android_material_icon_name="account-circle"
+              size={48}
+              color={colors.primary}
+            />
+          </View>
+          <View style={styles.babyDetails}>
+            <Text style={styles.babyCardName}>{baby.name}</Text>
+            <Text style={styles.babyCardInfo}>{baby.motherName}</Text>
+            <View style={styles.babyCardFooter}>
+              <View style={styles.ageContainer}>
+                <IconSymbol
+                  ios_icon_name="calendar"
+                  android_material_icon_name="calendar-today"
+                  size={14}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.ageText}>
+                  {baby.ageMonths}m {baby.ageDays}d
+                </Text>
+              </View>
+              <View style={[styles.contractBadge, { backgroundColor: contractColor + "20" }]}>
+                <Text style={[styles.contractBadgeText, { color: contractColor }]}>
+                  {contractStatus}
+                </Text>
+              </View>
+            </View>
+          </View>
+          <IconSymbol
+            ios_icon_name="chevron.right"
+            android_material_icon_name="chevron-right"
+            size={24}
+            color={colors.textSecondary}
+          />
+        </View>
+
+        <View style={styles.babyCardActions}>
+          {!baby.archived && (
+            <TouchableOpacity
+              style={styles.archiveButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleArchiveBaby(baby.id, baby.name);
+              }}
+              disabled={isLoadingAction}
+              activeOpacity={0.7}
+            >
+              {isLoadingAction ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <IconSymbol
+                  ios_icon_name="archivebox"
+                  android_material_icon_name="archive"
+                  size={16}
+                  color={colors.primary}
+                />
+              )}
+              <Text style={styles.archiveButtonText}>Arquivar</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.deleteBabyButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeleteBabyConfirm(baby.id, baby.name);
+            }}
+            disabled={isLoadingAction}
+            activeOpacity={0.7}
+          >
+            <IconSymbol
+              ios_icon_name="trash"
+              android_material_icon_name="delete"
+              size={16}
+              color={colors.error}
+            />
+            <Text style={styles.deleteBabyButtonText}>Excluir</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -1061,39 +1170,7 @@ export default function ConsultantDashboardScreen() {
       >
         <View style={styles.greetingSection}>
           <Text style={styles.greetingText}>Olá, Consultora! 👋</Text>
-          <Text style={styles.babyCountText}>{babyCount} bebê cadastrado</Text>
-        </View>
-
-        <View style={styles.filterButtons}>
-          <TouchableOpacity
-            style={[styles.filterButton, !showArchived && styles.filterButtonActive]}
-            onPress={() => setShowArchived(false)}
-          >
-            <IconSymbol
-              ios_icon_name="arrow.2.circlepath"
-              android_material_icon_name="sync"
-              size={20}
-              color={!showArchived ? colors.card : colors.text}
-            />
-            <Text style={[styles.filterButtonText, !showArchived && styles.filterButtonTextActive]}>
-              Ativos
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.filterButton, showArchived && styles.filterButtonActive]}
-            onPress={() => setShowArchived(true)}
-          >
-            <IconSymbol
-              ios_icon_name="archivebox"
-              android_material_icon_name="archive"
-              size={20}
-              color={showArchived ? colors.card : colors.text}
-            />
-            <Text style={[styles.filterButtonText, showArchived && styles.filterButtonTextActive]}>
-              Arquivados
-            </Text>
-          </TouchableOpacity>
+          <Text style={styles.babyCountText}>{activeBabies.length} bebê ativo</Text>
         </View>
 
         <TouchableOpacity 
@@ -1110,125 +1187,51 @@ export default function ConsultantDashboardScreen() {
           <Text style={styles.registerButtonText}>Cadastrar Novo Bebê</Text>
         </TouchableOpacity>
 
-        {displayedBabies.length === 0 ? (
+        {/* Ativos section */}
+        <View style={styles.sectionHeader}>
+          <IconSymbol
+            ios_icon_name="arrow.2.circlepath"
+            android_material_icon_name="sync"
+            size={16}
+            color={colors.primary}
+          />
+          <Text style={styles.sectionHeaderText}>Ativos</Text>
+          <View style={styles.sectionBadge}>
+            <Text style={styles.sectionBadgeText}>{activeBabies.length}</Text>
+          </View>
+        </View>
+
+        {activeBabies.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              {showArchived ? "Nenhum bebê arquivado" : "Nenhum bebê ativo"}
-            </Text>
+            <Text style={styles.emptyText}>Nenhum bebê ativo</Text>
           </View>
         ) : (
           <View style={styles.babiesList}>
-            {displayedBabies.map((baby) => {
-              let contractStatus = "Sem contrato";
-              let contractColor = colors.textSecondary;
+            {activeBabies.map(renderBabyCard)}
+          </View>
+        )}
 
-              if (baby.activeContract) {
-                const status = baby.activeContract.status;
-                if (status === "active") {
-                  contractStatus = "Vigente";
-                  contractColor = colors.success;
-                } else if (status === "paused") {
-                  contractStatus = "Em Pausa";
-                  contractColor = colors.warning;
-                } else if (status === "completed") {
-                  contractStatus = "Concluído";
-                  contractColor = colors.textSecondary;
-                }
-              }
+        {/* Arquivados section */}
+        <View style={[styles.sectionHeader, styles.sectionHeaderArchived]}>
+          <IconSymbol
+            ios_icon_name="archivebox"
+            android_material_icon_name="archive"
+            size={16}
+            color={colors.textSecondary}
+          />
+          <Text style={[styles.sectionHeaderText, styles.sectionHeaderTextArchived]}>Arquivados</Text>
+          <View style={[styles.sectionBadge, styles.sectionBadgeArchived]}>
+            <Text style={[styles.sectionBadgeText, styles.sectionBadgeTextArchived]}>{archivedBabies.length}</Text>
+          </View>
+        </View>
 
-              const isLoadingAction = actionLoadingId === baby.id;
-
-              return (
-                <TouchableOpacity
-                  key={baby.id}
-                  style={styles.babyCard}
-                  onPress={() => handleSelectBaby(baby)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.babyCardContent}>
-                    <View style={styles.babyIcon}>
-                      <IconSymbol
-                        ios_icon_name="person.circle"
-                        android_material_icon_name="account-circle"
-                        size={48}
-                        color={colors.primary}
-                      />
-                    </View>
-                    <View style={styles.babyDetails}>
-                      <Text style={styles.babyCardName}>{baby.name}</Text>
-                      <Text style={styles.babyCardInfo}>{baby.motherName}</Text>
-                      <View style={styles.babyCardFooter}>
-                        <View style={styles.ageContainer}>
-                          <IconSymbol
-                            ios_icon_name="calendar"
-                            android_material_icon_name="calendar-today"
-                            size={14}
-                            color={colors.textSecondary}
-                          />
-                          <Text style={styles.ageText}>
-                            {baby.ageMonths}m {baby.ageDays}d
-                          </Text>
-                        </View>
-                        <View style={[styles.contractBadge, { backgroundColor: contractColor + "20" }]}>
-                          <Text style={[styles.contractBadgeText, { color: contractColor }]}>
-                            {contractStatus}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                    <IconSymbol
-                      ios_icon_name="chevron.right"
-                      android_material_icon_name="chevron-right"
-                      size={24}
-                      color={colors.textSecondary}
-                    />
-                  </View>
-
-                  <View style={styles.babyCardActions}>
-                    {!baby.archived && (
-                      <TouchableOpacity
-                        style={styles.archiveButton}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleArchiveBaby(baby.id, baby.name);
-                        }}
-                        disabled={isLoadingAction}
-                        activeOpacity={0.7}
-                      >
-                        {isLoadingAction ? (
-                          <ActivityIndicator size="small" color={colors.primary} />
-                        ) : (
-                          <IconSymbol
-                            ios_icon_name="archivebox"
-                            android_material_icon_name="archive"
-                            size={16}
-                            color={colors.primary}
-                          />
-                        )}
-                        <Text style={styles.archiveButtonText}>Arquivar</Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={styles.deleteBabyButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleDeleteBabyConfirm(baby.id, baby.name);
-                      }}
-                      disabled={isLoadingAction}
-                      activeOpacity={0.7}
-                    >
-                      <IconSymbol
-                        ios_icon_name="trash"
-                        android_material_icon_name="delete"
-                        size={16}
-                        color={colors.error}
-                      />
-                      <Text style={styles.deleteBabyButtonText}>Excluir</Text>
-                    </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+        {archivedBabies.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Nenhum bebê arquivado</Text>
+          </View>
+        ) : (
+          <View style={styles.babiesList}>
+            {archivedBabies.map(renderBabyCard)}
           </View>
         )}
       </ScrollView>
@@ -1287,36 +1290,47 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
   },
-  filterButtons: {
-    flexDirection: "row",
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  filterButton: {
-    flex: 1,
+  sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: spacing.sm,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
     gap: spacing.sm,
   },
-  filterButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+  sectionHeaderArchived: {
+    marginTop: spacing.xl,
   },
-  filterButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
+  sectionHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    flex: 1,
   },
-  filterButtonTextActive: {
-    color: colors.card,
+  sectionHeaderTextArchived: {
+    color: colors.textSecondary,
+  },
+  sectionBadge: {
+    backgroundColor: colors.primary + "20",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    minWidth: 24,
+    alignItems: "center",
+  },
+  sectionBadgeArchived: {
+    backgroundColor: colors.border,
+  },
+  sectionBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  sectionBadgeTextArchived: {
+    color: colors.textSecondary,
   },
   registerButton: {
     flexDirection: "row",
