@@ -391,8 +391,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: buildAuthHeaders(),
         body: JSON.stringify({
           email: email.trim(),
-          password: password,
-          inviteCode: inviteCode.trim(),
+          senha: password, // Backend expects 'senha' (Portuguese for password)
+          babyCode: inviteCode.trim(), // Backend expects 'babyCode'
         }),
       });
       
