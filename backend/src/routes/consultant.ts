@@ -3,7 +3,6 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
-import bcrypt from 'bcrypt';
 
 export function registerConsultantRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -523,15 +522,6 @@ export function registerConsultantRoutes(app: App) {
     }
 
     try {
-      // Step 1: Check if email already exists
-      const existingUser = await app.db.query.user.findFirst({
-        where: eq(authSchema.user.email, motherEmail),
-      });
-
-      if (existingUser) {
-        app.logger.warn({ motherEmail }, 'User already exists with this email');
-        return reply.status(409).send({ error: 'Email already exists. Please use a different email.' });
-      }
 
       // Step 2: Get consultant
       const consultant = await app.db.query.consultants.findFirst({
@@ -550,32 +540,76 @@ export function registerConsultantRoutes(app: App) {
 
       app.logger.debug({ provisionalPasswordLength: provisionalPassword.length }, 'Generated provisional password');
 
-      // Step 4: Hash password
-      const hashedPassword = await bcrypt.hash(provisionalPassword, 10);
+      // Step 4: Create mother account using Better Auth's signup mechanism
+      // This ensures the password is hashed using Better Auth's internal mechanism,
+      // which is compatible with Better Auth's login flow
+      let motherUserId: string;
 
-      // Step 5: Create mother user with requirePasswordChange flag
-      const motherUserId = crypto.randomUUID();
-      await app.db.insert(authSchema.user).values({
-        id: motherUserId,
-        email: motherEmail,
-        emailVerified: false,
-        name: motherName,
-        requirePasswordChange: true,
-      });
+      try {
+        const signupResponse = await app.fastify.inject({
+          method: 'POST',
+          url: '/api/auth/sign-up/email',
+          payload: {
+            email: motherEmail,
+            password: provisionalPassword,
+            name: motherName,
+          },
+        });
 
-      app.logger.info({ motherUserId, motherEmail }, 'Mother user created');
+        // Check for error responses from Better Auth
+        if (signupResponse.statusCode !== 200 && signupResponse.statusCode !== 201) {
+          const errorData = signupResponse.json() as { error?: { message?: string }; message?: string };
+          const errorMessage = errorData.error?.message || errorData.message || '';
 
-      // Step 6: Create account record with credential provider
-      const accountId = crypto.randomUUID();
-      await app.db.insert(authSchema.account).values({
-        id: accountId,
-        accountId: motherEmail,
-        providerId: 'credential',
-        userId: motherUserId,
-        password: hashedPassword,
-      });
+          app.logger.warn(
+            { status: signupResponse.statusCode, errorMessage, motherEmail },
+            'Better Auth signup returned error'
+          );
 
-      app.logger.info({ accountId, motherUserId }, 'Mother account created');
+          // Check if it's a duplicate email error
+          if (
+            signupResponse.statusCode === 409 ||
+            errorMessage.toLowerCase().includes('email') ||
+            errorMessage.toLowerCase().includes('already') ||
+            errorMessage.toLowerCase().includes('exists')
+          ) {
+            app.logger.warn({ motherEmail }, 'Email already exists');
+            return reply.status(409).send({ error: 'Email already exists. Please use a different email.' });
+          }
+
+          app.logger.error(
+            { status: signupResponse.statusCode, error: errorData, motherEmail },
+            'Failed to create mother account via Better Auth signup'
+          );
+          return reply.status(500).send({ error: 'Failed to create mother account' });
+        }
+
+        const signupData = signupResponse.json() as { user?: { id: string } };
+        motherUserId = signupData.user?.id;
+
+        if (!motherUserId) {
+          app.logger.error(
+            { responseData: JSON.stringify(signupData) },
+            'Failed to extract user ID from Better Auth signup response'
+          );
+          return reply.status(500).send({ error: 'Failed to create mother account' });
+        }
+
+        app.logger.info({ motherUserId, motherEmail }, 'Mother account created via Better Auth signup');
+      } catch (signupError) {
+        app.logger.error(
+          { err: signupError, motherEmail },
+          'Error calling Better Auth signup internally'
+        );
+        return reply.status(500).send({ error: 'Failed to create mother account' });
+      }
+
+      // Step 5: Update user to set requirePasswordChange flag
+      await app.db.update(authSchema.user)
+        .set({ requirePasswordChange: true })
+        .where(eq(authSchema.user.id, motherUserId));
+
+      app.logger.info({ motherUserId }, 'requirePasswordChange flag set for mother account');
 
       // Step 7: Create baby with motherUserId already set
       const babyId = crypto.randomUUID();
