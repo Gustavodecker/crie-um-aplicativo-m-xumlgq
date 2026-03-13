@@ -65,11 +65,19 @@ export function registerUserRoutes(app: App) {
         ),
       });
 
-      app.logger.debug({ userId, accountFound: !!account }, 'Account record lookup result');
+      app.logger.debug(
+        { userId, accountFound: !!account, passwordFieldSet: !!account?.password },
+        'Account record lookup result'
+      );
 
-      if (!account || !account.password) {
-        app.logger.error({ userId }, 'Account or password not found');
-        return reply.status(400).send({ error: 'Account not found or password not set' });
+      if (!account) {
+        app.logger.error({ userId }, 'No credential account found for this user');
+        return reply.status(400).send({ error: 'No credential account found for this user' });
+      }
+
+      if (!account.password) {
+        app.logger.error({ userId }, 'No password set for this account');
+        return reply.status(400).send({ error: 'No password set for this account' });
       }
 
       // Step 2: Verify current password
