@@ -82,7 +82,9 @@ export function registerMotherRoutes(app: App) {
       },
     },
   }, async (request: FastifyRequest<{ Body: { email: string; senha: string; babyCode: string } }>, reply: FastifyReply) => {
-    const { email, senha, babyCode } = request.body;
+    const { email: rawEmail, senha, babyCode } = request.body;
+    // Normalize email to lowercase for consistent lookups with Better Auth
+    const email = rawEmail.toLowerCase().trim();
 
     app.logger.info({ email, babyCodePreview: babyCode.substring(0, 10) + '...' }, 'Registering mother with email and baby code');
 
@@ -142,15 +144,13 @@ export function registerMotherRoutes(app: App) {
       }
 
       // Step 4: Create new user (email verified to be unique above)
+      // Set emailVerified: true since mothers are pre-approved by consultant via baby code
       const userId = crypto.randomUUID();
       await app.db.insert(authSchema.user).values({
         id: userId,
         email: email,
-        emailVerified: false,
+        emailVerified: true,
         name: baby.motherName,
-        image: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
       });
 
       app.logger.info({ userId, email, name: baby.motherName }, 'User created for mother');
@@ -234,14 +234,6 @@ export function registerMotherRoutes(app: App) {
         providerId: 'credential',
         userId: userId,
         password: hashedPassword,
-        accessToken: null,
-        refreshToken: null,
-        idToken: null,
-        accessTokenExpiresAt: null,
-        refreshTokenExpiresAt: null,
-        scope: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
       }).returning();
 
       app.logger.info(
@@ -406,8 +398,6 @@ export function registerMotherRoutes(app: App) {
         userId: userId,
         token: sessionToken,
         expiresAt: expiresAt,
-        createdAt: new Date(),
-        updatedAt: new Date(),
         ipAddress: request.ip,
         userAgent: request.headers['user-agent'] || null,
       });
@@ -603,7 +593,9 @@ export function registerMotherRoutes(app: App) {
       },
     },
   }, async (request: FastifyRequest<{ Body: { email: string; senha: string } }>, reply: FastifyReply) => {
-    const { email, senha } = request.body;
+    const { email: rawEmail, senha } = request.body;
+    // Normalize email to lowercase for consistent lookups with Better Auth
+    const email = rawEmail.toLowerCase().trim();
 
     app.logger.info({ email }, 'Testing mother login - finding account');
 
