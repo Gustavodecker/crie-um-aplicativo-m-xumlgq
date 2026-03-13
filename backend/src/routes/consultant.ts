@@ -803,4 +803,90 @@ export function registerConsultantRoutes(app: App) {
       return reply.status(500).send({ error: 'Failed to archive baby' });
     }
   });
+
+  // PATCH /api/consultant/babies/:id/unarchive - Unarchive a baby
+  app.fastify.patch('/api/consultant/babies/:id/unarchive', {
+    schema: {
+      description: 'Unarchive a baby and reactivate contracts (consultant only)',
+      tags: ['consultant', 'babies'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    const babyId = request.params.id;
+    app.logger.info({ userId: session.user.id, babyId }, 'Attempting to unarchive baby');
+
+    try {
+      // Step 1: Get consultant for authenticated user
+      const consultant = await app.db.query.consultants.findFirst({
+        where: eq(schema.consultants.userId, session.user.id),
+      });
+
+      if (!consultant) {
+        app.logger.warn({ userId: session.user.id }, 'Consultant not found');
+        return reply.status(404).send({ error: 'Not found' });
+      }
+
+      // Step 2: Find baby and verify it belongs to this consultant
+      const baby = await app.db.query.babies.findFirst({
+        where: and(
+          eq(schema.babies.id, babyId),
+          eq(schema.babies.consultantId, consultant.id)
+        ),
+      });
+
+      if (!baby) {
+        app.logger.warn(
+          { userId: session.user.id, babyId, consultantId: consultant.id },
+          'Baby not found or does not belong to consultant'
+        );
+        return reply.status(404).send({ error: 'Not found' });
+      }
+
+      // Step 3: Unarchive baby and reactivate contracts in atomic transaction
+      await app.db.transaction(async (tx) => {
+        // Update 1: Unarchive the baby
+        await tx.update(schema.babies)
+          .set({ archived: false })
+          .where(and(
+            eq(schema.babies.id, babyId),
+            eq(schema.babies.consultantId, consultant.id)
+          ));
+
+        app.logger.debug({ babyId }, 'Baby unarchived in transaction');
+
+        // Update 2: Reactivate all contracts for this baby
+        await tx.update(schema.contracts)
+          .set({ status: 'active' })
+          .where(eq(schema.contracts.babyId, babyId));
+
+        app.logger.debug({ babyId }, 'Contracts reactivated in transaction');
+      });
+
+      app.logger.info({ babyId, consultantId: consultant.id }, 'Baby and contracts unarchived successfully');
+
+      return reply.status(200).send({ success: true });
+    } catch (error) {
+      app.logger.error({ err: error, babyId }, 'Error unarchiving baby');
+      return reply.status(500).send({ error: 'Failed to unarchive baby' });
+    }
+  });
 }
