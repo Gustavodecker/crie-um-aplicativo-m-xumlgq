@@ -18,6 +18,7 @@ import { registerOrientationsRoutes } from './routes/orientations.js';
 import { registerSleepWindowsRoutes } from './routes/sleep-windows.js';
 import { registerReportsRoutes } from './routes/reports.js';
 import { registerUploadRoutes } from './routes/upload.js';
+import { registerDebugRoutes } from './routes/debug.js';
 
 // Combine schemas
 const schema = { ...appSchema, ...authSchema };
@@ -119,6 +120,7 @@ registerOrientationsRoutes(app);
 registerSleepWindowsRoutes(app);
 registerReportsRoutes(app);
 registerUploadRoutes(app);
+registerDebugRoutes(app);
 
 await app.run();
 app.logger.info('Application running');

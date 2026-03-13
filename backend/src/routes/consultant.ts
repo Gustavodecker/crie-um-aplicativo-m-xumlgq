@@ -523,10 +523,8 @@ export function registerConsultantRoutes(app: App) {
         return reply.status(401).send({ error: 'Not a consultant' });
       }
 
-      // Step 3: Generate provisional password (12 alphanumeric + special characters)
-      const provisionalPassword = Math.random().toString(36).substring(2, 9) +
-                                 Math.random().toString(36).substring(2, 6).toUpperCase() +
-                                 '!@#'[Math.floor(Math.random() * 3)];
+      // Step 3: Generate provisional password (8 alphanumeric characters)
+      const provisionalPassword = Math.random().toString(36).slice(2, 10).toUpperCase();
 
       app.logger.debug({ provisionalPasswordLength: provisionalPassword.length }, 'Generated provisional password');
 
@@ -593,6 +591,35 @@ export function registerConsultantRoutes(app: App) {
         );
         return reply.status(500).send({ error: 'Failed to create mother account' });
       }
+
+      // Step 4b: Verify that the credential account was created with password field populated
+      const credentialAccount = await app.db.query.account.findFirst({
+        where: and(
+          eq(authSchema.account.userId, motherUserId),
+          eq(authSchema.account.providerId, 'credential')
+        ),
+      });
+
+      if (!credentialAccount) {
+        app.logger.error(
+          { motherUserId, motherEmail },
+          'Credential account was not created by Better Auth signup'
+        );
+        return reply.status(500).send({ error: 'Failed to create mother account: credential account not created' });
+      }
+
+      if (!credentialAccount.password) {
+        app.logger.error(
+          { motherUserId, accountId: credentialAccount.id },
+          'Credential account password field is empty after signup'
+        );
+        return reply.status(500).send({ error: 'Failed to create mother account: password not set' });
+      }
+
+      app.logger.info(
+        { motherUserId, accountId: credentialAccount.id, hasPassword: !!credentialAccount.password },
+        'Credential account verified with password field populated'
+      );
 
       // Step 5: Update user to set requirePasswordChange flag
       await app.db.update(authSchema.user)
