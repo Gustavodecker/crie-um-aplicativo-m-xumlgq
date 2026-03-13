@@ -2,7 +2,6 @@ import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
-import { generateToken } from '../utils/token.js';
 
 export function registerBabiesRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -28,7 +27,6 @@ export function registerBabiesRoutes(app: App) {
           type: 'object',
           properties: {
             id: { type: 'string', format: 'uuid' },
-            token: { type: 'string' },
             name: { type: 'string' },
             birthDate: { type: 'string', format: 'date' },
             motherName: { type: 'string' },
@@ -60,49 +58,24 @@ export function registerBabiesRoutes(app: App) {
       return reply.status(401).send({ error: 'Not a consultant' });
     }
 
-    // Generate unique token with retry logic
-    let token: string;
-    let maxRetries = 10;
-    let created = false;
+    try {
+      const [baby] = await app.db.insert(schema.babies).values({
+        name: request.body.name,
+        birthDate: request.body.birthDate,
+        motherName: request.body.motherName,
+        motherPhone: request.body.motherPhone,
+        motherEmail: null,
+        motherUserId: null,
+        objectives: request.body.objectives || null,
+        consultantId: consultant.id,
+      }).returning();
 
-    while (maxRetries > 0 && !created) {
-      token = generateToken();
-
-      // Check if token already exists
-      const existing = await app.db.query.babies.findFirst({
-        where: eq(schema.babies.token, token),
-      });
-
-      if (!existing) {
-        try {
-          const [baby] = await app.db.insert(schema.babies).values({
-            token: token,
-            name: request.body.name,
-            birthDate: request.body.birthDate,
-            motherName: request.body.motherName,
-            motherPhone: request.body.motherPhone,
-            motherEmail: null,
-            objectives: request.body.objectives || null,
-            consultantId: consultant.id,
-          }).returning();
-
-          app.logger.info({ babyId: baby.id, token: baby.token, consultantId: consultant.id }, 'Baby created successfully');
-          return reply.status(201).send(baby);
-        } catch (err) {
-          // Token collision or other error, retry
-          maxRetries--;
-          if (maxRetries === 0) {
-            app.logger.error({ err, userId: session.user.id }, 'Failed to create baby after retries');
-            return reply.status(500).send({ error: 'Failed to create baby' });
-          }
-        }
-      } else {
-        maxRetries--;
-      }
+      app.logger.info({ babyId: baby.id, consultantId: consultant.id }, 'Baby created successfully');
+      return reply.status(201).send(baby);
+    } catch (err) {
+      app.logger.error({ err, userId: session.user.id }, 'Failed to create baby');
+      return reply.status(500).send({ error: 'Failed to create baby' });
     }
-
-    app.logger.error({ userId: session.user.id }, 'Failed to generate unique token');
-    return reply.status(500).send({ error: 'Failed to create baby' });
   });
 
   // PUT /api/babies/:id - Updates baby (consultant can edit conclusion)
@@ -130,7 +103,6 @@ export function registerBabiesRoutes(app: App) {
           type: 'object',
           properties: {
             id: { type: 'string', format: 'uuid' },
-            token: { type: ['string', 'null'] },
             name: { type: 'string' },
             birthDate: { type: 'string', format: 'date' },
             motherName: { type: 'string' },
@@ -198,7 +170,6 @@ export function registerBabiesRoutes(app: App) {
           type: 'object',
           properties: {
             id: { type: 'string', format: 'uuid' },
-            token: { type: ['string', 'null'] },
             name: { type: 'string' },
             birthDate: { type: 'string', format: 'date' },
             motherName: { type: 'string' },
@@ -265,7 +236,6 @@ export function registerBabiesRoutes(app: App) {
 
     return {
       id: baby.id,
-      token: baby.token,
       name: baby.name,
       birthDate: baby.birthDate,
       motherName: baby.motherName,
@@ -305,7 +275,6 @@ export function registerBabiesRoutes(app: App) {
           type: 'object',
           properties: {
             id: { type: 'string', format: 'uuid' },
-            token: { type: ['string', 'null'] },
             name: { type: 'string' },
             birthDate: { type: 'string', format: 'date' },
             motherName: { type: 'string' },

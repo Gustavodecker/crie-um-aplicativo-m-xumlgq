@@ -7,7 +7,6 @@ describe("API Integration Tests", () => {
   let userId: string;
   let userEmail: string;
   let babyId: string;
-  let babyToken: string;
   let contractId: string;
   let routineId: string;
   let napId: string;
@@ -214,11 +213,9 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 201);
     const data = await res.json();
     babyId = data.id;
-    babyToken = data.token;
     expect(data.name).toBe("Baby Test");
     expect(data.motherName).toBe("Mother Test");
     expect(data.consultantId).toBe(consultantId);
-    expect(data.token).toBeDefined();
   });
 
   test("Create baby via consultant endpoint", async () => {
@@ -237,7 +234,6 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.name).toBe("Baby via Consultant");
     expect(data.consultantId).toBe(consultantId);
-    expect(data.token).toBeDefined();
   });
 
   test("Get baby by ID", async () => {
@@ -1702,460 +1698,142 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  // ===== Init Mother (Baby Token Registration) =====
+  // ===== Register Baby and Mother (Consultant) =====
 
-  test("Init mother with valid baby token", async () => {
-    // Create a baby to get a token
-    const babyRes = await authenticatedApi("/api/babies", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Baby for Init Mother",
-        birthDate: "2024-10-15",
-        motherName: "Init Mother Test",
-        motherPhone: "+1234567890",
-      }),
-    });
-    const babyData = await babyRes.json();
-    const babyTokenForInit = babyData.token;
-
-    // Sign up a new user who will be the mother
-    const { token: motherToken, user: motherUser } = await signUpTestUser();
-
-    // Call init mother endpoint
-    const res = await authenticatedApi("/api/init/mother", motherToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: babyTokenForInit,
-      }),
-    });
-    await expectStatus(res, 200);
+  test("Register baby and mother as consultant", async () => {
+    const uniqueId = crypto.randomUUID();
+    const res = await authenticatedApi(
+      "/api/consultant/register-baby-and-mother",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          babyName: "Baby Registered",
+          birthDate: "2024-05-15",
+          motherName: "Registered Mother",
+          motherPhone: "+1234567890",
+          motherEmail: `mother+${uniqueId}@example.com`,
+          objectives: "Sleep training",
+        }),
+      }
+    );
+    await expectStatus(res, 201);
     const data = await res.json();
-    expect(data.id).toBe(babyData.id);
-    expect(data.motherUserId).toBe(motherUser.id);
-    expect(data.consultantId).toBe(consultantId);
-    expect(data.name).toBe("Baby for Init Mother");
+    expect(data.success).toBe(true);
+    expect(data.babyId).toBeDefined();
+    expect(data.motherUserId).toBeDefined();
+    expect(data.motherEmail).toBeDefined();
   });
 
-  test("Init mother with invalid token returns 404", async () => {
-    const { token: motherToken } = await signUpTestUser();
-    const res = await authenticatedApi("/api/init/mother", motherToken, {
+  test("Register baby and mother without required fields returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/register-baby-and-mother",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          babyName: "Baby",
+          // Missing other required fields
+        }),
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Register baby and mother without auth returns 401", async () => {
+    const uniqueId = crypto.randomUUID();
+    const res = await api("/api/consultant/register-baby-and-mother", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        token: "invalid-baby-token",
-      }),
-    });
-    await expectStatus(res, 404);
-  });
-
-  test("Init mother without auth returns 401", async () => {
-    // Create a baby to get a token
-    const babyRes = await authenticatedApi("/api/babies", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Baby for Unauth Init",
-        birthDate: "2024-11-15",
-        motherName: "Test",
+        babyName: "Baby",
+        birthDate: "2024-05-15",
+        motherName: "Mother",
         motherPhone: "+1234567890",
-      }),
-    });
-    const babyData = await babyRes.json();
-
-    const res = await api("/api/init/mother", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: babyData.token,
+        motherEmail: `mother+${uniqueId}@example.com`,
       }),
     });
     await expectStatus(res, 401);
   });
 
-  test("Init mother without required token returns 400", async () => {
-    const { token: motherToken } = await signUpTestUser();
-    const res = await authenticatedApi("/api/init/mother", motherToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Init mother with already used token returns 409", async () => {
-    // Create a baby
-    const babyRes = await authenticatedApi("/api/babies", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Baby for Token Reuse",
-        birthDate: "2024-12-15",
-        motherName: "Test",
-        motherPhone: "+1234567890",
-      }),
-    });
-    const babyData = await babyRes.json();
-    const sharedToken = babyData.token;
-
-    // Sign up first mother and link to baby
-    const { token: mother1Token } = await signUpTestUser();
-    await authenticatedApi("/api/init/mother", mother1Token, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: sharedToken,
-      }),
-    });
-
-    // Sign up second mother and try to link to same baby
-    const { token: mother2Token } = await signUpTestUser();
-    const res = await authenticatedApi("/api/init/mother", mother2Token, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: sharedToken,
-      }),
-    });
+  test("Register baby and mother with duplicate email returns 409", async () => {
+    const uniqueId = crypto.randomUUID();
+    const sharedEmail = `duplicate-mother+${uniqueId}@example.com`;
+    // First registration
+    await authenticatedApi(
+      "/api/consultant/register-baby-and-mother",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          babyName: "Baby 1",
+          birthDate: "2024-05-15",
+          motherName: "Mother",
+          motherPhone: "+1234567890",
+          motherEmail: sharedEmail,
+        }),
+      }
+    );
+    // Second registration with same email
+    const res = await authenticatedApi(
+      "/api/consultant/register-baby-and-mother",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          babyName: "Baby 2",
+          birthDate: "2024-06-15",
+          motherName: "Mother",
+          motherPhone: "+0987654321",
+          motherEmail: sharedEmail,
+        }),
+      }
+    );
     await expectStatus(res, 409);
   });
 
-  // ===== Mother Registration =====
-
-  test("Create mother account with baby code", async () => {
-    // Create a new baby to get a fresh code
+  test("Register baby and mother with missing babyName returns 400", async () => {
     const uniqueId = crypto.randomUUID();
-    const babyRes = await authenticatedApi("/api/babies", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Baby for Mother Account",
-        birthDate: "2024-08-15",
-        motherName: "New Mother",
-        motherPhone: "+1234567890",
-      }),
-    });
-    const babyData = await babyRes.json();
-    const newBabyCode = babyData.token;
-
-    const res = await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        babyCode: newBabyCode,
-        email: `newmother+${uniqueId}@example.com`,
-        senha: "SecurePassword123!",
-      }),
-    });
-    await expectStatus(res, 201);
-    const data = await res.json();
-    expect(data.user).toBeDefined();
-    expect(data.user.id).toBeDefined();
-    expect(data.user.email).toBeDefined();
-    expect(data.token).toBeDefined();
-  });
-
-  test("Create mother account with nonexistent baby code returns 404", async () => {
-    const res = await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        babyCode: "NONEXISTENT-CODE",
-        email: "test@example.com",
-        senha: "Password123!",
-      }),
-    });
-    await expectStatus(res, 404);
-  });
-
-  test("Create mother account without required fields returns 400", async () => {
-    const res = await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        babyCode: babyToken,
-        email: "test@example.com",
-        // Missing senha
-      }),
-    });
+    const res = await authenticatedApi(
+      "/api/consultant/register-baby-and-mother",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          birthDate: "2024-05-15",
+          motherName: "Mother",
+          motherPhone: "+1234567890",
+          motherEmail: `mother+${uniqueId}@example.com`,
+        }),
+      }
+    );
     await expectStatus(res, 400);
   });
 
-  test("Create mother account without email field returns 400", async () => {
-    const res = await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        babyCode: babyToken,
-        senha: "Password123!",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Create mother account without baby code field returns 400", async () => {
-    const res = await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "test@example.com",
-        senha: "Password123!",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Create mother account when account already exists returns 409", async () => {
-    // Create two babies for this test
-    const uniqueId = crypto.randomUUID();
-    const sharedEmail = `duplicate-account+${uniqueId}@example.com`;
-
-    // Create first baby
-    const baby1Res = await authenticatedApi("/api/babies", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Baby for Duplicate Account 1",
-        birthDate: "2024-09-15",
-        motherName: "Duplicate Mother",
-        motherPhone: "+1234567890",
-      }),
-    });
-    const baby1Data = await baby1Res.json();
-    const baby1Token = baby1Data.token;
-
-    // Create second baby
-    const baby2Res = await authenticatedApi("/api/babies", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Baby for Duplicate Account 2",
-        birthDate: "2024-09-16",
-        motherName: "Duplicate Mother",
-        motherPhone: "+1234567890",
-      }),
-    });
-    const baby2Data = await baby2Res.json();
-    const baby2Token = baby2Data.token;
-
-    // Create account with first baby and email
-    await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        babyCode: baby1Token,
-        email: sharedEmail,
-        senha: "Password123!",
-      }),
-    });
-
-    // Try to create another account with same email but different baby (should fail with 409)
-    const res = await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        babyCode: baby2Token,
-        email: sharedEmail,
-        senha: "Password123!",
-      }),
-    });
-    await expectStatus(res, 409);
-  });
-
-  test("Baby code already used returns 404", async () => {
-    // Create baby
-    const babyRes = await authenticatedApi("/api/babies", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Baby for Code Reuse",
-        birthDate: "2024-07-15",
-        motherName: "Test Mother",
-        motherPhone: "+1234567890",
-      }),
-    });
-    const babyData = await babyRes.json();
-    const babyCode = babyData.token;
-    const uniqueId = crypto.randomUUID();
-
-    // First mother registers with the code
-    await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        babyCode: babyCode,
-        email: `mother1+${uniqueId}@example.com`,
-        senha: "Password123!",
-      }),
-    });
-
-    // Second mother tries to register with same code (should fail with 404 because code was invalidated)
-    const res = await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        babyCode: babyCode,
-        email: `mother2+${uniqueId}@example.com`,
-        senha: "Password123!",
-      }),
-    });
-    await expectStatus(res, 404);
-  });
-
-  // ===== Mother Test Login =====
-
-  test("Test mother login with valid credentials", async () => {
-    // Create a baby first
-    const uniqueId = crypto.randomUUID();
-    const babyRes = await authenticatedApi("/api/babies", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Baby for Test Login",
-        birthDate: "2024-06-15",
-        motherName: "Test Mother",
-        motherPhone: "+1234567890",
-      }),
-    });
-    const babyData = await babyRes.json();
-
-    // Register a mother with this baby
-    const testEmail = `test-login+${uniqueId}@example.com`;
-    const testPassword = "TestPassword123!";
-    await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        babyCode: babyData.token,
-        email: testEmail,
-        senha: testPassword,
-      }),
-    });
-
-    // Test login with correct credentials
-    const res = await api("/api/mother/test-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: testEmail,
-        senha: testPassword,
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.accountFound).toBe(true);
-    expect(data.userFound).toBe(true);
-    expect(data.passwordMatches).toBe(true);
-  });
-
-  test("Test mother login with wrong password", async () => {
-    // Create a baby first
-    const uniqueId = crypto.randomUUID();
-    const babyRes = await authenticatedApi("/api/babies", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Baby for Wrong Password Test",
-        birthDate: "2024-06-15",
-        motherName: "Test Mother",
-        motherPhone: "+1234567890",
-      }),
-    });
-    const babyData = await babyRes.json();
-
-    // Register a mother
-    const testEmail = `test-login-wrong+${uniqueId}@example.com`;
-    const testPassword = "CorrectPassword123!";
-    await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        babyCode: babyData.token,
-        email: testEmail,
-        senha: testPassword,
-      }),
-    });
-
-    // Test login with wrong password
-    const res = await api("/api/mother/test-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: testEmail,
-        senha: "WrongPassword123!",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.accountFound).toBe(true);
-    expect(data.passwordMatches).toBe(false);
-  });
-
-  test("Test mother login with nonexistent email returns 404", async () => {
-    const res = await api("/api/mother/test-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "nonexistent-mother@example.com",
-        senha: "AnyPassword123!",
-      }),
-    });
-    await expectStatus(res, 404);
-  });
-
-  test("Test mother login without email returns 400", async () => {
-    const res = await api("/api/mother/test-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        senha: "Password123!",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Test mother login without password returns 400", async () => {
-    const res = await api("/api/mother/test-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "test@example.com",
-      }),
-    });
+  test("Register baby and mother with missing motherEmail returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/register-baby-and-mother",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          babyName: "Baby",
+          birthDate: "2024-05-15",
+          motherName: "Mother",
+          motherPhone: "+1234567890",
+        }),
+      }
+    );
     await expectStatus(res, 400);
   });
 
   // ===== Mother Baby Access =====
-
-  test("Get baby linked to mother", async () => {
-    // Register a mother with the existing baby
-    const uniqueId = crypto.randomUUID();
-    const motherRes = await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        babyCode: babyToken,
-        email: `mother-get-baby+${uniqueId}@example.com`,
-        senha: "Password123!",
-      }),
-    });
-    await expectStatus(motherRes, 201);
-    const motherData = await motherRes.json();
-    const motherToken = motherData.token;
-    const motherUserId = motherData.user.id;
-
-    // Get baby linked to this mother
-    const res = await authenticatedApi("/api/mother/baby", motherToken);
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.id).toBe(babyId);
-    expect(data.motherUserId).toBe(motherUserId);
-    expect(data.ageMonths).toBeGreaterThanOrEqual(0);
-    expect(data.ageDays).toBeGreaterThanOrEqual(0);
-    expect(data.token).toBeDefined();
-    expect(data.activeContract).toBeDefined();
-  });
 
   test("Get mother baby without auth returns 401", async () => {
     const res = await api("/api/mother/baby");
@@ -2169,46 +1847,6 @@ describe("API Integration Tests", () => {
   });
 
   // ===== Get Mother's Consultant =====
-
-  test("Get consultant profile for mother's linked baby", async () => {
-    // Create a new baby for this test
-    const uniqueId = crypto.randomUUID();
-    const babyRes = await authenticatedApi("/api/babies", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Baby for Consultant Profile",
-        birthDate: "2024-12-20",
-        motherName: "Test Mother",
-        motherPhone: "+1234567890",
-      }),
-    });
-    await expectStatus(babyRes, 201);
-    const babyData = await babyRes.json();
-    const consultantBabyToken = babyData.token;
-
-    // Register a mother with this baby
-    const motherRes = await api("/api/mother/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        babyCode: consultantBabyToken,
-        email: `mother-get-consultant+${uniqueId}@example.com`,
-        senha: "Password123!",
-      }),
-    });
-    await expectStatus(motherRes, 201);
-    const motherData = await motherRes.json();
-    const motherToken = motherData.token;
-
-    // Get consultant for this mother's linked baby
-    const res = await authenticatedApi("/api/mother/consultant", motherToken);
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.id).toBe(consultantId);
-    expect(data.name).toBe("Dr. Updated Consultant");
-    expect(data.userId).toBeDefined();
-  });
 
   test("Get mother consultant without auth returns 401", async () => {
     const res = await api("/api/mother/consultant");
