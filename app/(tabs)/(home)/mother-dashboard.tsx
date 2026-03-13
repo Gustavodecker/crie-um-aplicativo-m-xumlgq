@@ -637,6 +637,25 @@ export default function MotherDashboardScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Logout Button */}
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={async () => {
+            console.log("[Mother Dashboard] User pressed logout button");
+            await signOut();
+            router.replace("/auth");
+          }}
+          activeOpacity={0.75}
+        >
+          <IconSymbol
+            ios_icon_name="rectangle.portrait.and.arrow.right"
+            android_material_icon_name="logout"
+            size={20}
+            color={colors.error}
+          />
+          <Text style={styles.logoutButtonText}>Sair da conta</Text>
+        </TouchableOpacity>
       </Animated.ScrollView>
     </SafeAreaView>
   );
@@ -948,5 +967,24 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     lineHeight: 20,
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.error,
+    backgroundColor: "rgba(193, 123, 123, 0.06)",
+  },
+  logoutButtonText: {
+    ...typography.button,
+    color: colors.error,
+    fontSize: 15,
   },
 });
