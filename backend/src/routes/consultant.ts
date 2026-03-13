@@ -482,6 +482,7 @@ export function registerConsultantRoutes(app: App) {
             babyId: { type: 'string', format: 'uuid' },
             motherUserId: { type: 'string' },
             motherEmail: { type: 'string' },
+            provisionalPassword: { type: 'string', description: 'Provisional password for mother to use on first login' },
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
@@ -552,13 +553,14 @@ export function registerConsultantRoutes(app: App) {
       // Step 4: Hash password
       const hashedPassword = await bcrypt.hash(provisionalPassword, 10);
 
-      // Step 5: Create mother user
+      // Step 5: Create mother user with requirePasswordChange flag
       const motherUserId = crypto.randomUUID();
       await app.db.insert(authSchema.user).values({
         id: motherUserId,
         email: motherEmail,
         emailVerified: false,
         name: motherName,
+        requirePasswordChange: true,
       });
 
       app.logger.info({ motherUserId, motherEmail }, 'Mother user created');
@@ -594,11 +596,9 @@ export function registerConsultantRoutes(app: App) {
         'Baby created with mother linked'
       );
 
-      // Step 8: Send password reset email to mother
-      // TODO: Send password reset email with instructions to set password
       app.logger.info(
-        { motherEmail, babyName },
-        'Password reset email should be sent to mother'
+        { motherEmail, babyName, motherUserId },
+        'Baby and mother account created successfully'
       );
 
       return reply.status(201).send({
@@ -606,6 +606,7 @@ export function registerConsultantRoutes(app: App) {
         babyId,
         motherUserId,
         motherEmail,
+        provisionalPassword,
       });
 
     } catch (error) {
