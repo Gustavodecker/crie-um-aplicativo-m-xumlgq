@@ -411,13 +411,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (responseData?.error) errorMsg = responseData.error;
         
         if (response.status === 404) {
-          throw new Error("Código não encontrado. Verifique com sua consultora.");
+          // After backend fix: token is set to null after first use, so a used code returns 404
+          // This means either the code is invalid OR it was already used
+          throw new Error("Código inválido ou já utilizado. Verifique com sua consultora.");
         }
         if (response.status === 409) {
-          if (errorMsg.toLowerCase().includes("código") || errorMsg.toLowerCase().includes("utilizado")) {
-            throw new Error("Este código já foi utilizado.");
+          // 409 can mean: baby already has a mother (code used before backend fix) OR email already registered
+          if (
+            errorMsg.toLowerCase().includes("código") ||
+            errorMsg.toLowerCase().includes("utilizado") ||
+            errorMsg.toLowerCase().includes("já foi utilizado")
+          ) {
+            throw new Error("Este código já foi utilizado. Solicite um novo código à sua consultora.");
           }
-          throw new Error("Já existe uma conta com este email. Use a opção de login.");
+          if (
+            errorMsg.toLowerCase().includes("email") ||
+            errorMsg.toLowerCase().includes("cadastrado")
+          ) {
+            throw new Error("Já existe uma conta com este email. Use a opção de login.");
+          }
+          throw new Error(errorMsg || "Já existe uma conta com este email. Use a opção de login.");
         }
         throw new Error(errorMsg);
       }

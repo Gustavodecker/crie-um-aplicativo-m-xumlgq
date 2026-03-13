@@ -10,7 +10,6 @@ import {
   RefreshControl,
   Image,
   Animated,
-  Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -91,7 +90,6 @@ export default function MotherDashboardScreen() {
   const [consultant, setConsultant] = useState<ConsultantProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [noBabyLinked, setNoBabyLinked] = useState(false);
-  const [showRelinkModal, setShowRelinkModal] = useState(false);
 
   // Fade-in animation
   useEffect(() => {
@@ -224,9 +222,8 @@ export default function MotherDashboardScreen() {
         error.status === 404 ||
         (error.response && error.response.status === 404)
       ) {
-        console.log("[Mother Dashboard] 404 detected - baby not linked, showing re-link modal");
+        console.log("[Mother Dashboard] 404 detected - baby not linked");
         setNoBabyLinked(true);
-        setShowRelinkModal(true); // Automatically show the modal
         errorMessage = "Seu bebê não está vinculado à sua conta. Solicite um novo token à sua consultora.";
       } else if (error.message?.includes("Network") || error.message?.includes("fetch")) {
         errorMessage = "Erro de conexão. Verifique sua internet.";
@@ -243,14 +240,7 @@ export default function MotherDashboardScreen() {
     }
   }, []);
 
-  const handleRelink = useCallback(async () => {
-    // In the new flow, re-linking is done by signing out and using the first-access token flow.
-    // Direct the user to sign out.
-    console.log("[Mother Dashboard] User chose to sign out and use first-access flow");
-    setShowRelinkModal(false);
-    await signOut();
-    router.replace("/auth");
-  }, [signOut, router]);
+
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -330,40 +320,6 @@ export default function MotherDashboardScreen() {
             </>
           )}
         </View>
-
-        {/* Re-link Modal */}
-        <Modal
-          visible={showRelinkModal}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowRelinkModal(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContainer}>
-              <Text style={styles.modalTitle}>Bebê não vinculado</Text>
-              <Text style={styles.modalSubtitle}>
-                Sua conta não está vinculada a nenhum bebê. Para vincular, você precisa sair e usar o token fornecido pela sua consultora no primeiro acesso.
-              </Text>
-              
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonCancel]}
-                  onPress={() => {
-                    setShowRelinkModal(false);
-                  }}
-                >
-                  <Text style={styles.modalButtonCancelText}>Fechar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonConfirm]}
-                  onPress={handleRelink}
-                >
-                  <Text style={styles.modalButtonConfirmText}>Sair e Vincular</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
       </SafeAreaView>
     );
   }
@@ -986,61 +942,5 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     lineHeight: 20,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.xl,
-  },
-  modalContainer: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    width: "100%",
-    maxWidth: 400,
-    ...shadows.lg,
-  },
-  modalTitle: {
-    ...typography.h2,
-    marginBottom: spacing.sm,
-    textAlign: "center",
-  },
-  modalSubtitle: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: "center",
-    marginBottom: spacing.lg,
-    lineHeight: 22,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    gap: spacing.md,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 48,
-  },
-  modalButtonCancel: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  modalButtonCancelText: {
-    ...typography.button,
-    color: colors.text,
-  },
-  modalButtonConfirm: {
-    backgroundColor: colors.primary,
-    ...shadows.sm,
-  },
-  modalButtonConfirmText: {
-    ...typography.button,
-    color: "#FFF",
   },
 });
