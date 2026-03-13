@@ -19,7 +19,6 @@ export const consultants = pgTable('consultants', {
 // Babies table
 export const babies = pgTable('babies', {
   id: uuid('id').primaryKey().defaultRandom(),
-  token: text('token').unique(),
   name: text('name').notNull(),
   birthDate: date('birth_date').notNull(),
   motherName: text('mother_name').notNull(),
@@ -34,7 +33,6 @@ export const babies = pgTable('babies', {
 }, (table) => [
   index('babies_consultant_id_idx').on(table.consultantId),
   index('babies_mother_user_id_idx').on(table.motherUserId),
-  index('babies_token_idx').on(table.token),
 ]);
 
 // Contracts table

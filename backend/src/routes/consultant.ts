@@ -2,7 +2,8 @@ import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
-import { generateToken } from '../utils/token.js';
+import * as authSchema from '../db/schema/auth-schema.js';
+import bcrypt from 'bcrypt';
 
 export function registerConsultantRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -28,7 +29,6 @@ export function registerConsultantRoutes(app: App) {
           type: 'object',
           properties: {
             id: { type: 'string', format: 'uuid' },
-            token: { type: 'string' },
             name: { type: 'string' },
             birthDate: { type: 'string', format: 'date' },
             motherName: { type: 'string' },
@@ -60,52 +60,27 @@ export function registerConsultantRoutes(app: App) {
       return reply.status(401).send({ error: 'Not a consultant' });
     }
 
-    // Generate unique token with retry logic
-    let token: string;
-    let maxRetries = 10;
-    let created = false;
+    try {
+      const [baby] = await app.db.insert(schema.babies).values({
+        name: request.body.name,
+        birthDate: request.body.birthDate,
+        motherName: request.body.motherName,
+        motherPhone: request.body.motherPhone,
+        motherEmail: null,
+        motherUserId: null,
+        objectives: request.body.objectives || null,
+        consultantId: consultant.id,
+      }).returning();
 
-    while (maxRetries > 0 && !created) {
-      token = generateToken();
-
-      // Check if token already exists
-      const existing = await app.db.query.babies.findFirst({
-        where: eq(schema.babies.token, token),
-      });
-
-      if (!existing) {
-        try {
-          const [baby] = await app.db.insert(schema.babies).values({
-            token: token,
-            name: request.body.name,
-            birthDate: request.body.birthDate,
-            motherName: request.body.motherName,
-            motherPhone: request.body.motherPhone,
-            motherEmail: null,
-            objectives: request.body.objectives || null,
-            consultantId: consultant.id,
-          }).returning();
-
-          app.logger.info(
-            { babyId: baby.id, token: baby.token, consultantId: consultant.id },
-            'Baby created successfully for consultant'
-          );
-          return reply.status(201).send(baby);
-        } catch (err) {
-          // Token collision or other error, retry
-          maxRetries--;
-          if (maxRetries === 0) {
-            app.logger.error({ err, userId: session.user.id }, 'Failed to create baby after retries');
-            return reply.status(500).send({ error: 'Failed to create baby' });
-          }
-        }
-      } else {
-        maxRetries--;
-      }
+      app.logger.info(
+        { babyId: baby.id, consultantId: consultant.id },
+        'Baby created successfully for consultant'
+      );
+      return reply.status(201).send(baby);
+    } catch (err) {
+      app.logger.error({ err, userId: session.user.id }, 'Failed to create baby');
+      return reply.status(500).send({ error: 'Failed to create baby' });
     }
-
-    app.logger.error({ userId: session.user.id }, 'Failed to generate unique token after retries');
-    return reply.status(500).send({ error: 'Failed to create baby' });
   });
 
   // POST /api/consultants/create-profile - Create consultant profile after signup
@@ -480,5 +455,165 @@ export function registerConsultantRoutes(app: App) {
 
     app.logger.info({ consultantId: consultant.id, motherUserId: session.user.id }, 'Consultant profile fetched for mother');
     return consultant;
+  });
+
+  // POST /api/consultant/register-baby-and-mother - Register baby and create mother account
+  app.fastify.post('/api/consultant/register-baby-and-mother', {
+    schema: {
+      description: 'Register a baby and create mother account with provisional password',
+      tags: ['consultant', 'babies', 'mother'],
+      body: {
+        type: 'object',
+        required: ['babyName', 'birthDate', 'motherName', 'motherPhone', 'motherEmail'],
+        properties: {
+          babyName: { type: 'string', description: 'Baby name' },
+          birthDate: { type: 'string', format: 'date', description: 'Baby birth date (YYYY-MM-DD)' },
+          motherName: { type: 'string', description: 'Mother name' },
+          motherPhone: { type: 'string', description: 'Mother phone' },
+          motherEmail: { type: 'string', format: 'email', description: 'Mother email' },
+          objectives: { type: ['string', 'null'], description: 'Baby care objectives' },
+        },
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            babyId: { type: 'string', format: 'uuid' },
+            motherUserId: { type: 'string' },
+            motherEmail: { type: 'string' },
+          },
+        },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        409: { type: 'object', properties: { error: { type: 'string' } } },
+        500: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Body: { babyName: string; birthDate: string; motherName: string; motherPhone: string; motherEmail: string; objectives?: string } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    const { babyName, birthDate, motherName, motherPhone, motherEmail: rawMotherEmail, objectives } = request.body;
+
+    // Normalize email to lowercase
+    const motherEmail = rawMotherEmail.toLowerCase().trim();
+
+    app.logger.info(
+      { consultantUserId: session.user.id, babyName, motherEmail },
+      'Registering baby and creating mother account'
+    );
+
+    // Validate required fields
+    if (!babyName || babyName.trim().length === 0) {
+      return reply.status(400).send({ error: 'Baby name is required' });
+    }
+    if (!birthDate || birthDate.trim().length === 0) {
+      return reply.status(400).send({ error: 'Birth date is required' });
+    }
+    if (!motherName || motherName.trim().length === 0) {
+      return reply.status(400).send({ error: 'Mother name is required' });
+    }
+    if (!motherPhone || motherPhone.trim().length === 0) {
+      return reply.status(400).send({ error: 'Mother phone is required' });
+    }
+    if (!motherEmail || motherEmail.length === 0) {
+      return reply.status(400).send({ error: 'Mother email is required' });
+    }
+
+    try {
+      // Step 1: Check if email already exists
+      const existingUser = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, motherEmail),
+      });
+
+      if (existingUser) {
+        app.logger.warn({ motherEmail }, 'User already exists with this email');
+        return reply.status(409).send({ error: 'Email already exists. Please use a different email.' });
+      }
+
+      // Step 2: Get consultant
+      const consultant = await app.db.query.consultants.findFirst({
+        where: eq(schema.consultants.userId, session.user.id),
+      });
+
+      if (!consultant) {
+        app.logger.warn({ userId: session.user.id }, 'Consultant not found');
+        return reply.status(401).send({ error: 'Not a consultant' });
+      }
+
+      // Step 3: Generate provisional password (12 alphanumeric + special characters)
+      const provisionalPassword = Math.random().toString(36).substring(2, 9) +
+                                 Math.random().toString(36).substring(2, 6).toUpperCase() +
+                                 '!@#'[Math.floor(Math.random() * 3)];
+
+      app.logger.debug({ provisionalPasswordLength: provisionalPassword.length }, 'Generated provisional password');
+
+      // Step 4: Hash password
+      const hashedPassword = await bcrypt.hash(provisionalPassword, 10);
+
+      // Step 5: Create mother user
+      const motherUserId = crypto.randomUUID();
+      await app.db.insert(authSchema.user).values({
+        id: motherUserId,
+        email: motherEmail,
+        emailVerified: false,
+        name: motherName,
+      });
+
+      app.logger.info({ motherUserId, motherEmail }, 'Mother user created');
+
+      // Step 6: Create account record with credential provider
+      const accountId = crypto.randomUUID();
+      await app.db.insert(authSchema.account).values({
+        id: accountId,
+        accountId: motherEmail,
+        providerId: 'credential',
+        userId: motherUserId,
+        password: hashedPassword,
+      });
+
+      app.logger.info({ accountId, motherUserId }, 'Mother account created');
+
+      // Step 7: Create baby with motherUserId already set
+      const babyId = crypto.randomUUID();
+      await app.db.insert(schema.babies).values({
+        id: babyId,
+        name: babyName,
+        birthDate: birthDate,
+        motherName: motherName,
+        motherPhone: motherPhone,
+        motherEmail: motherEmail,
+        motherUserId: motherUserId,
+        consultantId: consultant.id,
+        objectives: objectives || null,
+      });
+
+      app.logger.info(
+        { babyId, motherUserId, consultantId: consultant.id },
+        'Baby created with mother linked'
+      );
+
+      // Step 8: Send password reset email to mother
+      // TODO: Send password reset email with instructions to set password
+      app.logger.info(
+        { motherEmail, babyName },
+        'Password reset email should be sent to mother'
+      );
+
+      return reply.status(201).send({
+        success: true,
+        babyId,
+        motherUserId,
+        motherEmail,
+      });
+
+    } catch (error) {
+      app.logger.error(
+        { err: error, babyName, motherEmail },
+        'Error registering baby and creating mother account'
+      );
+      return reply.status(500).send({ error: 'Failed to register baby and create mother account' });
+    }
   });
 }
