@@ -1,9 +1,10 @@
 
 import React, { useEffect } from "react";
-import { Redirect, Slot, useRouter, useSegments } from "expo-router";
+import { Redirect, Stack, useRouter, useSegments } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { View } from "react-native";
 import FloatingTabBar, { TabBarItem } from "@/components/FloatingTabBar";
+import { colors } from "@/styles/commonStyles";
 
 export default function TabLayout() {
   const { user, userRole } = useAuth();
@@ -21,8 +22,15 @@ export default function TabLayout() {
     console.log("[TabLayout] User role:", userRole, "Current path:", currentPath);
 
     if (userRole === "mother") {
-      // Redirect to mother dashboard if not already there
-      if (!currentPath.startsWith("(tabs)/(home)/mother-dashboard")) {
+      // Only redirect to dashboard if not already navigating within mother screens
+      const isAtMotherDashboard = currentPath.includes("mother-dashboard");
+      const isNavigatingDeeper =
+        currentPath.includes("mother-day-selection") ||
+        currentPath.includes("mother-routine") ||
+        currentPath.includes("mother-orientations") ||
+        currentPath.includes("mother-evolution");
+
+      if (!isAtMotherDashboard && !isNavigatingDeeper) {
         console.log("[TabLayout] Redirecting mother to dashboard");
         router.replace("/(tabs)/(home)/mother-dashboard");
       }
@@ -40,13 +48,13 @@ export default function TabLayout() {
     return <Redirect href="/auth" />;
   }
 
-  // Render mother layout (no tab bar)
+  // Render mother layout — must use Stack (not Slot) so router.push() works
   if (userRole === "mother") {
-    console.log("[TabLayout] Rendering mother layout");
+    console.log("[TabLayout] Rendering mother layout (Stack)");
     return (
-      <View style={{ flex: 1 }}>
-        <Slot />
-      </View>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+        <Stack.Screen name="(home)" options={{ headerShown: false }} />
+      </Stack>
     );
   }
 
@@ -69,7 +77,10 @@ export default function TabLayout() {
 
   return (
     <View style={{ flex: 1 }}>
-      <Slot />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(home)" options={{ headerShown: false }} />
+        <Stack.Screen name="profile" options={{ headerShown: false }} />
+      </Stack>
       <FloatingTabBar tabs={tabs} />
     </View>
   );
