@@ -190,15 +190,16 @@ export default function ConsultantDashboardScreen() {
     }
   }, []);
 
-  const loadBabies = useCallback(async () => {
+  const loadBabies = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const data = await apiGet<Baby[]>("/api/consultant/babies");
+      console.log("[loadBabies] Fetched babies:", data.length, "| archived:", data.filter((b) => b.archived).length);
       setBabies(data);
     } catch (error) {
       console.error("Error loading babies:", error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -419,12 +420,21 @@ export default function ConsultantDashboardScreen() {
   const handleArchiveBaby = async (babyId: string, babyName: string) => {
     console.log(`📦 [Archive Baby] Archiving baby: ${babyName} (${babyId})`);
     setActionLoadingId(babyId);
+    // Optimistic update: immediately flip archived flag so the baby moves sections
+    setBabies((prev) =>
+      prev.map((b) => (b.id === babyId ? { ...b, archived: true } : b))
+    );
     try {
       await apiPatch(`/api/consultant/babies/${babyId}/archive`, {});
       console.log(`✅ [Archive Baby] Successfully archived: ${babyName}`);
-      await loadBabies();
+      // Silent re-fetch to sync server state (no loading spinner)
+      await loadBabies(true);
     } catch (error) {
       console.error(`❌ [Archive Baby] Error archiving baby ${babyName}:`, error);
+      // Revert optimistic update on failure
+      setBabies((prev) =>
+        prev.map((b) => (b.id === babyId ? { ...b, archived: false } : b))
+      );
     } finally {
       setActionLoadingId(null);
     }
