@@ -180,6 +180,7 @@ export default function ConsultantDashboardScreen() {
   }>({ visible: false, babyId: "", babyName: "" });
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [consultantProfile, setConsultantProfile] = useState<ConsultantProfile | null>(null);
+  const [archivedSectionExpanded, setArchivedSectionExpanded] = useState(false);
 
   const loadConsultantProfile = useCallback(async () => {
     try {
@@ -434,6 +435,29 @@ export default function ConsultantDashboardScreen() {
       // Revert optimistic update on failure
       setBabies((prev) =>
         prev.map((b) => (b.id === babyId ? { ...b, archived: false } : b))
+      );
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleUnarchiveBaby = async (babyId: string, babyName: string) => {
+    console.log(`📤 [Unarchive Baby] Unarchiving baby: ${babyName} (${babyId})`);
+    setActionLoadingId(babyId);
+    // Optimistic update: immediately flip archived flag so the baby moves to Ativos
+    setBabies((prev) =>
+      prev.map((b) => (b.id === babyId ? { ...b, archived: false } : b))
+    );
+    try {
+      await apiPatch(`/api/consultant/babies/${babyId}/unarchive`, {});
+      console.log(`✅ [Unarchive Baby] Successfully unarchived: ${babyName}`);
+      // Silent re-fetch to sync server state
+      await loadBabies(true);
+    } catch (error) {
+      console.error(`❌ [Unarchive Baby] Error unarchiving baby ${babyName}:`, error);
+      // Revert optimistic update on failure
+      setBabies((prev) =>
+        prev.map((b) => (b.id === babyId ? { ...b, archived: true } : b))
       );
     } finally {
       setActionLoadingId(null);
@@ -1130,6 +1154,30 @@ export default function ConsultantDashboardScreen() {
               <Text style={styles.archiveButtonText}>Arquivar</Text>
             </TouchableOpacity>
           )}
+          {baby.archived && (
+            <TouchableOpacity
+              style={styles.unarchiveButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                console.log(`📤 [Unarchive Button] Tapped for baby: ${baby.name} (${baby.id})`);
+                handleUnarchiveBaby(baby.id, baby.name);
+              }}
+              disabled={isLoadingAction}
+              activeOpacity={0.7}
+            >
+              {isLoadingAction ? (
+                <ActivityIndicator size="small" color={colors.success} />
+              ) : (
+                <IconSymbol
+                  ios_icon_name="arrow.uturn.up.circle"
+                  android_material_icon_name="unarchive"
+                  size={16}
+                  color={colors.success}
+                />
+              )}
+              <Text style={styles.unarchiveButtonText}>Desarquivar</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.deleteBabyButton}
             onPress={(e) => {
@@ -1222,7 +1270,15 @@ export default function ConsultantDashboardScreen() {
         )}
 
         {/* Arquivados section */}
-        <View style={[styles.sectionHeader, styles.sectionHeaderArchived]}>
+        <TouchableOpacity
+          style={[styles.sectionHeader, styles.sectionHeaderArchived]}
+          onPress={() => {
+            const next = !archivedSectionExpanded;
+            console.log(`📂 [Arquivados] Section toggled: ${next ? 'expanded' : 'collapsed'}`);
+            setArchivedSectionExpanded(next);
+          }}
+          activeOpacity={0.7}
+        >
           <IconSymbol
             ios_icon_name="archivebox"
             android_material_icon_name="archive"
@@ -1233,16 +1289,24 @@ export default function ConsultantDashboardScreen() {
           <View style={[styles.sectionBadge, styles.sectionBadgeArchived]}>
             <Text style={[styles.sectionBadgeText, styles.sectionBadgeTextArchived]}>{archivedBabies.length}</Text>
           </View>
-        </View>
+          <IconSymbol
+            ios_icon_name={archivedSectionExpanded ? "chevron.up" : "chevron.down"}
+            android_material_icon_name={archivedSectionExpanded ? "expand-less" : "expand-more"}
+            size={18}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
 
-        {archivedBabies.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>Nenhum bebê arquivado</Text>
-          </View>
-        ) : (
-          <View style={styles.babiesList}>
-            {archivedBabies.map(renderBabyCard)}
-          </View>
+        {archivedSectionExpanded && (
+          archivedBabies.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Nenhum bebê arquivado</Text>
+            </View>
+          ) : (
+            <View style={styles.babiesList}>
+              {archivedBabies.map(renderBabyCard)}
+            </View>
+          )
         )}
       </ScrollView>
 
@@ -1778,6 +1842,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary + "12",
     borderWidth: 1,
     borderColor: colors.primary + "30",
+  },
+  unarchiveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: "#16a34a20",
+  },
+  unarchiveButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#16a34a",
   },
   archiveButtonText: {
     fontSize: 13,
