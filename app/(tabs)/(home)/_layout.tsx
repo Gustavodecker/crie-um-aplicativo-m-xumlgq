@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from "react";
-import { Slot } from "expo-router";
+import { Stack } from "expo-router";
 import { View, ActivityIndicator } from "react-native";
 import { colors } from "@/styles/commonStyles";
 import { apiGet } from "@/utils/api";
@@ -44,7 +44,7 @@ export default function HomeLayout() {
 
     try {
       console.log("[HomeLayout] Loading consultant profile and babies");
-      
+
       const [profileData, babiesData] = await Promise.all([
         apiGet<ConsultantProfile>("/api/consultant/profile"),
         apiGet<Baby[]>("/api/consultant/babies"),
@@ -72,5 +72,54 @@ export default function HomeLayout() {
     );
   }
 
-  return <Slot />;
+  return (
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.background },
+      }}
+    >
+      <Stack.Screen name="index" options={{ headerShown: false }} />
+      <Stack.Screen name="mother-dashboard" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="mother-day-selection"
+        options={{
+          headerShown: true,
+          title: "Selecionar Dia",
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+        }}
+      />
+      <Stack.Screen
+        name="mother-routine"
+        options={{
+          headerShown: true,
+          title: "Registrar Rotina",
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+        }}
+      />
+      <Stack.Screen
+        name="mother-orientations"
+        options={{
+          headerShown: true,
+          title: "Orientações",
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+        }}
+      />
+      <Stack.Screen
+        name="mother-evolution"
+        options={{
+          headerShown: true,
+          title: "Evolução",
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+        }}
+      />
+      <Stack.Screen name="consultant-dashboard" options={{ headerShown: false }} />
+      <Stack.Screen name="acompanhamento" options={{ headerShown: false }} />
+      <Stack.Screen name="reports-landscape" options={{ headerShown: false }} />
+    </Stack>
+  );
 }
