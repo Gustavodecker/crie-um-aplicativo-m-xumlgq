@@ -30,6 +30,8 @@ interface User {
   requirePasswordChange?: boolean;
 }
 
+const REQUIRE_PASSWORD_CHANGE_KEY = "requirePasswordChange";
+
 interface AuthContextType {
   user: User | null;
   userRole: string | null;
@@ -38,6 +40,7 @@ interface AuthContextType {
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
   signOut: () => Promise<void>;
+  clearRequirePasswordChange: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -90,7 +93,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (sessionData?.user) {
           console.log("[Auth] ✅ Session valid, user:", sessionData.user.email);
-          setUser(sessionData.user as User);
+
+          // Restore requirePasswordChange flag from persistent storage
+          const storedRequirePasswordChange = await AsyncStorage.getItem(REQUIRE_PASSWORD_CHANGE_KEY);
+          const requirePasswordChange = storedRequirePasswordChange === "true";
+          const restoredUser: User = {
+            ...(sessionData.user as User),
+            requirePasswordChange,
+          };
+          setUser(restoredUser);
+          console.log("[Auth] 🔑 requirePasswordChange restored:", requirePasswordChange);
           
           // Load userRole from storage
           const storedRole = await AsyncStorage.getItem("userRole");
@@ -255,9 +267,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // CRITICAL: Save token FIRST, then set user state
       console.log("[Auth] 💾 Saving token...");
       await setBearerToken(token);
-      
+
+      // Persist requirePasswordChange flag so it survives app restarts
+      const requirePasswordChange = !!(user as any).requirePasswordChange;
+      console.log("[Auth] 🔑 requirePasswordChange from login response:", requirePasswordChange);
+      if (requirePasswordChange) {
+        await AsyncStorage.setItem(REQUIRE_PASSWORD_CHANGE_KEY, "true");
+      } else {
+        await AsyncStorage.removeItem(REQUIRE_PASSWORD_CHANGE_KEY);
+      }
+
       console.log("[Auth] ✅ Setting user:", user.email);
-      setUser(user);
+      setUser({ ...user, requirePasswordChange });
       
       // Determine role
       console.log("[Auth] 🔍 Determining user role...");
@@ -372,6 +393,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
 
+  const clearRequirePasswordChange = async () => {
+    console.log("[Auth] 🔓 Clearing requirePasswordChange flag");
+    await AsyncStorage.removeItem(REQUIRE_PASSWORD_CHANGE_KEY);
+    setUser((prev) => prev ? { ...prev, requirePasswordChange: false } : prev);
+  };
+
   const signOut = async () => {
     console.log("[Auth] 🚪 Signing out");
     
@@ -405,6 +432,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithEmail,
         signUpWithEmail,
         signOut,
+        clearRequirePasswordChange,
       }}
     >
       {children}

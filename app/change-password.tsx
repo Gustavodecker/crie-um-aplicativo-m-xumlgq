@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, borderRadius, typography, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
-import { apiPost } from "@/utils/api";
+import { apiPatch } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function ChangePasswordScreen() {
@@ -28,10 +28,10 @@ export default function ChangePasswordScreen() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const router = useRouter();
-  const { user, setUser } = useAuth();
+  const { clearRequirePasswordChange } = useAuth();
 
   const handleChangePassword = async () => {
+    console.log("[ChangePassword] User pressed 'Alterar Senha' button");
     setError("");
 
     // Validation
@@ -53,23 +53,20 @@ export default function ChangePasswordScreen() {
     setLoading(true);
 
     try {
-      console.log("[API] Changing password via /api/user/change-password...");
-      await apiPost("/api/user/change-password", {
+      console.log("[API] PATCH /api/user/change-password — sending request...");
+      await apiPatch("/api/user/change-password", {
         currentPassword,
         newPassword,
       });
 
-      console.log("Password changed successfully");
+      console.log("[ChangePassword] Password changed successfully");
 
-      // Update user state to remove requirePasswordChange flag
-      if (user) {
-        setUser({ ...user, requirePasswordChange: false } as any);
-      }
-
-      // Navigate to home
-      router.replace("/(tabs)");
+      // Clear the flag in context + AsyncStorage — NavigationGuard will then
+      // redirect to /(tabs) automatically because requirePasswordChange is now false.
+      await clearRequirePasswordChange();
+      console.log("[ChangePassword] requirePasswordChange cleared — NavigationGuard will redirect to /(tabs)");
     } catch (err: any) {
-      console.error("Password change error:", err);
+      console.error("[ChangePassword] Password change error:", err);
       const errorMessage = err?.message || "Erro ao alterar senha";
       setError(errorMessage);
     } finally {

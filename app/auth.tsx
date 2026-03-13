@@ -46,8 +46,9 @@ export default function AuthScreen() {
     try {
       console.log("Attempting consultant login with email:", email);
       await signInWithEmail(email, password);
-      console.log("Consultant login successful");
-      router.replace("/(tabs)");
+      console.log("Consultant login successful — NavigationGuard will handle redirect");
+      // Do NOT call router.replace here — NavigationGuard in _layout.tsx handles
+      // all post-login redirects, including requirePasswordChange check.
     } catch (err: any) {
       console.error("Consultant login error:", err);
       const errorMessage = err?.message || "Erro ao fazer login";
@@ -75,8 +76,8 @@ export default function AuthScreen() {
     try {
       console.log("Attempting consultant registration with email:", email);
       await signUpWithEmail(email, password, name);
-      console.log("Consultant registration successful");
-      router.replace("/(tabs)");
+      console.log("Consultant registration successful — NavigationGuard will handle redirect");
+      // Do NOT call router.replace here — NavigationGuard handles all post-auth redirects.
     } catch (err: any) {
       console.error("Consultant registration error:", err);
       const errorMessage = err?.message || "Erro ao criar conta";
@@ -99,8 +100,9 @@ export default function AuthScreen() {
     try {
       console.log("Attempting mother login with email:", email);
       await signInWithEmail(email, password);
-      console.log("Mother login successful");
-      router.replace("/(tabs)");
+      console.log("Mother login successful — NavigationGuard will handle redirect (may go to /change-password if requirePasswordChange is true)");
+      // Do NOT call router.replace here — NavigationGuard in _layout.tsx handles
+      // all post-login redirects, including the requirePasswordChange check for mothers.
     } catch (err: any) {
       console.error("Mother login error:", err);
       const errorMessage = err?.message || "Erro ao fazer login";
