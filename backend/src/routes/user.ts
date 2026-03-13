@@ -102,4 +102,48 @@ export function registerUserRoutes(app: App) {
       return reply.status(500).send({ error: 'Failed to change password' });
     }
   });
+
+  // GET /api/user/flags - Get user feature flags
+  app.fastify.get('/api/user/flags', {
+    schema: {
+      description: 'Get user feature flags',
+      tags: ['user'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            requirePasswordChange: { type: 'boolean', description: 'Whether user must change password on next interaction' },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    const userId = session.user.id;
+    app.logger.info({ userId }, 'Fetching user flags');
+
+    try {
+      // Get user record to retrieve requirePasswordChange flag
+      const user = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.id, userId),
+      });
+
+      if (!user) {
+        app.logger.error({ userId }, 'User not found');
+        return reply.status(401).send({ error: 'User not found' });
+      }
+
+      app.logger.info({ userId, requirePasswordChange: user.requirePasswordChange }, 'User flags retrieved');
+
+      return reply.status(200).send({
+        requirePasswordChange: user.requirePasswordChange,
+      });
+    } catch (error) {
+      app.logger.error({ err: error, userId }, 'Error fetching user flags');
+      return reply.status(500).send({ error: 'Failed to fetch user flags' });
+    }
+  });
 }
