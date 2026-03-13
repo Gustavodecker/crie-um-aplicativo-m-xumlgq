@@ -103,7 +103,24 @@ export function registerMotherRoutes(app: App) {
     }
 
     try {
-      // Step 1: Find baby by code (token field)
+      // Step 1: Check if user already exists with this email (early check to prevent wasted DB operations)
+      app.logger.debug({ email }, 'Checking if email already exists');
+      const existingUser = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, email),
+      });
+
+      if (existingUser) {
+        app.logger.warn(
+          { email, existingUserId: existingUser.id },
+          'User already exists with this email - duplicate account prevention'
+        );
+        return reply.status(409).send({
+          error: 'EMAIL_ALREADY_EXISTS',
+          message: 'Já existe uma conta com este email. Use a opção de login.',
+        });
+      }
+
+      // Step 2: Find baby by code (token field)
       const baby = await app.db.query.babies.findFirst({
         where: eq(schema.babies.token, babyCode),
       });
@@ -115,7 +132,7 @@ export function registerMotherRoutes(app: App) {
 
       app.logger.info({ babyId: baby.id, email, motherUserId: baby.motherUserId }, 'Baby found with code');
 
-      // Step 2: Check if baby already has a mother (code already used)
+      // Step 3: Check if baby already has a mother (code already used)
       if (baby.motherUserId) {
         app.logger.warn(
           { babyId: baby.id, existingMotherUserId: baby.motherUserId, email },
@@ -124,17 +141,7 @@ export function registerMotherRoutes(app: App) {
         return reply.status(409).send({ error: 'Este código já foi utilizado' });
       }
 
-      // Step 3: Check if user already exists with this email
-      const existingUser = await app.db.query.user.findFirst({
-        where: eq(authSchema.user.email, email),
-      });
-
-      if (existingUser) {
-        app.logger.warn({ email }, 'User already exists with this email');
-        return reply.status(409).send({ error: 'Email já cadastrado' });
-      }
-
-      // Step 4: Create new user
+      // Step 4: Create new user (email verified to be unique above)
       const userId = crypto.randomUUID();
       await app.db.insert(authSchema.user).values({
         id: userId,
@@ -372,26 +379,16 @@ export function registerMotherRoutes(app: App) {
         return reply.status(500).send({ error: 'Failed to link baby to account - data verification failed' });
       }
 
-      if (verifiedBaby.token !== null) {
-        app.logger.warn(
-          {
-            babyId: baby.id,
-            token: verifiedBaby.token,
-          },
-          'WARNING: Baby token was not invalidated - code can still be reused'
-        );
-      }
-
       app.logger.info(
         {
           babyId: verifiedBaby.id,
           motherUserId: verifiedBaby.motherUserId,
           motherUserId_matches_userId: verifiedBaby.motherUserId === userId,
-          tokenInvalidated: verifiedBaby.token === null,
+          tokenStillValid: verifiedBaby.token !== null, // Will be invalidated in SECOND UPDATE
           motherEmail: verifiedBaby.motherEmail,
           verified: true
         },
-        'Baby association verified - baby correctly linked to mother'
+        'Baby association verified - baby correctly linked to mother (token invalidation pending)'
       );
 
       // Step 8: Create session for the newly created user
@@ -504,7 +501,7 @@ export function registerMotherRoutes(app: App) {
       // and return 409 instead of 404
       if (finalBaby.token !== null) {
         app.logger.info(
-          { babyId: baby.id },
+          { babyId: baby.id, currentToken: finalBaby.token.substring(0, 10) + '...' },
           'Invalidating baby code token after successful registration'
         );
 
@@ -516,16 +513,31 @@ export function registerMotherRoutes(app: App) {
           .returning();
 
         if (!tokenInvalidationResult || tokenInvalidationResult.length === 0) {
-          app.logger.warn(
+          app.logger.error(
             { babyId: baby.id },
-            'WARNING: Token invalidation update returned no rows'
+            'CRITICAL: Token invalidation update failed - returned no rows'
           );
-        } else {
-          app.logger.info(
-            { babyId: baby.id, tokenInvalidated: true },
-            'Baby token invalidated successfully'
-          );
+          return reply.status(500).send({ error: 'Failed to invalidate registration code' });
         }
+
+        const tokenInvalidatedBaby = tokenInvalidationResult[0];
+        if (tokenInvalidatedBaby.token !== null) {
+          app.logger.error(
+            { babyId: baby.id, tokenAfterUpdate: tokenInvalidatedBaby.token },
+            'CRITICAL: Token was not actually invalidated after update'
+          );
+          return reply.status(500).send({ error: 'Failed to invalidate registration code' });
+        }
+
+        app.logger.info(
+          { babyId: baby.id, tokenNowNull: true },
+          'Baby token invalidated successfully'
+        );
+      } else {
+        app.logger.warn(
+          { babyId: baby.id },
+          'WARNING: Baby token was already null - may have been invalidated by another process'
+        );
       }
 
       // Step 9: Return success with user data
