@@ -1963,7 +1963,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 409);
   });
 
-  test("Baby code already used returns 409", async () => {
+  test("Baby code already used returns 404", async () => {
     // Create baby
     const babyRes = await authenticatedApi("/api/babies", authToken, {
       method: "POST",
@@ -1990,7 +1990,7 @@ describe("API Integration Tests", () => {
       }),
     });
 
-    // Second mother tries to register with same code (should fail with 409)
+    // Second mother tries to register with same code (should fail with 404 because code was invalidated)
     const res = await api("/api/mother/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2000,7 +2000,7 @@ describe("API Integration Tests", () => {
         senha: "Password123!",
       }),
     });
-    await expectStatus(res, 409);
+    await expectStatus(res, 404);
   });
 
   // ===== Mother Test Login =====
