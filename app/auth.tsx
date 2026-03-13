@@ -17,25 +17,22 @@ import { colors, spacing, borderRadius, typography, shadows } from "@/styles/com
 import { IconSymbol } from "@/components/IconSymbol";
 import { useAuth } from "@/contexts/AuthContext";
 
-type MotherStep = "choose" | "login" | "register";
-type ConsultantStep = "login" | "register";
+type AuthStep = "login" | "register";
 
 export default function AuthScreen() {
   const [activeTab, setActiveTab] = useState<"mother" | "consultant">("consultant");
-  const [motherStep, setMotherStep] = useState<MotherStep>("choose");
-  const [consultantStep, setConsultantStep] = useState<ConsultantStep>("login");
+  const [consultantStep, setConsultantStep] = useState<AuthStep>("login");
+  const [motherStep, setMotherStep] = useState<AuthStep>("login");
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [emailAlreadyExists, setEmailAlreadyExists] = useState(false);
   
   const router = useRouter();
-  const { signInWithEmail, signUpWithEmail, registerMother } = useAuth();
+  const { signInWithEmail, signUpWithEmail } = useAuth();
 
   const handleConsultantLogin = async () => {
     if (!email || !password) {
@@ -118,7 +115,7 @@ export default function AuthScreen() {
       } else if (errorMessage.toLowerCase().includes("not found") || 
                  errorMessage.toLowerCase().includes("user") ||
                  errorMessage.toLowerCase().includes("não encontrada")) {
-        setError("Conta não encontrada. Verifique seu email ou crie uma nova conta com o token da consultora.");
+        setError("Conta não encontrada. Solicite à sua consultora que crie sua conta.");
       } else {
         setError(errorMessage);
       }
@@ -127,61 +124,7 @@ export default function AuthScreen() {
     }
   };
 
-  const handleMotherRegister = async () => {
-    if (!email.trim() || !password || !inviteCode.trim()) {
-      setError("Por favor, preencha todos os campos");
-      return;
-    }
-    
-    if (password.length < 6) {
-      setError("A senha deve ter pelo menos 6 caracteres");
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      setError("Por favor, informe um e-mail válido");
-      return;
-    }
-    
-    setLoading(true);
-    setError("");
-    setEmailAlreadyExists(false);
-    
-    try {
-      console.log("Registering mother with invite code");
-      await registerMother(email.trim(), password, inviteCode.trim());
-      console.log("Mother registration successful");
-      router.replace("/(tabs)");
-    } catch (err: any) {
-      console.error("Mother registration error:", err);
-      const errorMessage = err?.message || "Erro ao criar conta";
-      console.error("Error message:", errorMessage);
-      
-      // Check if this is a duplicate email error
-      if (errorMessage.startsWith("EMAIL_ALREADY_EXISTS:")) {
-        setEmailAlreadyExists(true);
-        setError(errorMessage.replace("EMAIL_ALREADY_EXISTS: ", ""));
-      } else {
-        setEmailAlreadyExists(false);
-        setError(errorMessage);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResetMotherFlow = () => {
-    setMotherStep("choose");
-    setInviteCode("");
-    setEmail("");
-    setName("");
-    setPassword("");
-    setError("");
-    setEmailAlreadyExists(false);
-  };
-
-  const handleResetConsultantFlow = () => {
+  const handleResetFlow = () => {
     setEmail("");
     setPassword("");
     setName("");
@@ -212,7 +155,7 @@ export default function AuthScreen() {
                   console.log("User switched to Consultant tab");
                   setActiveTab("consultant");
                   setError("");
-                  handleResetConsultantFlow();
+                  handleResetFlow();
                 }}
               >
                 <Text style={[styles.tabText, activeTab === "consultant" && styles.tabTextActive]}>
@@ -225,7 +168,7 @@ export default function AuthScreen() {
                   console.log("User switched to Mother tab");
                   setActiveTab("mother");
                   setError("");
-                  handleResetMotherFlow();
+                  handleResetFlow();
                 }}
               >
                 <Text style={[styles.tabText, activeTab === "mother" && styles.tabTextActive]}>
@@ -235,38 +178,14 @@ export default function AuthScreen() {
             </View>
 
             {error ? (
-              <View>
-                <View style={styles.errorContainer}>
-                  <IconSymbol
-                    ios_icon_name="exclamationmark.triangle.fill"
-                    android_material_icon_name="warning"
-                    size={20}
-                    color={colors.error}
-                  />
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-                {emailAlreadyExists && activeTab === "mother" && motherStep === "register" ? (
-                  <TouchableOpacity
-                    style={styles.goToLoginButton}
-                    onPress={() => {
-                      console.log("User redirected to login after EMAIL_ALREADY_EXISTS error");
-                      setEmailAlreadyExists(false);
-                      setError("");
-                      setPassword("");
-                      setInviteCode("");
-                      setMotherStep("login");
-                    }}
-                    disabled={loading}
-                  >
-                    <IconSymbol
-                      ios_icon_name="arrow.right.circle.fill"
-                      android_material_icon_name="login"
-                      size={18}
-                      color="#FFFFFF"
-                    />
-                    <Text style={styles.goToLoginButtonText}>Ir para Login</Text>
-                  </TouchableOpacity>
-                ) : null}
+              <View style={styles.errorContainer}>
+                <IconSymbol
+                  ios_icon_name="exclamationmark.triangle.fill"
+                  android_material_icon_name="warning"
+                  size={20}
+                  color={colors.error}
+                />
+                <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
 
@@ -327,7 +246,7 @@ export default function AuthScreen() {
                       style={styles.linkButton}
                       onPress={() => {
                         setConsultantStep("register");
-                        handleResetConsultantFlow();
+                        handleResetFlow();
                       }}
                       disabled={loading}
                     >
@@ -406,7 +325,7 @@ export default function AuthScreen() {
                       style={styles.linkButton}
                       onPress={() => {
                         setConsultantStep("login");
-                        handleResetConsultantFlow();
+                        handleResetFlow();
                       }}
                       disabled={loading}
                     >
@@ -417,211 +336,66 @@ export default function AuthScreen() {
               </View>
             ) : (
               <View style={styles.form}>
-                {motherStep === "choose" ? (
-                  <>
-                    <Text style={styles.instructionText}>
-                      Como você deseja acessar?
-                    </Text>
+                <View style={styles.inputContainer}>
+                  <IconSymbol
+                    ios_icon_name="envelope.fill"
+                    android_material_icon_name="email"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="E-mail"
+                    placeholderTextColor={colors.textSecondary}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    editable={!loading}
+                  />
+                </View>
 
-                    <TouchableOpacity
-                      style={styles.choiceButton}
-                      onPress={() => {
-                        console.log("Mother chose: Already have account");
-                        setMotherStep("login");
-                      }}
-                    >
-                      <View style={styles.choiceIconContainer}>
-                        <IconSymbol
-                          ios_icon_name="person.circle.fill"
-                          android_material_icon_name="account-circle"
-                          size={32}
-                          color={colors.primary}
-                        />
-                      </View>
-                      <View style={styles.choiceTextContainer}>
-                        <Text style={styles.choiceTitle}>Já tenho conta</Text>
-                        <Text style={styles.choiceSubtitle}>Entrar com email e senha</Text>
-                      </View>
-                      <IconSymbol
-                        ios_icon_name="chevron.right"
-                        android_material_icon_name="chevron-right"
-                        size={24}
-                        color={colors.textSecondary}
-                      />
-                    </TouchableOpacity>
+                <View style={styles.inputContainer}>
+                  <IconSymbol
+                    ios_icon_name="lock.fill"
+                    android_material_icon_name="lock"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Senha"
+                    placeholderTextColor={colors.textSecondary}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    editable={!loading}
+                  />
+                </View>
 
-                    <TouchableOpacity
-                      style={styles.choiceButton}
-                      onPress={() => {
-                        console.log("Mother chose: First access - register");
-                        setMotherStep("register");
-                      }}
-                    >
-                      <View style={styles.choiceIconContainer}>
-                        <IconSymbol
-                          ios_icon_name="key.fill"
-                          android_material_icon_name="vpn-key"
-                          size={32}
-                          color={colors.secondary}
-                        />
-                      </View>
-                      <View style={styles.choiceTextContainer}>
-                        <Text style={styles.choiceTitle}>Primeiro acesso</Text>
-                        <Text style={styles.choiceSubtitle}>Tenho um código da consultora</Text>
-                      </View>
-                      <IconSymbol
-                        ios_icon_name="chevron.right"
-                        android_material_icon_name="chevron-right"
-                        size={24}
-                        color={colors.textSecondary}
-                      />
-                    </TouchableOpacity>
-                  </>
-                ) : motherStep === "login" ? (
-                  <>
-                    <Text style={styles.instructionText}>
-                      Entre com seu email e senha
-                    </Text>
+                <TouchableOpacity
+                  style={[styles.button, loading && styles.buttonDisabled]}
+                  onPress={handleMotherLogin}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.buttonText}>Entrar</Text>
+                  )}
+                </TouchableOpacity>
 
-                    <View style={styles.inputContainer}>
-                      <IconSymbol
-                        ios_icon_name="envelope.fill"
-                        android_material_icon_name="email"
-                        size={20}
-                        color={colors.textSecondary}
-                      />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="E-mail"
-                        placeholderTextColor={colors.textSecondary}
-                        value={email}
-                        onChangeText={setEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        editable={!loading}
-                      />
-                    </View>
-
-                    <View style={styles.inputContainer}>
-                      <IconSymbol
-                        ios_icon_name="lock.fill"
-                        android_material_icon_name="lock"
-                        size={20}
-                        color={colors.textSecondary}
-                      />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Senha"
-                        placeholderTextColor={colors.textSecondary}
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                        editable={!loading}
-                      />
-                    </View>
-
-                    <TouchableOpacity
-                      style={[styles.button, loading && styles.buttonDisabled]}
-                      onPress={handleMotherLogin}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <ActivityIndicator color="#FFFFFF" />
-                      ) : (
-                        <Text style={styles.buttonText}>Entrar</Text>
-                      )}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.linkButton}
-                      onPress={handleResetMotherFlow}
-                      disabled={loading}
-                    >
-                      <Text style={styles.linkText}>Voltar</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.instructionText}>
-                      Crie sua conta com o código fornecido pela consultora
-                    </Text>
-
-                    <View style={styles.inputContainer}>
-                      <IconSymbol
-                        ios_icon_name="key.fill"
-                        android_material_icon_name="vpn-key"
-                        size={20}
-                        color={colors.textSecondary}
-                      />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Código de convite"
-                        placeholderTextColor={colors.textSecondary}
-                        value={inviteCode}
-                        onChangeText={setInviteCode}
-                        autoCapitalize="characters"
-                        editable={!loading}
-                      />
-                    </View>
-
-                    <View style={styles.inputContainer}>
-                      <IconSymbol
-                        ios_icon_name="envelope.fill"
-                        android_material_icon_name="email"
-                        size={20}
-                        color={colors.textSecondary}
-                      />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Seu e-mail"
-                        placeholderTextColor={colors.textSecondary}
-                        value={email}
-                        onChangeText={setEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        editable={!loading}
-                      />
-                    </View>
-
-                    <View style={styles.inputContainer}>
-                      <IconSymbol
-                        ios_icon_name="lock.fill"
-                        android_material_icon_name="lock"
-                        size={20}
-                        color={colors.textSecondary}
-                      />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Crie uma senha (mínimo 6 caracteres)"
-                        placeholderTextColor={colors.textSecondary}
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                        editable={!loading}
-                      />
-                    </View>
-
-                    <TouchableOpacity
-                      style={[styles.button, loading && styles.buttonDisabled]}
-                      onPress={handleMotherRegister}
-                      disabled={loading}
-                    >
-                      {loading ? (
-                        <ActivityIndicator color="#FFFFFF" />
-                      ) : (
-                        <Text style={styles.buttonText}>Criar Conta</Text>
-                      )}
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.linkButton}
-                      onPress={handleResetMotherFlow}
-                      disabled={loading}
-                    >
-                      <Text style={styles.linkText}>Voltar</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
+                <View style={styles.infoBox}>
+                  <IconSymbol
+                    ios_icon_name="info.circle"
+                    android_material_icon_name="info"
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.infoText}>
+                    Sua conta é criada pela consultora. Você receberá um email com instruções para criar sua senha no primeiro acesso.
+                  </Text>
+                </View>
               </View>
             )}
           </ScrollView>
@@ -739,70 +513,24 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: 14,
   },
-  goToLoginButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    ...shadows.md,
-  },
-  goToLoginButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "600",
-  },
   instructionText: {
     fontSize: 14,
     color: colors.textSecondary,
     textAlign: "center",
   },
-  welcomeBox: {
-    backgroundColor: colors.card,
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-    ...shadows.sm,
-  },
-  welcomeText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-  },
-  welcomeBold: {
-    fontWeight: "bold",
-    color: colors.text,
-  },
-  choiceButton: {
+  infoBox: {
     flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    gap: spacing.md,
-    ...shadows.sm,
+    alignItems: "flex-start",
+    backgroundColor: colors.primary + "15",
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
-  choiceIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  choiceTextContainer: {
+  infoText: {
     flex: 1,
-  },
-  choiceTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.text,
-    marginBottom: 2,
-  },
-  choiceSubtitle: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.text,
+    lineHeight: 18,
   },
 });

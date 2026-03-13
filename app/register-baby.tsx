@@ -17,21 +17,13 @@ import { IconSymbol } from "@/components/IconSymbol";
 import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
 import { apiPost } from "@/utils/api";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import * as Clipboard from "expo-clipboard";
+
 
 interface BabyResponse {
-  id: string;
-  token: string;
-  name: string;
-  birthDate: string;
-  motherName: string;
-  motherPhone: string;
-  motherUserId: string | null;
-  consultantId: string;
-  objectives: string | null;
-  conclusion: string | null;
-  archived: boolean;
-  createdAt: string;
+  success: boolean;
+  babyId: string;
+  motherUserId: string;
+  motherEmail: string;
 }
 
 export default function RegisterBabyScreen() {
@@ -42,14 +34,13 @@ export default function RegisterBabyScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [motherName, setMotherName] = useState("");
   const [motherPhone, setMotherPhone] = useState("");
+  const [motherEmail, setMotherEmail] = useState("");
   const [objectives, setObjectives] = useState("");
   const [error, setError] = useState("");
-  
-  // Token modal state
-  const [showTokenModal, setShowTokenModal] = useState(false);
-  const [generatedToken, setGeneratedToken] = useState("");
-  const [registeredBabyName, setRegisteredBabyName] = useState("");
-  const [copiedToken, setCopiedToken] = useState(false);
+  const [successModal, setSuccessModal] = useState<{ visible: boolean; email: string }>({
+    visible: false,
+    email: "",
+  });
 
   const formatDateToBR = (date: Date): string => {
     const day = date.getDate().toString().padStart(2, "0");
@@ -83,23 +74,7 @@ export default function RegisterBabyScreen() {
     }
   };
 
-  const handleCopyToken = async () => {
-    console.log("User tapped Copy Token button");
-    await Clipboard.setStringAsync(generatedToken);
-    setCopiedToken(true);
-    setTimeout(() => setCopiedToken(false), 2000);
-  };
 
-  const handleCloseTokenModal = () => {
-    console.log("User closed token modal, navigating back to babies list");
-    setShowTokenModal(false);
-    setGeneratedToken("");
-    setRegisteredBabyName("");
-    setCopiedToken(false);
-    
-    // Navigate back to consultant dashboard to refresh the babies list
-    router.replace("/(tabs)/(home)");
-  };
 
   const handleSubmit = async () => {
     console.log("User tapped Submit button on Register Baby screen");
@@ -120,33 +95,39 @@ export default function RegisterBabyScreen() {
       return;
     }
 
+    if (!motherEmail.trim()) {
+      setError("Por favor, informe o email da mãe");
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(motherEmail.trim())) {
+      setError("Por favor, informe um email válido");
+      return;
+    }
+
     try {
       setLoading(true);
       
       const requestBody = {
-        name: name.trim(),
+        babyName: name.trim(),
         birthDate: formatDateToISO(birthDate),
         motherName: motherName.trim(),
         motherPhone: motherPhone.trim(),
+        motherEmail: motherEmail.trim(),
         objectives: objectives.trim() || undefined,
       };
       
-      console.log("Submitting baby registration to /api/consultant/babies:", requestBody);
+      console.log("Submitting baby and mother registration to /api/consultant/register-baby-and-mother:", requestBody);
 
-      // Use consultant-specific endpoint - backend will associate with authenticated consultant
-      const response = await apiPost<BabyResponse>("/api/consultant/babies", requestBody);
+      // New endpoint that creates both baby and mother account
+      const response = await apiPost<BabyResponse>("/api/consultant/register-baby-and-mother", requestBody);
 
-      console.log("Baby registered successfully:", response);
+      console.log("Baby and mother registered successfully:", response);
       
-      // Show token modal with the generated token
-      if (response.token) {
-        setGeneratedToken(response.token);
-        setRegisteredBabyName(response.name);
-        setShowTokenModal(true);
-      } else {
-        console.error("No token returned from backend");
-        setError("Bebê cadastrado, mas não foi possível gerar o token. Tente novamente.");
-      }
+      // Show success modal instead of Alert (web-compatible)
+      setSuccessModal({ visible: true, email: motherEmail.trim() });
     } catch (err: any) {
       console.error("Error registering baby:", err);
       setError(err.message || "Erro ao cadastrar bebê. Tente novamente.");
@@ -249,6 +230,19 @@ export default function RegisterBabyScreen() {
               />
             </View>
 
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email da Mãe *</Text>
+              <TextInput
+                style={styles.input}
+                value={motherEmail}
+                onChangeText={setMotherEmail}
+                placeholder="Ex: maria@email.com"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
             <View style={styles.infoBox}>
               <IconSymbol
                 ios_icon_name="info.circle"
@@ -257,7 +251,7 @@ export default function RegisterBabyScreen() {
                 color={colors.primary}
               />
               <Text style={styles.infoText}>
-                O email da mãe será cadastrado por ela no primeiro acesso usando o token.
+                A mãe receberá um email com instruções para acessar o app e criar sua senha.
               </Text>
             </View>
           </View>
@@ -322,65 +316,41 @@ export default function RegisterBabyScreen() {
         />
       )}
 
-      {/* Token Modal */}
+      {/* Success Modal - web-compatible, no Alert.alert() */}
       <Modal
-        visible={showTokenModal}
-        transparent={true}
+        visible={successModal.visible}
+        transparent
         animationType="fade"
-        onRequestClose={handleCloseTokenModal}
+        onRequestClose={() => {
+          setSuccessModal({ visible: false, email: "" });
+          router.replace("/(tabs)/(home)");
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <IconSymbol
-                ios_icon_name="checkmark.circle.fill"
-                android_material_icon_name="check-circle"
-                size={64}
-                color={colors.success}
-              />
-              <Text style={styles.modalTitle}>Bebê Cadastrado!</Text>
-              <Text style={styles.modalSubtitle}>{registeredBabyName}</Text>
-            </View>
-
-            <View style={styles.tokenSection}>
-              <Text style={styles.tokenLabel}>Token de Acesso para a Mãe:</Text>
-              <View style={styles.tokenContainer}>
-                <Text style={styles.tokenText}>{generatedToken}</Text>
-              </View>
-              
-              <TouchableOpacity
-                style={styles.copyButton}
-                onPress={handleCopyToken}
-              >
-                <IconSymbol
-                  ios_icon_name={copiedToken ? "checkmark" : "doc.on.doc"}
-                  android_material_icon_name={copiedToken ? "check" : "content-copy"}
-                  size={20}
-                  color={colors.card}
-                />
-                <Text style={styles.copyButtonText}>
-                  {copiedToken ? "Token Copiado!" : "Copiar Token"}
-                </Text>
-              </TouchableOpacity>
-
-              <View style={styles.instructionsContainer}>
-                <IconSymbol
-                  ios_icon_name="info.circle"
-                  android_material_icon_name="info"
-                  size={20}
-                  color={colors.primary}
-                />
-                <Text style={styles.instructionsText}>
-                  Envie este token para a mãe. No primeiro acesso, ela usará o token para criar sua conta com email e senha.
-                </Text>
-              </View>
-            </View>
-
+            <IconSymbol
+              ios_icon_name="checkmark.circle.fill"
+              android_material_icon_name="check-circle"
+              size={64}
+              color={colors.success}
+            />
+            <Text style={styles.modalTitle}>Bebê Cadastrado!</Text>
+            <Text style={styles.modalMessage}>
+              Bebê cadastrado com sucesso!
+            </Text>
+            <Text style={styles.modalMessage}>
+              Um email foi enviado para{" "}
+              <Text style={styles.modalEmailHighlight}>{successModal.email}</Text>{" "}
+              com instruções de acesso.
+            </Text>
             <TouchableOpacity
-              style={styles.closeModalButton}
-              onPress={handleCloseTokenModal}
+              style={styles.modalButton}
+              onPress={() => {
+                setSuccessModal({ visible: false, email: "" });
+                router.replace("/(tabs)/(home)");
+              }}
             >
-              <Text style={styles.closeModalButtonText}>Fechar</Text>
+              <Text style={styles.modalButtonText}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -519,103 +489,57 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
   },
-  // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(47, 62, 70, 0.6)",
     justifyContent: "center",
     alignItems: "center",
-    padding: spacing.lg,
+    padding: spacing.xl,
   },
   modalContent: {
     backgroundColor: colors.card,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
+    borderRadius: 20,
+    padding: spacing.xxxl || spacing.xl,
     width: "100%",
-    maxWidth: 400,
+    maxWidth: 420,
+    alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
     elevation: 8,
   },
-  modalHeader: {
-    alignItems: "center",
-    marginBottom: spacing.xl,
-  },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "700",
     color: colors.text,
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+    textAlign: "center",
   },
-  modalSubtitle: {
-    fontSize: 16,
+  modalMessage: {
+    fontSize: 15,
     color: colors.textSecondary,
-    marginTop: spacing.xs,
-  },
-  tokenSection: {
-    marginBottom: spacing.xl,
-  },
-  tokenLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
+    textAlign: "center",
+    lineHeight: 22,
     marginBottom: spacing.sm,
   },
-  tokenContainer: {
-    backgroundColor: colors.background,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  tokenText: {
-    fontSize: 20,
+  modalEmailHighlight: {
     fontWeight: "700",
     color: colors.primary,
-    textAlign: "center",
-    letterSpacing: 2,
   },
-  copyButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+  modalButton: {
+    marginTop: spacing.xl,
     backgroundColor: colors.primary,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xxxl || spacing.xl,
+    borderRadius: borderRadius.lg,
+    minWidth: 120,
+    alignItems: "center",
   },
-  copyButtonText: {
+  modalButtonText: {
     fontSize: 16,
     fontWeight: "600",
     color: colors.card,
-  },
-  instructionsContainer: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: colors.primary + "15",
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    gap: spacing.sm,
-  },
-  instructionsText: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-  },
-  closeModalButton: {
-    backgroundColor: colors.background,
-    padding: spacing.lg,
-    borderRadius: borderRadius.md,
-    alignItems: "center",
-  },
-  closeModalButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: colors.text,
   },
 });

@@ -111,7 +111,7 @@ export default function MotherDashboardScreen() {
       if (!babyData || !babyData.id) {
         console.log("[Mother Dashboard] No baby linked to this account");
         setNoBabyLinked(true);
-        setError("Seu bebê não está vinculado à sua conta. Solicite um novo código à sua consultora.");
+        setError("Seu bebê não está vinculado à sua conta. Entre em contato com sua consultora.");
         return;
       }
       
@@ -231,7 +231,7 @@ export default function MotherDashboardScreen() {
       ) {
         console.log("[Mother Dashboard] 404 detected - baby not linked");
         setNoBabyLinked(true);
-        errorMessage = "Seu bebê não está vinculado à sua conta. Solicite um novo token à sua consultora.";
+        errorMessage = "Seu bebê não está vinculado à sua conta. Entre em contato com sua consultora.";
       } else if (error.message?.includes("Network") || error.message?.includes("fetch")) {
         errorMessage = "Erro de conexão. Verifique sua internet.";
       } else if (error.message) {
@@ -290,24 +290,23 @@ export default function MotherDashboardScreen() {
                 Sua conta não está vinculada a nenhum bebê.
               </Text>
               <Text style={[styles.errorText, { fontSize: 14, marginTop: spacing.md, fontWeight: "600" }]}>
-                Solicite um token à sua consultora e use a opção "Primeiro acesso" na tela de login.
+                Entre em contato com sua consultora para que ela crie o cadastro do seu bebê.
               </Text>
               <TouchableOpacity 
-                style={[styles.retryButton, { backgroundColor: colors.primary, marginTop: spacing.lg }]} 
+                style={[styles.retryButton, { marginTop: spacing.lg }]} 
+                onPress={loadDashboard}
+              >
+                <Text style={styles.retryButtonText}>Tentar Novamente</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.retryButton, { backgroundColor: colors.secondary, marginTop: spacing.md }]} 
                 onPress={async () => {
-                  console.log("[Mother Dashboard] User chose to sign out and use first-access flow");
+                  console.log("[Mother Dashboard] User chose to sign out");
                   await signOut();
                   router.replace("/auth");
                 }}
               >
-                <IconSymbol 
-                  ios_icon_name="arrow.right.circle.fill" 
-                  android_material_icon_name="login" 
-                  size={20} 
-                  color="#FFF" 
-                  style={{ marginRight: spacing.sm }}
-                />
-                <Text style={styles.retryButtonText}>Sair e Usar Token</Text>
+                <Text style={styles.retryButtonText}>Sair</Text>
               </TouchableOpacity>
             </>
           ) : (

@@ -36,7 +36,6 @@ interface AuthContextType {
   setUser: (user: User | null) => void;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
-  registerMother: (email: string, password: string, inviteCode: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -370,94 +369,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const registerMother = async (email: string, password: string, inviteCode: string) => {
-    try {
-      console.log("[Auth] 📝 Registering mother with invite code");
-      
-      if (!inviteCode || inviteCode.trim().length === 0) {
-        throw new Error("Código de convite é obrigatório");
-      }
-      if (!email || email.trim().length === 0) {
-        throw new Error("Email é obrigatório");
-      }
-      if (!password || password.length < 6) {
-        throw new Error("Senha deve ter pelo menos 6 caracteres");
-      }
 
-      console.log("[Auth] 📡 Calling /api/mother/register");
-      
-      const response = await fetch(`${BACKEND_URL}/api/mother/register`, {
-        method: "POST",
-        headers: buildAuthHeaders(),
-        body: JSON.stringify({
-          email: email.trim(),
-          senha: password, // Backend expects 'senha' (Portuguese for password)
-          babyCode: inviteCode.trim(), // Backend expects 'babyCode'
-        }),
-      });
-      
-      const responseText = await response.text();
-      let responseData: any = null;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch {
-        responseData = {};
-      }
-      
-      if (!response.ok) {
-        console.error("[Auth] ❌ Mother registration failed:", response.status, responseText);
-        
-        let errorMsg = "Erro ao criar conta";
-        if (responseData?.error) errorMsg = responseData.error;
-        if (responseData?.message) errorMsg = responseData.message;
-        
-        if (response.status === 404) {
-          throw new Error("Código inválido. Verifique o código fornecido pela consultora.");
-        }
-        if (response.status === 409) {
-          if (errorMsg.toLowerCase().includes("código") || errorMsg.toLowerCase().includes("utilizado")) {
-            throw new Error("Este código já foi utilizado. Solicite um novo código à sua consultora.");
-          }
-          if (errorMsg.toLowerCase().includes("email") || errorMsg.toLowerCase().includes("já existe")) {
-            throw new Error("EMAIL_ALREADY_EXISTS: Já existe uma conta com este email. Use a opção 'Já tenho conta' para fazer login.");
-          }
-          throw new Error(errorMsg);
-        }
-        throw new Error(errorMsg);
-      }
-      
-      console.log("[Auth] ✅ Mother registration response received");
-      
-      const sessionToken = responseData?.token;
-      const user = responseData?.user;
-      
-      if (!sessionToken) {
-        console.error("[Auth] ❌ No session token in response!");
-        throw new Error("Não foi possível criar sessão. Tente novamente.");
-      }
-      
-      if (!user) {
-        console.warn("[Auth] ⚠️ No user in response");
-        throw new Error("Dados do usuário não recebidos");
-      }
-      
-      // CRITICAL: Save token FIRST, then set user state
-      console.log("[Auth] 💾 Saving session token...");
-      await setBearerToken(sessionToken);
-      
-      console.log("[Auth] ✅ Setting user:", user.email);
-      setUser(user);
-      
-      await AsyncStorage.setItem("userRole", "mother");
-      setUserRole("mother");
-      
-      console.log("[Auth] ✅ Mother registration complete");
-      
-    } catch (error: any) {
-      console.error("[Auth] ❌ Mother registration failed:", error?.message || error);
-      throw error;
-    }
-  };
 
   const signOut = async () => {
     console.log("[Auth] 🚪 Signing out");
@@ -491,7 +403,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser,
         signInWithEmail,
         signUpWithEmail,
-        registerMother,
         signOut,
       }}
     >
