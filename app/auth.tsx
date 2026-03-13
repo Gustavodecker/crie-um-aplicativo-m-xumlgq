@@ -32,6 +32,7 @@ export default function AuthScreen() {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [emailAlreadyExists, setEmailAlreadyExists] = useState(false);
   
   const router = useRouter();
   const { signInWithEmail, signUpWithEmail, registerMother } = useAuth();
@@ -145,6 +146,7 @@ export default function AuthScreen() {
     
     setLoading(true);
     setError("");
+    setEmailAlreadyExists(false);
     
     try {
       console.log("Registering mother with baby code");
@@ -155,7 +157,15 @@ export default function AuthScreen() {
       console.error("Mother registration error:", err);
       const errorMessage = err?.message || "Erro ao criar conta";
       console.error("Error message:", errorMessage);
-      setError(errorMessage);
+      
+      // Check if this is a duplicate email error (backend returns EMAIL_ALREADY_EXISTS)
+      if (errorMessage.startsWith("EMAIL_ALREADY_EXISTS:")) {
+        setEmailAlreadyExists(true);
+        setError(errorMessage.replace("EMAIL_ALREADY_EXISTS: ", ""));
+      } else {
+        setEmailAlreadyExists(false);
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -168,6 +178,7 @@ export default function AuthScreen() {
     setName("");
     setPassword("");
     setError("");
+    setEmailAlreadyExists(false);
   };
 
   const handleResetConsultantFlow = () => {
@@ -224,14 +235,38 @@ export default function AuthScreen() {
             </View>
 
             {error ? (
-              <View style={styles.errorContainer}>
-                <IconSymbol
-                  ios_icon_name="exclamationmark.triangle.fill"
-                  android_material_icon_name="warning"
-                  size={20}
-                  color={colors.error}
-                />
-                <Text style={styles.errorText}>{error}</Text>
+              <View>
+                <View style={styles.errorContainer}>
+                  <IconSymbol
+                    ios_icon_name="exclamationmark.triangle.fill"
+                    android_material_icon_name="warning"
+                    size={20}
+                    color={colors.error}
+                  />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+                {emailAlreadyExists && activeTab === "mother" && motherStep === "register" ? (
+                  <TouchableOpacity
+                    style={styles.goToLoginButton}
+                    onPress={() => {
+                      console.log("User redirected to login after EMAIL_ALREADY_EXISTS error");
+                      setEmailAlreadyExists(false);
+                      setError("");
+                      setPassword("");
+                      setBabyCode("");
+                      setMotherStep("login");
+                    }}
+                    disabled={loading}
+                  >
+                    <IconSymbol
+                      ios_icon_name="arrow.right.circle.fill"
+                      android_material_icon_name="login"
+                      size={18}
+                      color="#FFFFFF"
+                    />
+                    <Text style={styles.goToLoginButtonText}>Ir para Login</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ) : null}
 
@@ -703,6 +738,22 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.error,
     fontSize: 14,
+  },
+  goToLoginButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    ...shadows.md,
+  },
+  goToLoginButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "600",
   },
   instructionText: {
     fontSize: 14,

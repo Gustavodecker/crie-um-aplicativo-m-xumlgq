@@ -409,26 +409,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         let errorMsg = "Erro ao criar conta";
         if (responseData?.error) errorMsg = responseData.error;
+        if (responseData?.message) errorMsg = responseData.message;
         
         if (response.status === 404) {
           // After backend fix: token is set to null after first use, so a used code returns 404
           // This means either the code is invalid OR it was already used
-          throw new Error("Código inválido ou já utilizado. Verifique com sua consultora.");
+          throw new Error("Código inválido ou já utilizado. Solicite um novo código à sua consultora.");
         }
         if (response.status === 409) {
-          // 409 can mean: baby already has a mother (code used before backend fix) OR email already registered
+          // Backend now returns { error: "EMAIL_ALREADY_EXISTS", message: "..." } for duplicate emails
+          // Check for the specific error code first
+          if (responseData?.error === "EMAIL_ALREADY_EXISTS") {
+            throw new Error("EMAIL_ALREADY_EXISTS: Já existe uma conta com este email. Use a opção 'Já tenho conta' para fazer login.");
+          }
+          // Fallback: check error message text for email-related issues
+          if (
+            errorMsg.toLowerCase().includes("email") ||
+            errorMsg.toLowerCase().includes("cadastrado") ||
+            errorMsg.toLowerCase().includes("already exists") ||
+            errorMsg.toLowerCase().includes("email_already_exists")
+          ) {
+            throw new Error("EMAIL_ALREADY_EXISTS: Já existe uma conta com este email. Use a opção 'Já tenho conta' para fazer login.");
+          }
           if (
             errorMsg.toLowerCase().includes("código") ||
             errorMsg.toLowerCase().includes("utilizado") ||
             errorMsg.toLowerCase().includes("já foi utilizado")
           ) {
             throw new Error("Este código já foi utilizado. Solicite um novo código à sua consultora.");
-          }
-          if (
-            errorMsg.toLowerCase().includes("email") ||
-            errorMsg.toLowerCase().includes("cadastrado")
-          ) {
-            throw new Error("Já existe uma conta com este email. Use a opção de login.");
           }
           throw new Error(errorMsg || "Já existe uma conta com este email. Use a opção de login.");
         }
