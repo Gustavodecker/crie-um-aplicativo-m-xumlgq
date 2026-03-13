@@ -651,6 +651,76 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Unarchive consultant baby", async () => {
+    // Create a baby specifically for consultant unarchive
+    const createRes = await authenticatedApi("/api/consultant/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby to Unarchive via Consultant",
+        birthDate: "2024-06-15",
+        motherName: "Mother Test",
+        motherPhone: "+1234567890",
+      }),
+    });
+    const babyToUnarchive = await createRes.json();
+
+    // First archive it
+    await authenticatedApi(
+      `/api/consultant/babies/${babyToUnarchive.id}/archive`,
+      authToken,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+    // Then unarchive it
+    const res = await authenticatedApi(
+      `/api/consultant/babies/${babyToUnarchive.id}/unarchive`,
+      authToken,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Unarchive consultant baby with nonexistent ID returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/babies/00000000-0000-0000-0000-000000000000/unarchive",
+      authToken,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Unarchive consultant baby with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/babies/invalid-uuid/unarchive",
+      authToken,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Unarchive consultant baby without auth returns 401", async () => {
+    const res = await api(`/api/consultant/babies/${babyId}/unarchive`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+    });
+    await expectStatus(res, 401);
+  });
+
   // ===== Contracts =====
 
   test("Create contract", async () => {
