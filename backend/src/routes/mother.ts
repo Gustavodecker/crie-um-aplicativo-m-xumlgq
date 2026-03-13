@@ -113,11 +113,14 @@ export function registerMotherRoutes(app: App) {
         return reply.status(404).send({ error: 'Código inválido' });
       }
 
-      app.logger.info({ babyId: baby.id, email }, 'Baby found with code');
+      app.logger.info({ babyId: baby.id, email, motherUserId: baby.motherUserId }, 'Baby found with code');
 
-      // Step 2: Check if baby already has a mother
+      // Step 2: Check if baby already has a mother (code already used)
       if (baby.motherUserId) {
-        app.logger.warn({ babyId: baby.id, existingMotherUserId: baby.motherUserId, email }, 'Baby already has mother');
+        app.logger.warn(
+          { babyId: baby.id, existingMotherUserId: baby.motherUserId, email },
+          'Baby already linked to a mother - code already used'
+        );
         return reply.status(409).send({ error: 'Este código já foi utilizado' });
       }
 
@@ -278,6 +281,17 @@ export function registerMotherRoutes(app: App) {
         'Updating baby with mother information'
       );
 
+      app.logger.debug(
+        {
+          babyId: baby.id,
+          userId,
+          newMotherUserId: userId,
+          invalidatingToken: true,
+        },
+        'Updating baby: setting motherUserId and invalidating token'
+      );
+
+      // FIRST UPDATE: Link baby to mother
       const updateResult = await app.db.update(schema.babies)
         .set({
           motherUserId: userId,
@@ -298,12 +312,28 @@ export function registerMotherRoutes(app: App) {
       app.logger.info(
         {
           babyId: updatedBaby.id,
-          userId,
-          motherUserId: updatedBaby.motherUserId,
-          motherEmail: updatedBaby.motherEmail
+          updatedMotherUserId: updatedBaby.motherUserId,
+          expectedMotherUserId: userId,
+          motherUserIdMatches: updatedBaby.motherUserId === userId,
+          tokenInvalidated: updatedBaby.token === null,
+          motherEmail: updatedBaby.motherEmail,
         },
-        'Baby updated with mother information - verifying persistence'
+        'Baby updated - checking if motherUserId was set correctly'
       );
+
+      // CRITICAL: Verify motherUserId was actually set
+      if (updatedBaby.motherUserId !== userId) {
+        app.logger.error(
+          {
+            babyId: baby.id,
+            expectedMotherUserId: userId,
+            actualMotherUserId: updatedBaby.motherUserId,
+            updateResult: updatedBaby,
+          },
+          'CRITICAL: Baby update returned wrong motherUserId'
+        );
+        return reply.status(500).send({ error: 'Failed to link baby - database error' });
+      }
 
       // Verify the update persisted by re-querying
       const verifiedBaby = await app.db.query.babies.findFirst({
@@ -318,23 +348,46 @@ export function registerMotherRoutes(app: App) {
         return reply.status(500).send({ error: 'Failed to verify baby update' });
       }
 
+      app.logger.debug(
+        {
+          babyId: verifiedBaby.id,
+          verifiedMotherUserId: verifiedBaby.motherUserId,
+          expectedMotherUserId: userId,
+          tokenIsNull: verifiedBaby.token === null,
+        },
+        'Baby re-queried after update - verifying motherUserId persistence'
+      );
+
       if (verifiedBaby.motherUserId !== userId) {
         app.logger.error(
           {
             babyId: baby.id,
             expectedMotherUserId: userId,
             actualMotherUserId: verifiedBaby.motherUserId,
-            updatedBabyMotherUserId: updatedBaby.motherUserId
+            returnedMotherUserId: updatedBaby.motherUserId,
+            verifiedMotherUserId: verifiedBaby.motherUserId,
           },
           'CRITICAL: Baby motherUserId mismatch - update did not persist correctly'
         );
         return reply.status(500).send({ error: 'Failed to link baby to account - data verification failed' });
       }
 
+      if (verifiedBaby.token !== null) {
+        app.logger.warn(
+          {
+            babyId: baby.id,
+            token: verifiedBaby.token,
+          },
+          'WARNING: Baby token was not invalidated - code can still be reused'
+        );
+      }
+
       app.logger.info(
         {
           babyId: verifiedBaby.id,
           motherUserId: verifiedBaby.motherUserId,
+          motherUserId_matches_userId: verifiedBaby.motherUserId === userId,
+          tokenInvalidated: verifiedBaby.token === null,
           motherEmail: verifiedBaby.motherEmail,
           verified: true
         },
@@ -406,6 +459,13 @@ export function registerMotherRoutes(app: App) {
         where: eq(schema.babies.id, baby.id),
       });
 
+      const allCorrect =
+        finalUser?.id === userId &&
+        finalUser?.email === email &&
+        finalBaby?.motherUserId === userId &&
+        finalBaby?.motherEmail === email &&
+        finalBaby?.token === null;
+
       app.logger.info(
         {
           userId,
@@ -413,20 +473,18 @@ export function registerMotherRoutes(app: App) {
           babyId: baby.id,
           babyMotherUserId: finalBaby?.motherUserId,
           babyMotherEmail: finalBaby?.motherEmail,
-          allFieldsCorrect:
-            finalUser?.id === userId &&
-            finalUser?.email === email &&
-            finalBaby?.motherUserId === userId &&
-            finalBaby?.motherEmail === email
+          tokenNull: finalBaby?.token === null,
+          allFieldsCorrect: allCorrect
         },
-        'Mother account registration complete - all data verified'
+        'Final verification before returning - all data check'
       );
 
       if (!finalUser || finalUser.id !== userId) {
         app.logger.error(
           { userId, finalUserId: finalUser?.id },
-          'WARNING: Final user verification failed - user not found'
+          'CRITICAL: Final user verification failed - user not found'
         );
+        return reply.status(500).send({ error: 'Final verification failed - user not found' });
       }
 
       if (!finalBaby || finalBaby.motherUserId !== userId) {
@@ -436,8 +494,38 @@ export function registerMotherRoutes(app: App) {
             expectedMotherUserId: userId,
             actualMotherUserId: finalBaby?.motherUserId
           },
-          'WARNING: Final baby verification failed - motherUserId not set'
+          'CRITICAL: Final baby verification failed - motherUserId not set'
         );
+        return reply.status(500).send({ error: 'Final verification failed - baby not linked' });
+      }
+
+      // SECOND UPDATE: Invalidate token after all verifications pass
+      // This is done in a separate update to ensure second attempts can find the baby
+      // and return 409 instead of 404
+      if (finalBaby.token !== null) {
+        app.logger.info(
+          { babyId: baby.id },
+          'Invalidating baby code token after successful registration'
+        );
+
+        const tokenInvalidationResult = await app.db.update(schema.babies)
+          .set({
+            token: null, // Invalidate code after successful registration
+          })
+          .where(eq(schema.babies.id, baby.id))
+          .returning();
+
+        if (!tokenInvalidationResult || tokenInvalidationResult.length === 0) {
+          app.logger.warn(
+            { babyId: baby.id },
+            'WARNING: Token invalidation update returned no rows'
+          );
+        } else {
+          app.logger.info(
+            { babyId: baby.id, tokenInvalidated: true },
+            'Baby token invalidated successfully'
+          );
+        }
       }
 
       // Step 9: Return success with user data
