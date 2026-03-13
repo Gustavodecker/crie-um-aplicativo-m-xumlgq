@@ -17,6 +17,7 @@ import { IconSymbol } from "@/components/IconSymbol";
 import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
 import { apiPost } from "@/utils/api";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as Clipboard from "expo-clipboard";
 
 
 interface BabyResponse {
@@ -47,6 +48,7 @@ export default function RegisterBabyScreen() {
     email: "",
     provisionalPassword: "",
   });
+  const [copied, setCopied] = useState(false);
 
   const formatDateToBR = (date: Date): string => {
     const day = date.getDate().toString().padStart(2, "0");
@@ -80,7 +82,17 @@ export default function RegisterBabyScreen() {
     }
   };
 
-
+  const handleCopyPassword = async () => {
+    console.log("User tapped Copy Password button");
+    try {
+      await Clipboard.setStringAsync(successModal.provisionalPassword);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      console.log("Password copied to clipboard");
+    } catch (err) {
+      console.error("Error copying to clipboard:", err);
+    }
+  };
 
   const handleSubmit = async () => {
     console.log("User tapped Submit button on Register Baby screen");
@@ -138,6 +150,7 @@ export default function RegisterBabyScreen() {
         email: motherEmail.trim(),
         provisionalPassword: response.provisionalPassword || "",
       });
+      setCopied(false);
     } catch (err: any) {
       console.error("Error registering baby:", err);
       setError(err.message || "Erro ao cadastrar bebê. Tente novamente.");
@@ -360,7 +373,23 @@ export default function RegisterBabyScreen() {
               </View>
               <View style={styles.credentialRow}>
                 <Text style={styles.credentialLabel}>Senha provisória:</Text>
-                <Text style={styles.credentialValuePassword}>{successModal.provisionalPassword}</Text>
+                <View style={styles.passwordRow}>
+                  <Text style={styles.credentialValuePassword}>{successModal.provisionalPassword}</Text>
+                  <TouchableOpacity
+                    style={[styles.copyButton, copied && styles.copyButtonSuccess]}
+                    onPress={handleCopyPassword}
+                  >
+                    <IconSymbol
+                      ios_icon_name={copied ? "checkmark" : "doc.on.doc"}
+                      android_material_icon_name={copied ? "check" : "content-copy"}
+                      size={18}
+                      color={copied ? colors.success : colors.primary}
+                    />
+                    <Text style={[styles.copyButtonText, copied && styles.copyButtonTextSuccess]}>
+                      {copied ? "Copiado!" : "Copiar"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
             
@@ -576,12 +605,39 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: "600",
   },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
   credentialValuePassword: {
+    flex: 1,
     fontSize: 18,
     color: colors.primary,
     fontWeight: "700",
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
     letterSpacing: 1,
+  },
+  copyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primary + "15",
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm,
+    gap: 4,
+  },
+  copyButtonSuccess: {
+    backgroundColor: colors.success + "15",
+  },
+  copyButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.primary,
+  },
+  copyButtonTextSuccess: {
+    color: colors.success,
   },
   modalWarning: {
     fontSize: 13,
