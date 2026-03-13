@@ -651,4 +651,144 @@ export function registerConsultantRoutes(app: App) {
       return reply.status(500).send({ error: 'Failed to register baby and create mother account' });
     }
   });
+
+  // DELETE /api/consultant/babies/:id - Delete a baby
+  app.fastify.delete('/api/consultant/babies/:id', {
+    schema: {
+      description: 'Delete a baby (consultant only)',
+      tags: ['consultant', 'babies'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    const babyId = request.params.id;
+    app.logger.info({ userId: session.user.id, babyId }, 'Attempting to delete baby');
+
+    try {
+      // Step 1: Get consultant for authenticated user
+      const consultant = await app.db.query.consultants.findFirst({
+        where: eq(schema.consultants.userId, session.user.id),
+      });
+
+      if (!consultant) {
+        app.logger.warn({ userId: session.user.id }, 'Consultant not found');
+        return reply.status(404).send({ error: 'Not found' });
+      }
+
+      // Step 2: Find baby and verify it belongs to this consultant
+      const baby = await app.db.query.babies.findFirst({
+        where: and(
+          eq(schema.babies.id, babyId),
+          eq(schema.babies.consultantId, consultant.id)
+        ),
+      });
+
+      if (!baby) {
+        app.logger.warn(
+          { userId: session.user.id, babyId, consultantId: consultant.id },
+          'Baby not found or does not belong to consultant'
+        );
+        return reply.status(404).send({ error: 'Not found' });
+      }
+
+      // Step 3: Delete the baby
+      await app.db.delete(schema.babies).where(eq(schema.babies.id, babyId));
+
+      app.logger.info({ babyId, consultantId: consultant.id }, 'Baby deleted successfully');
+
+      return reply.status(200).send({ success: true });
+    } catch (error) {
+      app.logger.error({ err: error, babyId }, 'Error deleting baby');
+      return reply.status(500).send({ error: 'Failed to delete baby' });
+    }
+  });
+
+  // PATCH /api/consultant/babies/:id/archive - Archive a baby
+  app.fastify.patch('/api/consultant/babies/:id/archive', {
+    schema: {
+      description: 'Archive a baby (consultant only)',
+      tags: ['consultant', 'babies'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    const babyId = request.params.id;
+    app.logger.info({ userId: session.user.id, babyId }, 'Attempting to archive baby');
+
+    try {
+      // Step 1: Get consultant for authenticated user
+      const consultant = await app.db.query.consultants.findFirst({
+        where: eq(schema.consultants.userId, session.user.id),
+      });
+
+      if (!consultant) {
+        app.logger.warn({ userId: session.user.id }, 'Consultant not found');
+        return reply.status(404).send({ error: 'Not found' });
+      }
+
+      // Step 2: Find baby and verify it belongs to this consultant
+      const baby = await app.db.query.babies.findFirst({
+        where: and(
+          eq(schema.babies.id, babyId),
+          eq(schema.babies.consultantId, consultant.id)
+        ),
+      });
+
+      if (!baby) {
+        app.logger.warn(
+          { userId: session.user.id, babyId, consultantId: consultant.id },
+          'Baby not found or does not belong to consultant'
+        );
+        return reply.status(404).send({ error: 'Not found' });
+      }
+
+      // Step 3: Archive the baby
+      await app.db.update(schema.babies)
+        .set({ archived: true })
+        .where(eq(schema.babies.id, babyId));
+
+      app.logger.info({ babyId, consultantId: consultant.id }, 'Baby archived successfully');
+
+      return reply.status(200).send({ success: true });
+    } catch (error) {
+      app.logger.error({ err: error, babyId }, 'Error archiving baby');
+      return reply.status(500).send({ error: 'Failed to archive baby' });
+    }
+  });
 }

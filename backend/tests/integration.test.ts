@@ -545,6 +545,112 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Delete consultant baby", async () => {
+    // Create a baby specifically for consultant deletion
+    const createRes = await authenticatedApi("/api/consultant/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby to Delete via Consultant",
+        birthDate: "2024-04-15",
+        motherName: "Mother Test",
+        motherPhone: "+1234567890",
+      }),
+    });
+    const babyToDelete = await createRes.json();
+
+    const res = await authenticatedApi(`/api/consultant/babies/${babyToDelete.id}`, authToken, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Delete consultant baby with nonexistent ID returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/babies/00000000-0000-0000-0000-000000000000",
+      authToken,
+      { method: "DELETE" }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Delete consultant baby with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/babies/invalid-uuid",
+      authToken,
+      { method: "DELETE" }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Delete consultant baby without auth returns 401", async () => {
+    const res = await api(`/api/consultant/babies/${babyId}`, {
+      method: "DELETE",
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Archive consultant baby", async () => {
+    // Create a baby specifically for consultant archive
+    const createRes = await authenticatedApi("/api/consultant/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby to Archive via Consultant",
+        birthDate: "2024-05-15",
+        motherName: "Mother Test",
+        motherPhone: "+1234567890",
+      }),
+    });
+    const babyToArchive = await createRes.json();
+
+    const res = await authenticatedApi(
+      `/api/consultant/babies/${babyToArchive.id}/archive`,
+      authToken,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Archive consultant baby with nonexistent ID returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/babies/00000000-0000-0000-0000-000000000000/archive",
+      authToken,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Archive consultant baby with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/babies/invalid-uuid/archive",
+      authToken,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Archive consultant baby without auth returns 401", async () => {
+    const res = await api(`/api/consultant/babies/${babyId}/archive`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+    });
+    await expectStatus(res, 401);
+  });
+
   // ===== Contracts =====
 
   test("Create contract", async () => {
