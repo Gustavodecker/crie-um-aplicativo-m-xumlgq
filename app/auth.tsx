@@ -28,7 +28,7 @@ export default function AuthScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [babyCode, setBabyCode] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -128,7 +128,7 @@ export default function AuthScreen() {
   };
 
   const handleMotherRegister = async () => {
-    if (!email.trim() || !password || !babyCode.trim()) {
+    if (!email.trim() || !password || !inviteCode.trim()) {
       setError("Por favor, preencha todos os campos");
       return;
     }
@@ -149,8 +149,8 @@ export default function AuthScreen() {
     setEmailAlreadyExists(false);
     
     try {
-      console.log("Registering mother with baby code");
-      await registerMother(email.trim(), password, babyCode.trim());
+      console.log("Registering mother with invite code");
+      await registerMother(email.trim(), password, inviteCode.trim());
       console.log("Mother registration successful");
       router.replace("/(tabs)");
     } catch (err: any) {
@@ -158,7 +158,7 @@ export default function AuthScreen() {
       const errorMessage = err?.message || "Erro ao criar conta";
       console.error("Error message:", errorMessage);
       
-      // Check if this is a duplicate email error (backend returns EMAIL_ALREADY_EXISTS)
+      // Check if this is a duplicate email error
       if (errorMessage.startsWith("EMAIL_ALREADY_EXISTS:")) {
         setEmailAlreadyExists(true);
         setError(errorMessage.replace("EMAIL_ALREADY_EXISTS: ", ""));
@@ -173,7 +173,7 @@ export default function AuthScreen() {
 
   const handleResetMotherFlow = () => {
     setMotherStep("choose");
-    setBabyCode("");
+    setInviteCode("");
     setEmail("");
     setName("");
     setPassword("");
@@ -253,7 +253,7 @@ export default function AuthScreen() {
                       setEmailAlreadyExists(false);
                       setError("");
                       setPassword("");
-                      setBabyCode("");
+                      setInviteCode("");
                       setMotherStep("login");
                     }}
                     disabled={loading}
@@ -555,10 +555,10 @@ export default function AuthScreen() {
                       />
                       <TextInput
                         style={styles.input}
-                        placeholder="Código do bebê"
+                        placeholder="Código de convite"
                         placeholderTextColor={colors.textSecondary}
-                        value={babyCode}
-                        onChangeText={setBabyCode}
+                        value={inviteCode}
+                        onChangeText={setInviteCode}
                         autoCapitalize="characters"
                         editable={!loading}
                       />

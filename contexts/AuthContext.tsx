@@ -36,7 +36,7 @@ interface AuthContextType {
   setUser: (user: User | null) => void;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
-  registerMother: (email: string, password: string, babyCode: string) => Promise<void>;
+  registerMother: (email: string, password: string, inviteCode: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -370,12 +370,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const registerMother = async (email: string, password: string, babyCode: string) => {
+  const registerMother = async (email: string, password: string, inviteCode: string) => {
     try {
-      console.log("[Auth] 📝 Registering mother with baby code");
+      console.log("[Auth] 📝 Registering mother with invite code");
       
-      if (!babyCode || babyCode.trim().length === 0) {
-        throw new Error("Código do bebê é obrigatório");
+      if (!inviteCode || inviteCode.trim().length === 0) {
+        throw new Error("Código de convite é obrigatório");
       }
       if (!email || email.trim().length === 0) {
         throw new Error("Email é obrigatório");
@@ -391,8 +391,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: buildAuthHeaders(),
         body: JSON.stringify({
           email: email.trim(),
-          senha: password,
-          babyCode: babyCode.trim(),
+          password: password,
+          inviteCode: inviteCode.trim(),
         }),
       });
       
@@ -412,55 +412,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (responseData?.message) errorMsg = responseData.message;
         
         if (response.status === 404) {
-          // After backend fix: token is set to null after first use, so a used code returns 404
-          // This means either the code is invalid OR it was already used
-          throw new Error("Código inválido ou já utilizado. Solicite um novo código à sua consultora.");
+          throw new Error("Código inválido. Verifique o código fornecido pela consultora.");
         }
         if (response.status === 409) {
-          // Backend now returns { error: "EMAIL_ALREADY_EXISTS", message: "..." } for duplicate emails
-          // Check for the specific error code first
-          if (responseData?.error === "EMAIL_ALREADY_EXISTS") {
-            throw new Error("EMAIL_ALREADY_EXISTS: Já existe uma conta com este email. Use a opção 'Já tenho conta' para fazer login.");
-          }
-          // Fallback: check error message text for email-related issues
-          if (
-            errorMsg.toLowerCase().includes("email") ||
-            errorMsg.toLowerCase().includes("cadastrado") ||
-            errorMsg.toLowerCase().includes("already exists") ||
-            errorMsg.toLowerCase().includes("email_already_exists")
-          ) {
-            throw new Error("EMAIL_ALREADY_EXISTS: Já existe uma conta com este email. Use a opção 'Já tenho conta' para fazer login.");
-          }
-          if (
-            errorMsg.toLowerCase().includes("código") ||
-            errorMsg.toLowerCase().includes("utilizado") ||
-            errorMsg.toLowerCase().includes("já foi utilizado")
-          ) {
+          if (errorMsg.toLowerCase().includes("código") || errorMsg.toLowerCase().includes("utilizado")) {
             throw new Error("Este código já foi utilizado. Solicite um novo código à sua consultora.");
           }
-          throw new Error(errorMsg || "Já existe uma conta com este email. Use a opção de login.");
+          if (errorMsg.toLowerCase().includes("email") || errorMsg.toLowerCase().includes("já existe")) {
+            throw new Error("EMAIL_ALREADY_EXISTS: Já existe uma conta com este email. Use a opção 'Já tenho conta' para fazer login.");
+          }
+          throw new Error(errorMsg);
         }
         throw new Error(errorMsg);
       }
       
       console.log("[Auth] ✅ Mother registration response received");
       
-      let sessionToken: string | null = null;
-      let user: User | null = null;
-      
-      if (responseData?.session?.token) {
-        sessionToken = responseData.session.token;
-      } else if (responseData?.token) {
-        sessionToken = responseData.token;
-      } else if (responseData?.data?.session?.token) {
-        sessionToken = responseData.data.session.token;
-      }
-      
-      if (responseData?.user) {
-        user = responseData.user as User;
-      } else if (responseData?.data?.user) {
-        user = responseData.data.user as User;
-      }
+      const sessionToken = responseData?.token;
+      const user = responseData?.user;
       
       if (!sessionToken) {
         console.error("[Auth] ❌ No session token in response!");

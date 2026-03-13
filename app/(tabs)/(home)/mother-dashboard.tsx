@@ -103,10 +103,19 @@ export default function MotherDashboardScreen() {
   const loadDashboard = useCallback(async () => {
     console.log("[Mother Dashboard] Loading dashboard data");
     try {
-      // Load baby data
-      const babyData = await apiGet<Baby>("/api/mother/baby");
+      // Load baby data - NEW API returns { baby: Baby | null }
+      const response = await apiGet<{ baby: Baby | null }>("/api/mother/baby");
       
       if (!isMountedRef.current) return;
+      
+      const babyData = response.baby;
+      
+      if (!babyData) {
+        console.log("[Mother Dashboard] No baby linked to this account");
+        setNoBabyLinked(true);
+        setError("Seu bebê não está vinculado à sua conta. Solicite um novo código à sua consultora.");
+        return;
+      }
       
       console.log("[Mother Dashboard] Baby loaded:", babyData.name);
       setBaby(babyData);
