@@ -17,6 +17,7 @@ import { colors, spacing, borderRadius, typography, shadows } from "@/styles/com
 import { IconSymbol } from "@/components/IconSymbol";
 import { apiPatch } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { ChevronLeft } from "lucide-react-native";
 
 export default function ChangePasswordScreen() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -28,7 +29,14 @@ export default function ChangePasswordScreen() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const { clearRequirePasswordChange } = useAuth();
+  const { clearRequirePasswordChange, signOut } = useAuth();
+  const router = useRouter();
+
+  const handleBackToLogin = async () => {
+    console.log("[ChangePassword] User pressed 'Voltar para o login' button");
+    await signOut();
+    router.replace("/auth");
+  };
 
   const handleChangePassword = async () => {
     console.log("[ChangePassword] User pressed 'Alterar Senha' button");
@@ -78,12 +86,10 @@ export default function ChangePasswordScreen() {
     <>
       <Stack.Screen
         options={{
-          headerShown: true,
-          title: "Alterar Senha",
-          headerBackVisible: false,
+          headerShown: false,
         }}
       />
-      <SafeAreaView style={styles.container} edges={["bottom"]}>
+      <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.keyboardView}
@@ -92,6 +98,11 @@ export default function ChangePasswordScreen() {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
+            <TouchableOpacity style={styles.backButton} onPress={handleBackToLogin}>
+              <ChevronLeft size={20} color={colors.primary} />
+              <Text style={styles.backButtonText}>Voltar para o login</Text>
+            </TouchableOpacity>
+
             <View style={styles.header}>
               <View style={styles.iconContainer}>
                 <IconSymbol
@@ -346,5 +357,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.text,
     lineHeight: 18,
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: spacing.xs,
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.xs,
+  },
+  backButtonText: {
+    fontSize: 15,
+    color: colors.primary,
+    fontWeight: "500",
   },
 });
