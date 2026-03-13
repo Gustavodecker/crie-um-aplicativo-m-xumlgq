@@ -16,8 +16,8 @@ import bcrypt from 'bcrypt';
 export function registerUserRoutes(app: App) {
   const requireAuth = app.requireAuth();
 
-  // POST /api/user/change-password - Change user password
-  app.fastify.post('/api/user/change-password', {
+  // PATCH /api/user/change-password - Change user password
+  app.fastify.patch('/api/user/change-password', {
     schema: {
       description: 'Change user password',
       tags: ['user'],
@@ -34,7 +34,6 @@ export function registerUserRoutes(app: App) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            message: { type: 'string' },
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
@@ -54,7 +53,7 @@ export function registerUserRoutes(app: App) {
     // Validate newPassword length
     if (!newPassword || newPassword.length < 6) {
       app.logger.warn({ userId }, 'New password too short');
-      return reply.status(400).send({ error: 'New password must be at least 6 characters' });
+      return reply.status(400).send({ error: 'newPassword is required and must be at least 6 characters' });
     }
 
     try {
@@ -72,7 +71,7 @@ export function registerUserRoutes(app: App) {
       const passwordMatches = await bcrypt.compare(currentPassword, account.password);
       if (!passwordMatches) {
         app.logger.warn({ userId }, 'Current password incorrect');
-        return reply.status(400).send({ error: 'Current password is incorrect' });
+        return reply.status(400).send({ error: 'Invalid current password' });
       }
 
       // Step 3: Hash new password
@@ -92,10 +91,7 @@ export function registerUserRoutes(app: App) {
 
       app.logger.info({ userId }, 'Password changed successfully and requirePasswordChange flag cleared');
 
-      return reply.status(200).send({
-        success: true,
-        message: 'Password changed successfully',
-      });
+      return reply.status(200).send({ success: true });
 
     } catch (error) {
       app.logger.error({ err: error, userId }, 'Error changing password');

@@ -115,9 +115,21 @@ describe("API Integration Tests", () => {
 
   // ===== User =====
 
+  test("Get user feature flags", async () => {
+    const res = await authenticatedApi("/api/user/flags", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(typeof data.requirePasswordChange).toBe("boolean");
+  });
+
+  test("Get user feature flags without auth returns 401", async () => {
+    const res = await api("/api/user/flags");
+    await expectStatus(res, 401);
+  });
+
   test("Change password without auth returns 401", async () => {
     const res = await api("/api/user/change-password", {
-      method: "POST",
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         currentPassword: "oldPassword123",
@@ -129,7 +141,7 @@ describe("API Integration Tests", () => {
 
   test("Change password with missing currentPassword returns 400", async () => {
     const res = await authenticatedApi("/api/user/change-password", authToken, {
-      method: "POST",
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         newPassword: "newPassword456",
@@ -140,7 +152,7 @@ describe("API Integration Tests", () => {
 
   test("Change password with missing newPassword returns 400", async () => {
     const res = await authenticatedApi("/api/user/change-password", authToken, {
-      method: "POST",
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         currentPassword: "currentPass123",
@@ -151,7 +163,7 @@ describe("API Integration Tests", () => {
 
   test("Change password with empty currentPassword returns 400", async () => {
     const res = await authenticatedApi("/api/user/change-password", authToken, {
-      method: "POST",
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         currentPassword: "",
