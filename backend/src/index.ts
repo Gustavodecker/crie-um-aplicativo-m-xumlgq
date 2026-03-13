@@ -6,6 +6,7 @@ import { sessionConfig } from './config/session.js';
 // Import route registration functions
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerInitRoutes } from './routes/init.js';
+import { registerUserRoutes } from './routes/user.js';
 import { registerConsultantRoutes } from './routes/consultant.js';
 import { registerMotherRoutes } from './routes/mother.js';
 import { registerBabiesRoutes } from './routes/babies.js';
@@ -106,6 +107,7 @@ app.withStorage();
 // Register all routes
 registerAuthRoutes(app);
 registerInitRoutes(app);
+registerUserRoutes(app);
 registerConsultantRoutes(app);
 registerMotherRoutes(app);
 registerBabiesRoutes(app);

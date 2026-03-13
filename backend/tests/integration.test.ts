@@ -113,6 +113,54 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  // ===== User =====
+
+  test("Change password without auth returns 401", async () => {
+    const res = await api("/api/user/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        currentPassword: "oldPassword123",
+        newPassword: "newPassword456",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Change password with missing currentPassword returns 400", async () => {
+    const res = await authenticatedApi("/api/user/change-password", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        newPassword: "newPassword456",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Change password with missing newPassword returns 400", async () => {
+    const res = await authenticatedApi("/api/user/change-password", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        currentPassword: "currentPass123",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Change password with empty currentPassword returns 400", async () => {
+    const res = await authenticatedApi("/api/user/change-password", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        currentPassword: "",
+        newPassword: "newPassword456",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ===== Create Consultant Profile Endpoint =====
 
   test("Create consultant profile with create-profile endpoint", async () => {
