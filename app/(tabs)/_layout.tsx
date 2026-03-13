@@ -17,6 +17,13 @@ export default function TabLayout() {
       return;
     }
 
+    // CRITICAL: If the user must change their password, do NOT redirect inside tabs.
+    // NavigationGuard in _layout.tsx owns this redirect — TabLayout must stay out of the way.
+    if (user.requirePasswordChange) {
+      console.log("[TabLayout] requirePasswordChange=true — skipping tab redirect, NavigationGuard will handle it");
+      return;
+    }
+
     const currentPath = segments.join("/");
 
     console.log("[TabLayout] User role:", userRole, "Current path:", currentPath);

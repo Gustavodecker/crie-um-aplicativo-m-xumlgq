@@ -308,16 +308,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await setBearerToken(token);
 
       // Fetch fresh requirePasswordChange flag from backend (source of truth)
-      const requirePasswordChange = await fetchRequirePasswordChangeFlag(token);
+      console.log("[Auth] 🚩 About to call fetchRequirePasswordChangeFlag with token length:", token.length);
+      let requirePasswordChange = false;
+      try {
+        requirePasswordChange = await fetchRequirePasswordChangeFlag(token);
+      } catch (flagErr: any) {
+        console.error("[Auth] ❌ fetchRequirePasswordChangeFlag threw:", flagErr?.message);
+      }
+      console.log("[Auth] 🚩 requirePasswordChange result:", requirePasswordChange);
 
-      console.log("[Auth] ✅ Setting user:", user.email);
-      setUser({ ...user, requirePasswordChange });
+      const userWithFlag: User = { ...user, requirePasswordChange };
+      console.log("[Auth] ✅ Setting user:", user.email, "requirePasswordChange:", requirePasswordChange);
+      setUser(userWithFlag);
       
       // Determine role
       console.log("[Auth] 🔍 Determining user role...");
       await determineUserRole(token);
       
-      console.log("[Auth] ✅ Login complete");
+      console.log("[Auth] ✅ Login complete — user.requirePasswordChange:", requirePasswordChange);
       
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign in failed:", error?.message || error);
