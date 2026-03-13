@@ -6,55 +6,47 @@ import { View } from "react-native";
 import FloatingTabBar, { TabBarItem } from "@/components/FloatingTabBar";
 
 export default function TabLayout() {
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const router = useRouter();
   const segments = useSegments();
 
   useEffect(() => {
-    if (!user) {
-      console.log("[TabLayout] No user, will redirect to auth");
+    if (!user || !userRole) {
+      console.log("[TabLayout.ios] No user or role yet, skipping redirect");
       return;
     }
 
-    // User object must contain role property
-    const userRole = (user as any).role;
     const currentPath = segments.join("/");
-
-    console.log("[TabLayout] User role:", userRole, "Current path:", currentPath);
+    console.log("[TabLayout.ios] User role:", userRole, "Current path:", currentPath);
 
     if (userRole === "mother") {
-      // Redirect to mother dashboard if not already there
-      if (!currentPath.startsWith("(tabs)/(home)/mother-dashboard")) {
-        console.log("[TabLayout] Redirecting mother to dashboard");
+      // Only redirect to dashboard if we're at the root tabs level, not navigating deeper
+      const isAtMotherDashboard = currentPath.includes("mother-dashboard");
+      const isNavigatingDeeper = currentPath.includes("mother-day-selection") ||
+        currentPath.includes("mother-routine") ||
+        currentPath.includes("mother-orientations") ||
+        currentPath.includes("mother-evolution");
+
+      if (!isAtMotherDashboard && !isNavigatingDeeper) {
+        console.log("[TabLayout.ios] Redirecting mother to dashboard");
         router.replace("/(tabs)/(home)/mother-dashboard");
       }
     } else if (userRole === "consultant") {
-      // Redirect to consultant dashboard if not already there
-      if (!currentPath.startsWith("(tabs)/(home)/index") && !currentPath.startsWith("(tabs)/(home)") && !currentPath.includes("profile")) {
-        console.log("[TabLayout] Redirecting consultant to dashboard");
-        router.replace("/(tabs)/(home)");
-      }
+      console.log("[TabLayout.ios] Consultant navigating to:", currentPath);
     } else {
-      console.warn("[TabLayout] Unknown user role:", userRole);
-      // Fallback to home
-      if (!currentPath.startsWith("(tabs)/(home)/")) {
-        router.replace("/(tabs)/(home)/");
-      }
+      console.warn("[TabLayout.ios] Unknown user role:", userRole);
     }
-  }, [user, segments]);
+  }, [user, userRole, segments]);
 
   // Redirect to auth if no user
   if (!user) {
-    console.log("[TabLayout] No user, redirecting to auth");
+    console.log("[TabLayout.ios] No user, redirecting to auth");
     return <Redirect href="/auth" />;
   }
 
-  // Get user role
-  const userRole = (user as any).role;
-
   // Render mother layout (no tab bar)
   if (userRole === "mother") {
-    console.log("[TabLayout] Rendering mother layout");
+    console.log("[TabLayout.ios] Rendering mother layout (no tab bar)");
     return (
       <View style={{ flex: 1 }}>
         <Slot />
@@ -63,7 +55,7 @@ export default function TabLayout() {
   }
 
   // Render consultant layout (with tab bar)
-  console.log("[TabLayout] Rendering consultant layout");
+  console.log("[TabLayout.ios] Rendering consultant layout");
   const tabs: TabBarItem[] = [
     {
       name: "Bebês",
