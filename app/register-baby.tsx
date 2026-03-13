@@ -24,6 +24,7 @@ interface BabyResponse {
   babyId: string;
   motherUserId: string;
   motherEmail: string;
+  provisionalPassword?: string;
 }
 
 export default function RegisterBabyScreen() {
@@ -37,9 +38,14 @@ export default function RegisterBabyScreen() {
   const [motherEmail, setMotherEmail] = useState("");
   const [objectives, setObjectives] = useState("");
   const [error, setError] = useState("");
-  const [successModal, setSuccessModal] = useState<{ visible: boolean; email: string }>({
+  const [successModal, setSuccessModal] = useState<{
+    visible: boolean;
+    email: string;
+    provisionalPassword: string;
+  }>({
     visible: false,
     email: "",
+    provisionalPassword: "",
   });
 
   const formatDateToBR = (date: Date): string => {
@@ -127,7 +133,11 @@ export default function RegisterBabyScreen() {
       console.log("Baby and mother registered successfully:", response);
       
       // Show success modal instead of Alert (web-compatible)
-      setSuccessModal({ visible: true, email: motherEmail.trim() });
+      setSuccessModal({
+        visible: true,
+        email: motherEmail.trim(),
+        provisionalPassword: response.provisionalPassword || "",
+      });
     } catch (err: any) {
       console.error("Error registering baby:", err);
       setError(err.message || "Erro ao cadastrar bebê. Tente novamente.");
@@ -251,7 +261,7 @@ export default function RegisterBabyScreen() {
                 color={colors.primary}
               />
               <Text style={styles.infoText}>
-                A mãe receberá um email com instruções para acessar o app e criar sua senha.
+                Uma senha provisória será gerada. Você deverá compartilhá-la com a mãe para o primeiro acesso.
               </Text>
             </View>
           </View>
@@ -322,7 +332,7 @@ export default function RegisterBabyScreen() {
         transparent
         animationType="fade"
         onRequestClose={() => {
-          setSuccessModal({ visible: false, email: "" });
+          setSuccessModal({ visible: false, email: "", provisionalPassword: "" });
           router.replace("/(tabs)/(home)");
         }}
       >
@@ -336,17 +346,31 @@ export default function RegisterBabyScreen() {
             />
             <Text style={styles.modalTitle}>Bebê Cadastrado!</Text>
             <Text style={styles.modalMessage}>
-              Bebê cadastrado com sucesso!
+              Bebê e conta da mãe criados com sucesso!
             </Text>
             <Text style={styles.modalMessage}>
-              Um email foi enviado para{" "}
-              <Text style={styles.modalEmailHighlight}>{successModal.email}</Text>{" "}
-              com instruções de acesso.
+              Compartilhe os dados de acesso com{" "}
+              <Text style={styles.modalEmailHighlight}>{successModal.email}</Text>:
+            </Text>
+            
+            <View style={styles.credentialsBox}>
+              <View style={styles.credentialRow}>
+                <Text style={styles.credentialLabel}>Email:</Text>
+                <Text style={styles.credentialValue}>{successModal.email}</Text>
+              </View>
+              <View style={styles.credentialRow}>
+                <Text style={styles.credentialLabel}>Senha provisória:</Text>
+                <Text style={styles.credentialValuePassword}>{successModal.provisionalPassword}</Text>
+              </View>
+            </View>
+            
+            <Text style={styles.modalWarning}>
+              ⚠️ A mãe deverá alterar a senha no primeiro acesso
             </Text>
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => {
-                setSuccessModal({ visible: false, email: "" });
+                setSuccessModal({ visible: false, email: "", provisionalPassword: "" });
                 router.replace("/(tabs)/(home)");
               }}
             >
@@ -527,6 +551,44 @@ const styles = StyleSheet.create({
   modalEmailHighlight: {
     fontWeight: "700",
     color: colors.primary,
+  },
+  credentialsBox: {
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    width: "100%",
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  credentialRow: {
+    marginBottom: spacing.md,
+  },
+  credentialLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+    fontWeight: "500",
+  },
+  credentialValue: {
+    fontSize: 15,
+    color: colors.text,
+    fontWeight: "600",
+  },
+  credentialValuePassword: {
+    fontSize: 18,
+    color: colors.primary,
+    fontWeight: "700",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    letterSpacing: 1,
+  },
+  modalWarning: {
+    fontSize: 13,
+    color: colors.warning || "#F59E0B",
+    textAlign: "center",
+    fontWeight: "600",
+    marginTop: spacing.sm,
   },
   modalButton: {
     marginTop: spacing.xl,

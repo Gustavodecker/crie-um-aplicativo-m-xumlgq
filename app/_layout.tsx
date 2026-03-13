@@ -36,13 +36,18 @@ function NavigationGuard({ children }: { children: React.ReactNode }) {
     }
 
     const inAuthGroup = segments[0] === "auth";
+    const inChangePassword = segments[0] === "change-password";
 
     if (!user && !inAuthGroup) {
       // User not logged in, redirect to auth
       console.log("[RootLayout] 🚪 No user, redirecting to /auth");
       router.replace("/auth");
-    } else if (user && inAuthGroup) {
-      // User logged in but on auth screen, redirect to app
+    } else if (user && user.requirePasswordChange && !inChangePassword) {
+      // User needs to change password
+      console.log("[RootLayout] 🔒 User must change password, redirecting to /change-password");
+      router.replace("/change-password");
+    } else if (user && !user.requirePasswordChange && inAuthGroup) {
+      // User logged in and password is OK, redirect to app
       console.log("[RootLayout] ✅ User logged in, redirecting to /(tabs)");
       router.replace("/(tabs)");
     }
@@ -112,6 +117,7 @@ export default function RootLayout() {
             <NavigationGuard>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="auth" options={{ headerShown: false }} />
+                <Stack.Screen name="change-password" options={{ headerShown: false }} />
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="+not-found" />
               </Stack>

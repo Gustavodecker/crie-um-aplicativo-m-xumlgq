@@ -393,7 +393,7 @@ export default function AuthScreen() {
                     color={colors.primary}
                   />
                   <Text style={styles.infoText}>
-                    Sua conta é criada pela consultora. Você receberá um email com instruções para criar sua senha no primeiro acesso.
+                    Sua conta é criada pela consultora. Ela fornecerá seu email e uma senha provisória. No primeiro acesso, você será solicitada a alterar a senha.
                   </Text>
                 </View>
               </View>
