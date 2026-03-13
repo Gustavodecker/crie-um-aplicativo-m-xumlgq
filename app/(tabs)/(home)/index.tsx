@@ -1,5 +1,5 @@
 
-import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
+import { apiGet, apiPost, apiPut, apiDelete, apiPatch } from "@/utils/api";
 import React, { useState, useEffect, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -173,6 +173,12 @@ export default function ConsultantDashboardScreen() {
     napId: string;
     napNumber: number;
   }>({ visible: false, napId: "", napNumber: 0 });
+  const [confirmDeleteBaby, setConfirmDeleteBaby] = useState<{
+    visible: boolean;
+    babyId: string;
+    babyName: string;
+  }>({ visible: false, babyId: "", babyName: "" });
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [consultantProfile, setConsultantProfile] = useState<ConsultantProfile | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
@@ -408,6 +414,41 @@ export default function ConsultantDashboardScreen() {
       if (Platform.OS === "ios") {
         setShowTimePicker(false);
       }
+    }
+  };
+
+  const handleArchiveBaby = async (babyId: string, babyName: string) => {
+    console.log(`📦 [Archive Baby] Archiving baby: ${babyName} (${babyId})`);
+    setActionLoadingId(babyId);
+    try {
+      await apiPatch(`/api/consultant/babies/${babyId}/archive`, {});
+      console.log(`✅ [Archive Baby] Successfully archived: ${babyName}`);
+      await loadBabies();
+    } catch (error) {
+      console.error(`❌ [Archive Baby] Error archiving baby ${babyName}:`, error);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleDeleteBabyConfirm = (babyId: string, babyName: string) => {
+    console.log(`🗑️ [Delete Baby] Showing confirm modal for: ${babyName} (${babyId})`);
+    setConfirmDeleteBaby({ visible: true, babyId, babyName });
+  };
+
+  const confirmDeleteBabyAction = async () => {
+    const { babyId, babyName } = confirmDeleteBaby;
+    console.log(`🗑️ [Delete Baby] Confirmed deletion of: ${babyName} (${babyId})`);
+    setActionLoadingId(babyId);
+    try {
+      await apiDelete(`/api/consultant/babies/${babyId}`);
+      console.log(`✅ [Delete Baby] Successfully deleted: ${babyName}`);
+      setConfirmDeleteBaby({ visible: false, babyId: "", babyName: "" });
+      await loadBabies();
+    } catch (error) {
+      console.error(`❌ [Delete Baby] Error deleting baby ${babyName}:`, error);
+    } finally {
+      setActionLoadingId(null);
     }
   };
 
@@ -1095,11 +1136,14 @@ export default function ConsultantDashboardScreen() {
                 }
               }
 
+              const isLoadingAction = actionLoadingId === baby.id;
+
               return (
                 <TouchableOpacity
                   key={baby.id}
                   style={styles.babyCard}
                   onPress={() => handleSelectBaby(baby)}
+                  activeOpacity={0.7}
                 >
                   <View style={styles.babyCardContent}>
                     <View style={styles.babyIcon}>
@@ -1139,6 +1183,49 @@ export default function ConsultantDashboardScreen() {
                       color={colors.textSecondary}
                     />
                   </View>
+
+                  <View style={styles.babyCardActions}>
+                    {!baby.archived && (
+                      <TouchableOpacity
+                        style={styles.archiveButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleArchiveBaby(baby.id, baby.name);
+                        }}
+                        disabled={isLoadingAction}
+                        activeOpacity={0.7}
+                      >
+                        {isLoadingAction ? (
+                          <ActivityIndicator size="small" color={colors.primary} />
+                        ) : (
+                          <IconSymbol
+                            ios_icon_name="archivebox"
+                            android_material_icon_name="archive"
+                            size={16}
+                            color={colors.primary}
+                          />
+                        )}
+                        <Text style={styles.archiveButtonText}>Arquivar</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={styles.deleteBabyButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteBabyConfirm(baby.id, baby.name);
+                      }}
+                      disabled={isLoadingAction}
+                      activeOpacity={0.7}
+                    >
+                      <IconSymbol
+                        ios_icon_name="trash"
+                        android_material_icon_name="delete"
+                        size={16}
+                        color={colors.error}
+                      />
+                      <Text style={styles.deleteBabyButtonText}>Excluir</Text>
+                    </TouchableOpacity>
+                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -1152,6 +1239,18 @@ export default function ConsultantDashboardScreen() {
         message={`Tem certeza que deseja excluir a Soneca ${confirmDelete.napNumber}?`}
         onConfirm={confirmDeleteNap}
         onCancel={() => setConfirmDelete({ visible: false, napId: "", napNumber: 0 })}
+      />
+
+      <ConfirmModal
+        visible={confirmDeleteBaby.visible}
+        title="Excluir Bebê"
+        message={`Tem certeza que deseja excluir permanentemente ${confirmDeleteBaby.babyName}? Esta ação não pode ser desfeita.`}
+        confirmText="Excluir"
+        confirmColor={colors.error}
+        loading={actionLoadingId === confirmDeleteBaby.babyId}
+        onConfirm={confirmDeleteBabyAction}
+        onCancel={() => setConfirmDeleteBaby({ visible: false, babyId: "", babyName: "" })}
+        icon={{ ios: "trash", android: "delete", color: colors.error }}
       />
     </SafeAreaView>
   );
@@ -1635,6 +1734,47 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderLeftWidth: 4,
     borderLeftColor: '#FF9800',
+  },
+  babyCardActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  archiveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.primary + "12",
+    borderWidth: 1,
+    borderColor: colors.primary + "30",
+  },
+  archiveButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.primary,
+  },
+  deleteBabyButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.error + "12",
+    borderWidth: 1,
+    borderColor: colors.error + "30",
+  },
+  deleteBabyButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.error,
   },
   wakingTitle: {
     fontSize: 14,
