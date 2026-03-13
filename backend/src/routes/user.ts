@@ -1,6 +1,6 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
 import bcrypt from 'bcrypt';
 
@@ -59,8 +59,13 @@ export function registerUserRoutes(app: App) {
     try {
       // Step 1: Find user's credential account
       const account = await app.db.query.account.findFirst({
-        where: eq(authSchema.account.userId, userId),
+        where: and(
+          eq(authSchema.account.userId, userId),
+          eq(authSchema.account.providerId, 'credential')
+        ),
       });
+
+      app.logger.debug({ userId, accountFound: !!account }, 'Account record lookup result');
 
       if (!account || !account.password) {
         app.logger.error({ userId }, 'Account or password not found');
