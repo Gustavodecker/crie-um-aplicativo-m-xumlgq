@@ -423,7 +423,7 @@ export function registerRoutinesRoutes(app: App) {
 
     if (!isMother && !isConsultant) {
       app.logger.warn({ userId: session.user.id, babyId: request.body.babyId }, 'Not authorized');
-      return reply.status(401).send({ error: 'Not authorized' });
+      return reply.status(403).send({ error: 'Not authorized' });
     }
 
     const contracts = await app.db.query.contracts.findMany({
@@ -531,7 +531,7 @@ export function registerRoutinesRoutes(app: App) {
 
     if (!isConsultant && !isMother) {
       app.logger.warn({ userId: session.user.id, routineId: request.params.id }, 'Not authorized');
-      return reply.status(401).send({ error: 'Not authorized' });
+      return reply.status(403).send({ error: 'Not authorized' });
     }
 
     // Allow observations and comments to be updated anytime (auto-save pattern)

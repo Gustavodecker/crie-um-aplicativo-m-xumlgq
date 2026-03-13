@@ -39,7 +39,7 @@ export function registerUploadRoutes(app: App) {
       return reply.status(401).send({ error: 'Not a consultant' });
     }
 
-    const data = await request.file({ limits: { fileSize: 10 * 1024 * 1024 } });
+    const data = await request.file({ limits: { fileSize: 5 * 1024 * 1024 } });
     if (!data) {
       app.logger.warn({ userId: session.user.id }, 'No file provided');
       return reply.status(400).send({ error: 'No file provided' });

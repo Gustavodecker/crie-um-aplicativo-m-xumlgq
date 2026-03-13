@@ -1094,6 +1094,40 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Create routine as different consultant returns 403", async () => {
+    // Sign up a different consultant
+    const { token: consultant2Token } = await signUpTestUser();
+    // Try to create a routine for consultant1's baby as consultant2
+    const res = await authenticatedApi("/api/routines", consultant2Token, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyId: babyId, // This is consultant1's baby
+        date: "2026-03-01",
+        wakeUpTime: "08:00",
+      }),
+    });
+    await expectStatus(res, 403);
+  });
+
+  test("Update routine as different consultant returns 403", async () => {
+    // Sign up a different consultant
+    const { token: consultant2Token } = await signUpTestUser();
+    // Try to update consultant1's routine as consultant2
+    const res = await authenticatedApi(
+      `/api/routines/${routineId}`,
+      consultant2Token,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wakeUpTime: "09:00",
+        }),
+      }
+    );
+    await expectStatus(res, 403);
+  });
+
   // ===== Naps =====
 
   test("Create nap", async () => {
@@ -1877,6 +1911,23 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Upload contract PDF with file too large returns 413", async () => {
+    const form = new FormData();
+    // Create a large file (10MB to exceed typical limits)
+    const largeContent = "x".repeat(10 * 1024 * 1024);
+    const file = createTestFile("large-contract.pdf", largeContent);
+    form.append("file", file);
+    const res = await authenticatedApi(
+      "/api/upload/contract",
+      authToken,
+      {
+        method: "POST",
+        body: form,
+      }
+    );
+    await expectStatus(res, 413);
+  });
+
   test("Upload profile photo", async () => {
     const form = new FormData();
     const file = createTestFile("profile.jpg", "image content");
@@ -1917,6 +1968,23 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 400);
+  });
+
+  test("Upload profile photo with file too large returns 413", async () => {
+    const form = new FormData();
+    // Create a large file (10MB to exceed typical limits)
+    const largeContent = "x".repeat(10 * 1024 * 1024);
+    const file = createTestFile("large-photo.jpg", largeContent);
+    form.append("file", file);
+    const res = await authenticatedApi(
+      "/api/upload/profile-photo",
+      authToken,
+      {
+        method: "POST",
+        body: form,
+      }
+    );
+    await expectStatus(res, 413);
   });
 
   // ===== Authentication & Authorization =====
