@@ -131,94 +131,103 @@ export default function ChangePasswordScreen() {
             ) : null}
 
             <View style={styles.form}>
-              <View style={styles.inputContainer}>
-                <IconSymbol
-                  ios_icon_name="lock.fill"
-                  android_material_icon_name="lock"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Senha atual (provisória)"
-                  placeholderTextColor={colors.textSecondary}
-                  value={currentPassword}
-                  onChangeText={setCurrentPassword}
-                  secureTextEntry={!showCurrentPassword}
-                  editable={!loading}
-                  autoCapitalize="none"
-                />
-                <TouchableOpacity
-                  onPress={() => setShowCurrentPassword(!showCurrentPassword)}
-                  style={styles.eyeButton}
-                >
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Senha provisória (recebida por e-mail)</Text>
+                <View style={styles.inputContainer}>
                   <IconSymbol
-                    ios_icon_name={showCurrentPassword ? "eye.slash.fill" : "eye.fill"}
-                    android_material_icon_name={showCurrentPassword ? "visibility-off" : "visibility"}
+                    ios_icon_name="lock.fill"
+                    android_material_icon_name="lock"
                     size={20}
                     color={colors.textSecondary}
                   />
-                </TouchableOpacity>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Digite a senha do e-mail de boas-vindas"
+                    placeholderTextColor={colors.textSecondary}
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                    secureTextEntry={!showCurrentPassword}
+                    editable={!loading}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                    style={styles.eyeButton}
+                  >
+                    <IconSymbol
+                      ios_icon_name={showCurrentPassword ? "eye.slash.fill" : "eye.fill"}
+                      android_material_icon_name={showCurrentPassword ? "visibility-off" : "visibility"}
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <View style={styles.inputContainer}>
-                <IconSymbol
-                  ios_icon_name="lock.fill"
-                  android_material_icon_name="lock"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nova senha (mínimo 6 caracteres)"
-                  placeholderTextColor={colors.textSecondary}
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  secureTextEntry={!showNewPassword}
-                  editable={!loading}
-                  autoCapitalize="none"
-                />
-                <TouchableOpacity
-                  onPress={() => setShowNewPassword(!showNewPassword)}
-                  style={styles.eyeButton}
-                >
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Nova senha</Text>
+                <View style={styles.inputContainer}>
                   <IconSymbol
-                    ios_icon_name={showNewPassword ? "eye.slash.fill" : "eye.fill"}
-                    android_material_icon_name={showNewPassword ? "visibility-off" : "visibility"}
+                    ios_icon_name="lock.fill"
+                    android_material_icon_name="lock"
                     size={20}
                     color={colors.textSecondary}
                   />
-                </TouchableOpacity>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Mínimo 6 caracteres"
+                    placeholderTextColor={colors.textSecondary}
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    secureTextEntry={!showNewPassword}
+                    editable={!loading}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowNewPassword(!showNewPassword)}
+                    style={styles.eyeButton}
+                  >
+                    <IconSymbol
+                      ios_icon_name={showNewPassword ? "eye.slash.fill" : "eye.fill"}
+                      android_material_icon_name={showNewPassword ? "visibility-off" : "visibility"}
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <View style={styles.inputContainer}>
-                <IconSymbol
-                  ios_icon_name="lock.fill"
-                  android_material_icon_name="lock"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Confirme a nova senha"
-                  placeholderTextColor={colors.textSecondary}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  secureTextEntry={!showConfirmPassword}
-                  editable={!loading}
-                  autoCapitalize="none"
-                />
-                <TouchableOpacity
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={styles.eyeButton}
-                >
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Confirmar nova senha</Text>
+                <View style={styles.inputContainer}>
                   <IconSymbol
-                    ios_icon_name={showConfirmPassword ? "eye.slash.fill" : "eye.fill"}
-                    android_material_icon_name={showConfirmPassword ? "visibility-off" : "visibility"}
+                    ios_icon_name="lock.fill"
+                    android_material_icon_name="lock"
                     size={20}
                     color={colors.textSecondary}
                   />
-                </TouchableOpacity>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Repita a nova senha"
+                    placeholderTextColor={colors.textSecondary}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry={!showConfirmPassword}
+                    editable={!loading}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={styles.eyeButton}
+                  >
+                    <IconSymbol
+                      ios_icon_name={showConfirmPassword ? "eye.slash.fill" : "eye.fill"}
+                      android_material_icon_name={showConfirmPassword ? "visibility-off" : "visibility"}
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <TouchableOpacity
@@ -294,6 +303,17 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: spacing.lg,
+  },
+  fieldGroup: {
+    gap: spacing.xs,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.textSecondary,
+    marginLeft: spacing.xs,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   inputContainer: {
     flexDirection: "row",
