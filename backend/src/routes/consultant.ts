@@ -778,12 +778,24 @@ export function registerConsultantRoutes(app: App) {
         return reply.status(404).send({ error: 'Not found' });
       }
 
-      // Step 3: Archive the baby
-      await app.db.update(schema.babies)
-        .set({ archived: true })
-        .where(eq(schema.babies.id, babyId));
+      // Step 3: Archive baby and suspend contracts in atomic transaction
+      await app.db.transaction(async (tx) => {
+        // Update 1: Archive the baby
+        await tx.update(schema.babies)
+          .set({ archived: true })
+          .where(eq(schema.babies.id, babyId));
 
-      app.logger.info({ babyId, consultantId: consultant.id }, 'Baby archived successfully');
+        app.logger.debug({ babyId }, 'Baby archived in transaction');
+
+        // Update 2: Suspend all contracts for this baby
+        await tx.update(schema.contracts)
+          .set({ status: 'suspended' })
+          .where(eq(schema.contracts.babyId, babyId));
+
+        app.logger.debug({ babyId }, 'Contracts suspended in transaction');
+      });
+
+      app.logger.info({ babyId, consultantId: consultant.id }, 'Baby and contracts archived successfully');
 
       return reply.status(200).send({ success: true });
     } catch (error) {
