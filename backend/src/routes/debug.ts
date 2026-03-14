@@ -4,6 +4,54 @@ import { eq, desc } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
 
 export function registerDebugRoutes(app: App) {
+  // GET /api/debug/juju-diagnosis - Diagnostic endpoint for juju@teste.com user
+  app.fastify.get('/api/debug/juju-diagnosis', async (request: FastifyRequest, reply: FastifyReply) => {
+    app.logger.info({}, 'Debug: Fetching juju diagnosis data');
+
+    try {
+      // Query 1: Get user with email juju@teste.com
+      const users = await app.db.query.user.findMany({
+        where: eq(authSchema.user.email, 'juju@teste.com'),
+      });
+
+      let accounts = [];
+
+      // Query 2: Get account for that user (if user exists)
+      if (users.length > 0) {
+        const userId = users[0].id;
+        accounts = await app.db.query.account.findMany({
+          where: eq(authSchema.account.userId, userId),
+        });
+      }
+
+      const response = {
+        user: users.map(u => ({
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          require_password_change: u.requirePasswordChange,
+        })),
+        account: accounts.map(a => ({
+          id: a.id,
+          user_id: a.userId,
+          provider_id: a.providerId,
+          account_id: a.accountId,
+          pwd_length: a.password ? a.password.length : 0,
+        })),
+      };
+
+      app.logger.info(
+        { userCount: users.length, accountCount: accounts.length },
+        'Debug: Returning juju diagnosis data'
+      );
+
+      return reply.status(200).send(response);
+    } catch (error) {
+      app.logger.error({ err: error }, 'Debug: Error fetching juju diagnosis data');
+      return reply.status(500).send({ error: 'Failed to fetch diagnostics' });
+    }
+  });
+
   // GET /api/debug/password-status - Returns password verification diagnostic data
   app.fastify.get('/api/debug/password-status', async (request: FastifyRequest, reply: FastifyReply) => {
     app.logger.info({}, 'Debug: Fetching password status diagnostics');
