@@ -57,67 +57,45 @@ export function registerUserRoutes(app: App) {
     }
 
     try {
-      // Step 1: Find user's credential account
-      const account = await app.db.query.account.findFirst({
-        where: and(
-          eq(authSchema.account.userId, userId),
-          eq(authSchema.account.providerId, 'credential')
-        ),
+      // Use Better Auth's change-password endpoint to handle password verification and hashing
+      // This ensures password operations use the same system as registration and sign-in
+      app.logger.info({ userId }, 'Attempting password change via Better Auth');
+
+      const changePasswordResponse = await app.fastify.inject({
+        method: 'POST',
+        url: '/api/auth/change-password',
+        payload: {
+          currentPassword,
+          newPassword,
+          revokeOtherSessions: false,
+        },
+        headers: request.headers,
       });
 
-      app.logger.debug(
-        { userId, accountFound: !!account, passwordFieldSet: !!account?.password, storedPasswordLength: account?.password?.length || 0 },
-        'Account record lookup result'
-      );
+      if (changePasswordResponse.statusCode !== 200) {
+        const errorData = changePasswordResponse.json() as { error?: { message?: string }; message?: string };
+        const errorMessage = errorData.error?.message || errorData.message || '';
 
-      if (!account) {
-        app.logger.error({ userId }, 'No credential account found for this user');
-        return reply.status(400).send({ error: 'No password account found' });
-      }
-
-      if (!account.password) {
-        app.logger.error({ userId }, 'No password set for this account');
-        return reply.status(400).send({ error: 'No password account found' });
-      }
-
-      // Step 2: Verify current password
-      let passwordMatches = false;
-      try {
-        passwordMatches = await bcrypt.compare(currentPassword, account.password);
-      } catch (verifyError) {
-        app.logger.error(
-          { err: verifyError, userId, storedPasswordHashLength: account.password.length },
-          'Error verifying password - hash may be invalid'
-        );
-        return reply.status(400).send({ error: 'Invalid current password' });
-      }
-
-      if (!passwordMatches) {
         app.logger.warn(
-          { userId, storedPasswordHashLength: account.password.length, attemptedPasswordLength: currentPassword.length },
-          'Current password incorrect'
+          { userId, status: changePasswordResponse.statusCode, errorMessage },
+          'Better Auth password change rejected'
         );
-        return reply.status(400).send({ error: 'Invalid current password' });
+
+        if (changePasswordResponse.statusCode === 400) {
+          return reply.status(400).send({ error: 'Invalid current password' });
+        }
+
+        return reply.status(400).send({ error: 'Password change failed' });
       }
 
-      app.logger.debug({ userId }, 'Current password verified successfully');
+      app.logger.info({ userId }, 'Password changed successfully via Better Auth');
 
-      // Step 3: Hash new password
-      const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-
-      // Step 4: Update account password
-      await app.db.update(authSchema.account)
-        .set({ password: hashedNewPassword })
-        .where(eq(authSchema.account.id, account.id));
-
-      app.logger.info({ userId }, 'Account password updated');
-
-      // Step 5: Clear requirePasswordChange flag
+      // Step 2: Clear requirePasswordChange flag
       await app.db.update(authSchema.user)
         .set({ requirePasswordChange: false })
         .where(eq(authSchema.user.id, userId));
 
-      app.logger.info({ userId }, 'Password changed successfully and requirePasswordChange flag cleared');
+      app.logger.info({ userId }, 'requirePasswordChange flag cleared');
 
       return reply.status(200).send({ success: true });
 
