@@ -3,6 +3,8 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
+import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 
 export function registerConsultantRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -592,34 +594,79 @@ export function registerConsultantRoutes(app: App) {
         return reply.status(500).send({ error: 'Failed to create mother account' });
       }
 
-      // Step 4b: Verify that the credential account was created with password field populated
-      const credentialAccount = await app.db.query.account.findFirst({
+      // Step 4b: Hash the password and ensure credential account exists
+      let hashedPassword: string;
+      try {
+        hashedPassword = await bcrypt.hash(provisionalPassword, 10);
+        app.logger.debug(
+          { hashedPasswordLength: hashedPassword.length },
+          'Provisional password hashed with bcrypt'
+        );
+      } catch (hashError) {
+        app.logger.error(
+          { err: hashError, motherEmail },
+          'Failed to hash provisional password'
+        );
+        return reply.status(500).send({ error: 'Failed to create mother account: password hashing failed' });
+      }
+
+      // Step 4c: Find or create credential account with the hashed password
+      let credentialAccount = await app.db.query.account.findFirst({
         where: and(
           eq(authSchema.account.userId, motherUserId),
           eq(authSchema.account.providerId, 'credential')
         ),
       });
 
-      if (!credentialAccount) {
-        app.logger.error(
-          { motherUserId, motherEmail },
-          'Credential account was not created by Better Auth signup'
-        );
-        return reply.status(500).send({ error: 'Failed to create mother account: credential account not created' });
-      }
+      const accountFound = !!credentialAccount;
 
-      if (!credentialAccount.password) {
-        app.logger.error(
-          { motherUserId, accountId: credentialAccount.id },
-          'Credential account password field is empty after signup'
-        );
-        return reply.status(500).send({ error: 'Failed to create mother account: password not set' });
-      }
+      if (credentialAccount) {
+        // Update existing credential account with the hashed password
+        await app.db.update(authSchema.account)
+          .set({
+            password: hashedPassword,
+            updatedAt: new Date(),
+          })
+          .where(eq(authSchema.account.id, credentialAccount.id));
 
-      app.logger.info(
-        { motherUserId, accountId: credentialAccount.id, hasPassword: !!credentialAccount.password },
-        'Credential account verified with password field populated'
-      );
+        app.logger.info(
+          { motherUserId, accountId: credentialAccount.id, accountFound: true, hashedPasswordLength: hashedPassword.length },
+          'Updated existing credential account with hashed password'
+        );
+      } else {
+        // Create new credential account with the hashed password
+        const newAccountId = crypto.randomUUID();
+        await app.db.insert(authSchema.account).values({
+          id: newAccountId,
+          accountId: motherEmail,
+          providerId: 'credential',
+          userId: motherUserId,
+          password: hashedPassword,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+
+        credentialAccount = {
+          id: newAccountId,
+          accountId: motherEmail,
+          providerId: 'credential',
+          userId: motherUserId,
+          password: hashedPassword,
+          accessToken: null,
+          refreshToken: null,
+          idToken: null,
+          accessTokenExpiresAt: null,
+          refreshTokenExpiresAt: null,
+          scope: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        app.logger.info(
+          { motherUserId, accountId: newAccountId, accountFound: false, hashedPasswordLength: hashedPassword.length },
+          'Created new credential account with hashed password'
+        );
+      }
 
       // Step 5: Update user to set requirePasswordChange flag
       await app.db.update(authSchema.user)

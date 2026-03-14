@@ -66,26 +66,41 @@ export function registerUserRoutes(app: App) {
       });
 
       app.logger.debug(
-        { userId, accountFound: !!account, passwordFieldSet: !!account?.password },
+        { userId, accountFound: !!account, passwordFieldSet: !!account?.password, storedPasswordLength: account?.password?.length || 0 },
         'Account record lookup result'
       );
 
       if (!account) {
         app.logger.error({ userId }, 'No credential account found for this user');
-        return reply.status(400).send({ error: 'No credential account found for this user' });
+        return reply.status(400).send({ error: 'No password account found' });
       }
 
       if (!account.password) {
         app.logger.error({ userId }, 'No password set for this account');
-        return reply.status(400).send({ error: 'No password set for this account' });
+        return reply.status(400).send({ error: 'No password account found' });
       }
 
       // Step 2: Verify current password
-      const passwordMatches = await bcrypt.compare(currentPassword, account.password);
-      if (!passwordMatches) {
-        app.logger.warn({ userId }, 'Current password incorrect');
+      let passwordMatches = false;
+      try {
+        passwordMatches = await bcrypt.compare(currentPassword, account.password);
+      } catch (verifyError) {
+        app.logger.error(
+          { err: verifyError, userId, storedPasswordHashLength: account.password.length },
+          'Error verifying password - hash may be invalid'
+        );
         return reply.status(400).send({ error: 'Invalid current password' });
       }
+
+      if (!passwordMatches) {
+        app.logger.warn(
+          { userId, storedPasswordHashLength: account.password.length, attemptedPasswordLength: currentPassword.length },
+          'Current password incorrect'
+        );
+        return reply.status(400).send({ error: 'Invalid current password' });
+      }
+
+      app.logger.debug({ userId }, 'Current password verified successfully');
 
       // Step 3: Hash new password
       const hashedNewPassword = await bcrypt.hash(newPassword, 10);

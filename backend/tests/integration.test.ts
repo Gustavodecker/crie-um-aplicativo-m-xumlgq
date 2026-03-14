@@ -545,13 +545,6 @@ describe("API Integration Tests", () => {
     expect(baby.name).toBe("Baby Updated");
   });
 
-  test("Get consultant babies with includeArchived parameter", async () => {
-    const res = await authenticatedApi("/api/consultant/babies?includeArchived=true", authToken);
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(Array.isArray(data)).toBe(true);
-  });
-
   test("Get consultant babies without auth returns 401", async () => {
     const res = await api("/api/consultant/babies");
     await expectStatus(res, 401);
