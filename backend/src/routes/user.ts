@@ -50,6 +50,12 @@ export function registerUserRoutes(app: App) {
 
     app.logger.info({ userId }, 'Attempting to change password');
 
+    // Validate currentPassword
+    if (!currentPassword || currentPassword.length === 0) {
+      app.logger.warn({ userId }, 'Current password is empty');
+      return reply.status(400).send({ error: 'currentPassword is required' });
+    }
+
     // Validate newPassword length
     if (!newPassword || newPassword.length < 6) {
       app.logger.warn({ userId }, 'New password too short');
