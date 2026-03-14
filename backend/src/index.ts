@@ -2,6 +2,7 @@ import { createApplication } from "@specific-dev/framework";
 import * as appSchema from './db/schema/schema.js';
 import * as authSchema from './db/schema/auth-schema.js';
 import { sessionConfig } from './config/session.js';
+import { eq } from 'drizzle-orm';
 
 // Import route registration functions
 import { registerAuthRoutes } from './routes/auth.js';
@@ -121,6 +122,51 @@ registerSleepWindowsRoutes(app);
 registerReportsRoutes(app);
 registerUploadRoutes(app);
 registerDebugRoutes(app);
+
+// Startup check: Detect credential accounts with invalid password hashes
+// MUST be added BEFORE app.run() is called
+app.fastify.addHook('onReady', async () => {
+  try {
+    // Query all credential accounts with passwords
+    const credentialAccounts = await app.db.query.account.findMany({
+      where: eq(authSchema.account.providerId, 'credential'),
+    });
+
+    const invalidAccounts = credentialAccounts.filter(
+      acc => acc.password && !acc.password.startsWith('$2')
+    );
+
+    if (invalidAccounts.length > 0) {
+      app.logger.warn(
+        { invalidAccountCount: invalidAccounts.length },
+        'STARTUP WARNING: Found credential accounts with invalid password hashes'
+      );
+
+      for (const acc of invalidAccounts) {
+        const passwordPrefix = acc.password ? acc.password.substring(0, 20) : 'null';
+        app.logger.warn(
+          {
+            accountId: acc.id,
+            userId: acc.userId,
+            passwordPrefix: passwordPrefix,
+            passwordLength: acc.password?.length || 0,
+          },
+          'Invalid password hash detected - password may be plaintext or corrupted'
+        );
+      }
+    } else {
+      app.logger.info(
+        { validCredentialAccounts: credentialAccounts.length },
+        'Startup check: All credential account passwords appear to be valid bcrypt hashes'
+      );
+    }
+  } catch (startupCheckError) {
+    app.logger.error(
+      { err: startupCheckError },
+      'Startup check: Error checking credential account passwords'
+    );
+  }
+});
 
 await app.run();
 app.logger.info('Application running');
