@@ -584,11 +584,12 @@ export function registerConsultantRoutes(app: App) {
       }
 
       // Step 7: Insert credential account record
+      // IMPORTANT: account_id MUST equal user_id for Better Auth's credential provider
       const accountId = crypto.randomUUID();
       try {
         await app.db.insert(authSchema.account).values({
           id: accountId,
-          accountId: motherEmail,
+          accountId: motherUserId,
           providerId: 'credential',
           userId: motherUserId,
           password: hashedPassword,
@@ -603,8 +604,8 @@ export function registerConsultantRoutes(app: App) {
         });
 
         app.logger.info(
-          { motherUserId, accountId, hashedPasswordLength: hashedPassword.length },
-          'Credential account record created directly in database'
+          { motherUserId, accountId, accountIdMatches: motherUserId === motherUserId, hashedPasswordLength: hashedPassword.length },
+          'Credential account record created with account_id = user_id for Better Auth compatibility'
         );
       } catch (accountInsertError) {
         app.logger.error(
