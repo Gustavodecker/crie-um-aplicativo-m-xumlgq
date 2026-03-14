@@ -616,7 +616,6 @@ describe("API Integration Tests", () => {
       authToken,
       {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
       }
     );
     await expectStatus(res, 200);
@@ -630,7 +629,6 @@ describe("API Integration Tests", () => {
       authToken,
       {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
       }
     );
     await expectStatus(res, 404);
@@ -642,7 +640,6 @@ describe("API Integration Tests", () => {
       authToken,
       {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
       }
     );
     await expectStatus(res, 400);
@@ -651,7 +648,6 @@ describe("API Integration Tests", () => {
   test("Archive consultant baby without auth returns 401", async () => {
     const res = await api(`/api/consultant/babies/${babyId}/archive`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
     });
     await expectStatus(res, 401);
   });
@@ -676,7 +672,6 @@ describe("API Integration Tests", () => {
       authToken,
       {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
       }
     );
 
@@ -686,7 +681,6 @@ describe("API Integration Tests", () => {
       authToken,
       {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
       }
     );
     await expectStatus(res, 200);
@@ -700,7 +694,6 @@ describe("API Integration Tests", () => {
       authToken,
       {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
       }
     );
     await expectStatus(res, 404);
@@ -712,7 +705,6 @@ describe("API Integration Tests", () => {
       authToken,
       {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
       }
     );
     await expectStatus(res, 400);
@@ -721,7 +713,6 @@ describe("API Integration Tests", () => {
   test("Unarchive consultant baby without auth returns 401", async () => {
     const res = await api(`/api/consultant/babies/${babyId}/unarchive`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
     });
     await expectStatus(res, 401);
   });
