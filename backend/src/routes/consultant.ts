@@ -3,7 +3,6 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
-import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 
 export function registerConsultantRoutes(app: App) {
@@ -530,87 +529,82 @@ export function registerConsultantRoutes(app: App) {
 
       app.logger.debug({ provisionalPasswordLength: provisionalPassword.length }, 'Generated provisional password');
 
-      // Step 4: Check if user with this email already exists
-      const existingUser = await app.db.query.user.findFirst({
-        where: eq(authSchema.user.email, motherEmail),
-      });
-
-      if (existingUser) {
-        app.logger.warn({ motherEmail }, 'Email already exists');
-        return reply.status(409).send({ error: 'Email already exists. Please use a different email.' });
-      }
-
-      // Step 5: Generate user ID and insert into user table
-      const motherUserId = crypto.randomUUID();
+      // Step 4: Use Better Auth's signup endpoint to create the mother account
+      // This ensures password hashing is handled entirely by Better Auth
+      let motherUserId: string;
 
       try {
-        await app.db.insert(authSchema.user).values({
-          id: motherUserId,
-          name: motherName,
-          email: motherEmail,
-          emailVerified: true,
-          image: null,
-          requirePasswordChange: true,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+        const signupResponse = await app.fastify.inject({
+          method: 'POST',
+          url: '/api/auth/sign-up/email',
+          payload: {
+            email: motherEmail,
+            password: provisionalPassword,
+            name: motherName,
+          },
         });
+
+        if (signupResponse.statusCode !== 200 && signupResponse.statusCode !== 201) {
+          const errorData = signupResponse.json() as { error?: { message?: string }; message?: string };
+          const errorMessage = errorData.error?.message || errorData.message || '';
+
+          if (
+            signupResponse.statusCode === 409 ||
+            errorMessage.toLowerCase().includes('email') ||
+            errorMessage.toLowerCase().includes('already') ||
+            errorMessage.toLowerCase().includes('exists')
+          ) {
+            app.logger.warn({ motherEmail }, 'Email already exists');
+            return reply.status(409).send({ error: 'Email already exists. Please use a different email.' });
+          }
+
+          app.logger.error(
+            { status: signupResponse.statusCode, error: errorData, motherEmail },
+            'Failed to create mother account via Better Auth signup'
+          );
+          return reply.status(500).send({ error: 'Failed to create mother account' });
+        }
+
+        const signupData = signupResponse.json() as { user?: { id: string } };
+        motherUserId = signupData.user?.id;
+
+        if (!motherUserId) {
+          app.logger.error(
+            { responseData: JSON.stringify(signupData) },
+            'Failed to extract user ID from Better Auth signup response'
+          );
+          return reply.status(500).send({ error: 'Failed to create mother account' });
+        }
 
         app.logger.info(
           { motherUserId, motherEmail },
-          'User record created directly in database'
+          'Mother account created via Better Auth signup'
         );
-      } catch (userInsertError) {
+      } catch (signupError) {
         app.logger.error(
-          { err: userInsertError, motherEmail },
-          'Failed to insert user record'
+          { err: signupError, motherEmail },
+          'Error calling Better Auth signup'
         );
         return reply.status(500).send({ error: 'Failed to create mother account' });
       }
 
-      // Step 6: Hash the password using consistent algorithm
-      let hashedPassword: string;
+      // Step 5: Update user to set role and requirePasswordChange flag
       try {
-        hashedPassword = await bcrypt.hash(provisionalPassword, 10);
-        app.logger.debug(
-          { hashedPasswordLength: hashedPassword.length },
-          'Provisional password hashed with bcrypt(10 rounds)'
-        );
-      } catch (hashError) {
-        app.logger.error(
-          { err: hashError, motherEmail },
-          'Failed to hash provisional password'
-        );
-        return reply.status(500).send({ error: 'Failed to create mother account: password hashing failed' });
-      }
-
-      // Step 7: Insert credential account record
-      // IMPORTANT: account_id MUST equal user_id for Better Auth's credential provider
-      const accountId = crypto.randomUUID();
-      try {
-        await app.db.insert(authSchema.account).values({
-          id: accountId,
-          accountId: motherUserId,
-          providerId: 'credential',
-          userId: motherUserId,
-          password: hashedPassword,
-          accessToken: null,
-          refreshToken: null,
-          idToken: null,
-          accessTokenExpiresAt: null,
-          refreshTokenExpiresAt: null,
-          scope: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
+        await app.db.update(authSchema.user)
+          .set({
+            requirePasswordChange: true,
+            role: 'mother',
+          })
+          .where(eq(authSchema.user.id, motherUserId));
 
         app.logger.info(
-          { motherUserId, accountId, accountIdMatches: motherUserId === motherUserId, hashedPasswordLength: hashedPassword.length },
-          'Credential account record created with account_id = user_id for Better Auth compatibility'
+          { motherUserId },
+          'User updated with mother role and requirePasswordChange flag'
         );
-      } catch (accountInsertError) {
+      } catch (updateError) {
         app.logger.error(
-          { err: accountInsertError, motherUserId, motherEmail },
-          'Failed to insert credential account record'
+          { err: updateError, motherUserId },
+          'Failed to update user role and flags'
         );
         return reply.status(500).send({ error: 'Failed to create mother account' });
       }
