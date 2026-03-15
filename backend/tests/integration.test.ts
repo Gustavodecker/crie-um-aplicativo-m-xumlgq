@@ -2146,4 +2146,21 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi("/api/mother/consultant", newMotherToken);
     await expectStatus(res, 404);
   });
+
+  // ===== Debug Endpoints =====
+
+  test("Debug juju diagnosis returns 200", async () => {
+    const res = await api("/api/debug/juju-diagnosis");
+    await expectStatus(res, 200);
+  });
+
+  test("Debug password status returns 200", async () => {
+    const res = await api("/api/debug/password-status");
+    await expectStatus(res, 200);
+  });
+
+  test("Debug mother account returns 200", async () => {
+    const res = await api("/api/debug/mother-account");
+    await expectStatus(res, 200);
+  });
 });
