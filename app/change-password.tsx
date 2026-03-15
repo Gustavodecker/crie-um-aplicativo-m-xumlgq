@@ -29,8 +29,12 @@ export default function ChangePasswordScreen() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const { clearRequirePasswordChange, signOut } = useAuth();
+  const { clearRequirePasswordChange, signOut, user } = useAuth();
   const router = useRouter();
+
+  // When require_password_change is true the user was created by a consultant
+  // and never knew their provisional password — skip the current password field.
+  const isFirstTimeReset = !!user?.requirePasswordChange;
 
   const handleBackToLogin = async () => {
     console.log("[ChangePassword] User pressed 'Voltar para o login' button");
@@ -43,7 +47,12 @@ export default function ChangePasswordScreen() {
     setError("");
 
     // Validation
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!isFirstTimeReset && !currentPassword) {
+      setError("Por favor, preencha a senha atual");
+      return;
+    }
+
+    if (!newPassword || !confirmPassword) {
       setError("Por favor, preencha todos os campos");
       return;
     }
@@ -62,10 +71,11 @@ export default function ChangePasswordScreen() {
 
     try {
       console.log("[API] PATCH /api/user/change-password — sending request...");
-      await apiPatch("/api/user/change-password", {
-        currentPassword,
-        newPassword,
-      });
+      const body: Record<string, string> = { newPassword };
+      if (!isFirstTimeReset) {
+        body.currentPassword = currentPassword;
+      }
+      await apiPatch("/api/user/change-password", body);
 
       console.log("[ChangePassword] Password changed successfully");
 
@@ -114,7 +124,9 @@ export default function ChangePasswordScreen() {
               </View>
               <Text style={styles.title}>Altere sua senha</Text>
               <Text style={styles.subtitle}>
-                Por segurança, você precisa alterar sua senha provisória antes de continuar.
+                {isFirstTimeReset
+                  ? "Crie uma senha pessoal para acessar sua conta."
+                  : "Por segurança, você precisa alterar sua senha provisória antes de continuar."}
               </Text>
             </View>
 
@@ -131,38 +143,41 @@ export default function ChangePasswordScreen() {
             ) : null}
 
             <View style={styles.form}>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Senha provisória (recebida por e-mail)</Text>
-                <View style={styles.inputContainer}>
-                  <IconSymbol
-                    ios_icon_name="lock.fill"
-                    android_material_icon_name="lock"
-                    size={20}
-                    color={colors.textSecondary}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Digite a senha do e-mail de boas-vindas"
-                    placeholderTextColor={colors.textSecondary}
-                    value={currentPassword}
-                    onChangeText={setCurrentPassword}
-                    secureTextEntry={!showCurrentPassword}
-                    editable={!loading}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity
-                    onPress={() => setShowCurrentPassword(!showCurrentPassword)}
-                    style={styles.eyeButton}
-                  >
+              {/* Only show current password field when the user is NOT doing a first-time reset */}
+              {!isFirstTimeReset && (
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Senha provisória (recebida por e-mail)</Text>
+                  <View style={styles.inputContainer}>
                     <IconSymbol
-                      ios_icon_name={showCurrentPassword ? "eye.slash.fill" : "eye.fill"}
-                      android_material_icon_name={showCurrentPassword ? "visibility-off" : "visibility"}
+                      ios_icon_name="lock.fill"
+                      android_material_icon_name="lock"
                       size={20}
                       color={colors.textSecondary}
                     />
-                  </TouchableOpacity>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Digite a senha do e-mail de boas-vindas"
+                      placeholderTextColor={colors.textSecondary}
+                      value={currentPassword}
+                      onChangeText={setCurrentPassword}
+                      secureTextEntry={!showCurrentPassword}
+                      editable={!loading}
+                      autoCapitalize="none"
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                      style={styles.eyeButton}
+                    >
+                      <IconSymbol
+                        ios_icon_name={showCurrentPassword ? "eye.slash.fill" : "eye.fill"}
+                        android_material_icon_name={showCurrentPassword ? "visibility-off" : "visibility"}
+                        size={20}
+                        color={colors.textSecondary}
+                      />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
+              )}
 
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Nova senha</Text>
