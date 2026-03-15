@@ -33,11 +33,12 @@ export function registerUserRoutes(app: App) {
         200: {
           type: 'object',
           properties: {
-            success: { type: 'boolean' },
+            message: { type: 'string' },
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
         401: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
         500: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
@@ -83,15 +84,30 @@ export function registerUserRoutes(app: App) {
         ),
       });
 
-      if (!credentialAccount || !credentialAccount.password) {
-        app.logger.warn({ userId }, 'Credential account not found or password not set');
+      if (!credentialAccount) {
+        app.logger.warn({ userId }, 'Credential account not found');
+        return reply.status(404).send({ error: 'No credential account found' });
+      }
+
+      if (!credentialAccount.password) {
+        app.logger.warn({ userId }, 'Credential account has no password set');
         return reply.status(401).send({ error: 'Invalid current password' });
       }
 
       app.logger.info({ userId }, 'Retrieved credential account');
 
-      // Step 3: Verify current password using bcrypt
-      const passwordMatches = await bcrypt.compare(currentPassword, credentialAccount.password);
+      // Step 3: Verify current password (handle both bcrypt hashes and plain text)
+      let passwordMatches = false;
+
+      if (credentialAccount.password.startsWith('$2')) {
+        // Password is a bcrypt hash - use hash comparison
+        app.logger.debug({ userId }, 'Verifying hashed password');
+        passwordMatches = await bcrypt.compare(currentPassword, credentialAccount.password);
+      } else {
+        // Password is plain text - compare directly
+        app.logger.debug({ userId }, 'Verifying plain text password');
+        passwordMatches = currentPassword === credentialAccount.password;
+      }
 
       if (!passwordMatches) {
         app.logger.warn({ userId }, 'Current password verification failed');
@@ -119,7 +135,7 @@ export function registerUserRoutes(app: App) {
 
       app.logger.info({ userId }, 'requirePasswordChange flag cleared');
 
-      return reply.status(200).send({ success: true });
+      return reply.status(200).send({ message: 'Password changed successfully' });
 
     } catch (error) {
       app.logger.error({ err: error, userId }, 'Error changing password');
