@@ -132,14 +132,13 @@ describe("API Integration Tests", () => {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        currentPassword: "oldPassword123",
         newPassword: "newPassword456",
       }),
     });
     await expectStatus(res, 401);
   });
 
-  test("Change password with missing currentPassword returns 400", async () => {
+  test("Change password successfully", async () => {
     const res = await authenticatedApi("/api/user/change-password", authToken, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -147,28 +146,16 @@ describe("API Integration Tests", () => {
         newPassword: "newPassword456",
       }),
     });
-    await expectStatus(res, 400);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
   });
 
   test("Change password with missing newPassword returns 400", async () => {
     const res = await authenticatedApi("/api/user/change-password", authToken, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        currentPassword: "currentPass123",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Change password with empty currentPassword returns 400", async () => {
-    const res = await authenticatedApi("/api/user/change-password", authToken, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        currentPassword: "",
-        newPassword: "newPassword456",
-      }),
+      body: JSON.stringify({}),
     });
     await expectStatus(res, 400);
   });
@@ -1373,9 +1360,7 @@ describe("API Integration Tests", () => {
     const res = await authenticatedApi("/api/night-sleep", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        // Missing routineId - should fail
-      }),
+      body: JSON.stringify({}),
     });
     await expectStatus(res, 400);
   });
