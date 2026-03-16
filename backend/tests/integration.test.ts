@@ -148,7 +148,8 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.message).toBeDefined();
+    expect(typeof data.success).toBe("boolean");
+    expect(typeof data.rowsAffected).toBe("number");
   });
 
   test("Change password with missing newPassword returns 400", async () => {
@@ -2140,8 +2141,13 @@ describe("API Integration Tests", () => {
   });
 
   test("Debug password status returns 200", async () => {
-    const res = await api("/api/debug/password-status");
+    const res = await api(`/api/debug/password-status?email=${encodeURIComponent(userEmail)}`);
     await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.found).toBe(true);
+    expect(data.userId).toBeDefined();
+    expect(data.accountId).toBeDefined();
+    expect(data.providerId).toBe("credential");
   });
 
   test("Debug mother account returns 200", async () => {
