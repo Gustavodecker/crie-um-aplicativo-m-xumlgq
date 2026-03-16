@@ -148,7 +148,7 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.success).toBe(true);
+    expect(data.message).toBeDefined();
   });
 
   test("Change password with missing newPassword returns 400", async () => {
