@@ -3,6 +3,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
 import bcrypt from 'bcrypt';
+import { hashPassword, verifyPassword } from 'better-auth/crypto';
 
 /**
  * User Routes
@@ -23,8 +24,9 @@ export function registerUserRoutes(app: App) {
       tags: ['user'],
       body: {
         type: 'object',
-        required: ['newPassword'],
+        required: ['currentPassword', 'newPassword'],
         properties: {
+          currentPassword: { type: 'string', description: 'Current password' },
           newPassword: { type: 'string', description: 'New password' },
         },
       },
@@ -41,36 +43,27 @@ export function registerUserRoutes(app: App) {
         500: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: { newPassword: string } }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: { currentPassword: string; newPassword: string } }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
-    const { newPassword } = request.body;
+    const { currentPassword, newPassword } = request.body;
     const userId = session.user.id;
 
+    // Validate inputs
+    if (!currentPassword || (typeof currentPassword === 'string' && currentPassword.trim().length === 0)) {
+      app.logger.warn({ userId }, 'currentPassword is required or empty');
+      return reply.status(400).send({ error: 'currentPassword is required' });
+    }
+
     if (!newPassword || (typeof newPassword === 'string' && newPassword.trim().length === 0)) {
-      app.logger.warn({ userId, hasPassword: !!newPassword }, 'newPassword is required or empty');
+      app.logger.warn({ userId }, 'newPassword is required or empty');
       return reply.status(400).send({ error: 'newPassword is required' });
     }
 
     app.logger.info({ userId }, 'Password change request received');
 
     try {
-      // Hash the new password using bcrypt (Better Auth's default)
-      app.logger.info({ userId }, 'Hashing password using bcrypt');
-
-      let hashedPassword: string;
-
-      try {
-        // Use bcrypt with default rounds (10)
-        hashedPassword = await bcrypt.hash(newPassword, 10);
-
-        app.logger.info({ userId, hashLength: hashedPassword.length }, 'Password hashed successfully');
-      } catch (hashError) {
-        app.logger.error({ err: hashError, userId, errorMsg: (hashError as Error).message }, 'Failed to hash password');
-        return reply.status(500).send({ error: 'Failed to change password' });
-      }
-
       // First, find the credential account to ensure it exists
       app.logger.info({ userId }, 'Looking up credential account');
 
@@ -91,6 +84,39 @@ export function registerUserRoutes(app: App) {
         app.logger.info({ userId, accountId: credentialAccount.id }, 'Found credential account');
       } catch (queryError) {
         app.logger.error({ err: queryError, userId }, 'Failed to query credential account');
+        return reply.status(500).send({ error: 'Failed to change password' });
+      }
+
+      // Verify current password
+      app.logger.info({ userId }, 'Verifying current password');
+
+      try {
+        const passwordMatches = await verifyPassword({
+          hash: credentialAccount.password || '',
+          password: currentPassword,
+        });
+
+        if (!passwordMatches) {
+          app.logger.warn({ userId }, 'Current password verification failed');
+          return reply.status(401).send({ error: 'Current password is incorrect' });
+        }
+
+        app.logger.info({ userId }, 'Current password verified successfully');
+      } catch (verifyError) {
+        app.logger.error({ err: verifyError, userId }, 'Error verifying current password');
+        return reply.status(500).send({ error: 'Failed to change password' });
+      }
+
+      // Hash the new password using Better Auth's hash function
+      app.logger.info({ userId }, 'Hashing new password using Better Auth');
+
+      let hashedPassword: string;
+
+      try {
+        hashedPassword = await hashPassword(newPassword);
+        app.logger.info({ userId, hashLength: hashedPassword.length }, 'New password hashed successfully');
+      } catch (hashError) {
+        app.logger.error({ err: hashError, userId, errorMsg: (hashError as Error).message }, 'Failed to hash new password');
         return reply.status(500).send({ error: 'Failed to change password' });
       }
 

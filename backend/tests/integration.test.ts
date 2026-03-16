@@ -132,6 +132,7 @@ describe("API Integration Tests", () => {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        currentPassword: "TestPassword123!",
         newPassword: "newPassword456",
       }),
     });
@@ -143,6 +144,7 @@ describe("API Integration Tests", () => {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        currentPassword: "TestPassword123!",
         newPassword: "newPassword456",
       }),
     });
@@ -152,13 +154,38 @@ describe("API Integration Tests", () => {
     expect(typeof data.message).toBe("string");
   });
 
+  test("Change password with missing currentPassword returns 400", async () => {
+    const res = await authenticatedApi("/api/user/change-password", authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        newPassword: "newPassword456",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Change password with missing newPassword returns 400", async () => {
     const res = await authenticatedApi("/api/user/change-password", authToken, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        currentPassword: "TestPassword123!",
+      }),
     });
     await expectStatus(res, 400);
+  });
+
+  test("Change password with incorrect currentPassword returns 401", async () => {
+    const res = await authenticatedApi("/api/user/change-password", authToken, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        currentPassword: "WrongPassword",
+        newPassword: "newPassword456",
+      }),
+    });
+    await expectStatus(res, 401);
   });
 
   // ===== Create Consultant Profile Endpoint =====
