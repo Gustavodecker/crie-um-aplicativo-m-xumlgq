@@ -52,68 +52,6 @@ export function registerDebugRoutes(app: App) {
     }
   });
 
-  // GET /api/debug/password-status - Returns password verification diagnostic data
-  app.fastify.get('/api/debug/password-status', async (request: FastifyRequest, reply: FastifyReply) => {
-    app.logger.info({}, 'Debug: Fetching password status diagnostics');
-
-    try {
-      // Query 1: Last 5 users
-      const recentUsers = await app.db.query.user.findMany({
-        orderBy: desc(authSchema.user.createdAt),
-        limit: 5,
-      });
-
-      app.logger.debug({ userCount: recentUsers.length }, 'Debug: Found recent users');
-
-      // Query 2: Credential accounts for those users
-      const accountData = [];
-      for (const user of recentUsers) {
-        const accounts = await app.db.query.account.findMany({
-          where: eq(authSchema.account.userId, user.id),
-        });
-
-        for (const acc of accounts) {
-          const passwordHashPrefix = acc.password ? acc.password.substring(0, 7) : null;
-          const isValidBcryptHash = acc.password ? acc.password.startsWith('$2') : false;
-          accountData.push({
-            userId: acc.userId,
-            accountId: acc.id,
-            providerId: acc.providerId,
-            passwordStatus: acc.password === null ? 'NULL' : acc.password === '' ? 'EMPTY_STRING' : 'POPULATED',
-            passwordHashPrefix: passwordHashPrefix,
-            isValidBcryptHash: isValidBcryptHash,
-            createdAt: acc.createdAt,
-          });
-        }
-      }
-
-      const response = {
-        users: recentUsers.map(u => ({
-          id: u.id,
-          email: u.email,
-          createdAt: u.createdAt,
-        })),
-        accounts: accountData,
-        diagnostics: {
-          totalUsersChecked: recentUsers.length,
-          totalAccountsChecked: accountData.length,
-          validBcryptHashes: accountData.filter(a => a.isValidBcryptHash).length,
-          invalidPasswordHashes: accountData.filter(a => a.passwordStatus === 'POPULATED' && !a.isValidBcryptHash).length,
-        },
-      };
-
-      app.logger.info(
-        { userCount: recentUsers.length, accountCount: accountData.length },
-        'Debug: Returning password status diagnostics'
-      );
-
-      return reply.status(200).send(response);
-    } catch (error) {
-      app.logger.error({ err: error }, 'Debug: Error fetching password status diagnostics');
-      return reply.status(500).send({ error: 'Failed to fetch diagnostics' });
-    }
-  });
-
   // GET /api/debug/mother-account - Returns diagnostic data about recently created mother accounts
   app.fastify.get('/api/debug/mother-account', async (request: FastifyRequest, reply: FastifyReply) => {
     app.logger.info({}, 'Debug: Fetching mother account diagnostics');
@@ -169,7 +107,7 @@ export function registerDebugRoutes(app: App) {
     }
   });
 
-  // GET /api/debug/password-status?email=... - Inspect password hash for a specific user
+  // GET /api/debug/password-status-by-email?email=... - Inspect password hash for a specific user
   app.fastify.get<{ Querystring: { email?: string } }>('/api/debug/password-status-by-email', async (request: FastifyRequest, reply: FastifyReply) => {
     const { email } = request.query as { email?: string };
 
@@ -223,6 +161,65 @@ export function registerDebugRoutes(app: App) {
       return reply.status(200).send(response);
     } catch (error) {
       app.logger.error({ err: error, email }, 'Debug: Error fetching password status for email');
+      return reply.status(500).send({ error: 'Failed to fetch password status' });
+    }
+  });
+
+  // GET /api/debug/password-status?email=... - Inspect password hash for a specific user
+  app.fastify.get<{ Querystring: { email?: string } }>('/api/debug/password-status', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { email } = request.query as { email?: string };
+
+    app.logger.info({ email }, 'Debug: Fetching password status for email');
+
+    if (!email) {
+      return reply.status(400).send({ error: 'email query parameter is required', found: false });
+    }
+
+    try {
+      // Query user joined with credential account
+      const user = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, email),
+      });
+
+      if (!user) {
+        app.logger.info({ email }, 'Debug: User not found');
+        return reply.status(200).send({ found: false, email });
+      }
+
+      // Find credential account for this user
+      const credentialAccount = await app.db.query.account.findFirst({
+        where: and(
+          eq(authSchema.account.userId, user.id),
+          eq(authSchema.account.providerId, 'credential')
+        ),
+      });
+
+      if (!credentialAccount) {
+        app.logger.info({ email, userId: user.id }, 'Debug: Credential account not found');
+        return reply.status(200).send({ found: false, email });
+      }
+
+      const passwordPrefix = credentialAccount.password ? credentialAccount.password.substring(0, 10) : null;
+      const passwordLength = credentialAccount.password ? credentialAccount.password.length : 0;
+
+      const response = {
+        found: true,
+        userId: user.id,
+        accountId: credentialAccount.id,
+        providerId: 'credential',
+        passwordLength: passwordLength,
+        passwordPrefix: passwordPrefix,
+        rowCount: 1,
+      };
+
+      app.logger.info(
+        { email, userId: user.id, accountId: credentialAccount.id, passwordLength },
+        'Debug: Returning password status'
+      );
+
+      return reply.status(200).send(response);
+    } catch (error) {
+      app.logger.error({ err: error, email }, 'Debug: Error fetching password status');
       return reply.status(500).send({ error: 'Failed to fetch password status' });
     }
   });
