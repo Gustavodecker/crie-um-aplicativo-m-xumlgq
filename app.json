@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "crie-um-aplicativo-m",
-    "slug": "crie-um-aplicativo-m",
+    "name": "TodaNoite Baby",
+    "slug": "toda-noite-baby",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-afq.png",
@@ -16,6 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.todanoite.baby",
       "infoPlist": {
+        "CFBundleDisplayName": "TodaNoite Baby",
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "Precisamos acessar suas fotos para atualizar sua imagem de perfil."
       }
