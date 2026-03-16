@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
-import { apiPatch } from "@/utils/api";
+import { apiPost } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { ChevronLeft } from "lucide-react-native";
 
@@ -58,8 +58,8 @@ export default function ChangePasswordScreen() {
     setLoading(true);
 
     try {
-      console.log("[API] PATCH /api/user/change-password — sending request...");
-      await apiPatch("/api/user/change-password", { newPassword });
+      console.log("[API] POST /api/user/set-password — sending request...");
+      await apiPost("/api/user/set-password", { newPassword });
       console.log("[ChangePassword] Password changed successfully");
       await clearRequirePasswordChange();
       console.log("[ChangePassword] requirePasswordChange cleared — NavigationGuard will redirect to /(tabs)");
