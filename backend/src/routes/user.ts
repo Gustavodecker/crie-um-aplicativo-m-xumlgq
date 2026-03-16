@@ -23,9 +23,9 @@ export function registerUserRoutes(app: App) {
       tags: ['user'],
       body: {
         type: 'object',
-        required: ['currentPassword', 'newPassword'],
+        required: ['newPassword'],
         properties: {
-          currentPassword: { type: 'string', description: 'Current password' },
+          currentPassword: { type: 'string', description: 'Current password (optional if require_password_change is true)' },
           newPassword: { type: 'string', description: 'New password (minimum 6 characters)' },
         },
       },
@@ -49,7 +49,7 @@ export function registerUserRoutes(app: App) {
     const { currentPassword, newPassword } = request.body;
     const userId = session.user.id;
 
-    app.logger.info({ userId }, 'Attempting to change password');
+    app.logger.info({ userId, hasCurrentPassword: !!currentPassword, hasNewPassword: !!newPassword }, 'Password change request received');
 
     // Validate newPassword
     if (!newPassword || newPassword.length < 6) {
@@ -68,7 +68,10 @@ export function registerUserRoutes(app: App) {
         return reply.status(401).send({ error: 'User not found' });
       }
 
-      app.logger.info({ userId, requirePasswordChange: user.requirePasswordChange }, 'Retrieved user for password change');
+      app.logger.info(
+        { userId, requirePasswordChange: user.requirePasswordChange },
+        `Retrieved user: require_password_change = ${user.requirePasswordChange}`
+      );
 
       // Step 2: Fetch credential account row
       const credentialAccount = await app.db.query.account.findFirst({
@@ -83,13 +86,15 @@ export function registerUserRoutes(app: App) {
         return reply.status(404).send({ error: 'Credential account not found' });
       }
 
-      app.logger.info({ userId }, 'Retrieved credential account');
+      app.logger.info({ userId, hasStoredPassword: !!credentialAccount.password }, 'Retrieved credential account');
 
       // Step 3: Conditional password verification
       // If require_password_change = true, skip currentPassword verification (first-time setup)
       // If require_password_change = false, verify currentPassword
       if (!user.requirePasswordChange) {
         // User is changing an existing password - verify current password
+        app.logger.info({ userId }, 'User has existing password - verification required');
+
         if (!currentPassword) {
           app.logger.warn({ userId }, 'Current password required but not provided');
           return reply.status(400).send({ error: 'currentPassword is required' });
@@ -97,36 +102,50 @@ export function registerUserRoutes(app: App) {
 
         if (!credentialAccount.password) {
           app.logger.warn({ userId }, 'No password stored for credential account');
-          return reply.status(401).send({ error: 'Senha atual incorreta' });
+          return reply.status(401).send({ error: 'Current password is incorrect' });
         }
 
-        // Verify current password (handle both bcrypt hashes and plain text)
+        // Verify current password (handle both bcrypt and scrypt hashes, plus plain text)
         let passwordMatches = false;
+        let hashType = 'unknown';
 
         if (credentialAccount.password.startsWith('$2')) {
-          // Password is a bcrypt hash - use hash comparison
-          app.logger.debug({ userId }, 'Verifying hashed password');
+          // Password is a bcrypt hash
+          hashType = 'bcrypt';
+          app.logger.debug({ userId }, 'Verifying bcrypt-hashed password');
           passwordMatches = await bcrypt.compare(currentPassword, credentialAccount.password);
+        } else if (credentialAccount.password.startsWith('$7')) {
+          // Password is a scrypt hash - bcrypt.compare will handle it for scrypt-compatible hashes
+          hashType = 'scrypt';
+          app.logger.debug({ userId }, 'Verifying scrypt-hashed password');
+          try {
+            passwordMatches = await bcrypt.compare(currentPassword, credentialAccount.password);
+          } catch (err) {
+            // If bcrypt fails with scrypt, password doesn't match
+            app.logger.debug({ userId, error: (err as Error).message }, 'Scrypt comparison via bcrypt failed');
+            passwordMatches = false;
+          }
         } else {
-          // Password is plain text - compare directly
+          // Password is plain text
+          hashType = 'plaintext';
           app.logger.debug({ userId }, 'Verifying plain text password');
           passwordMatches = currentPassword === credentialAccount.password;
         }
 
         if (!passwordMatches) {
-          app.logger.warn({ userId }, 'Current password verification failed');
-          return reply.status(401).send({ error: 'Senha atual incorreta' });
+          app.logger.warn({ userId, hashType }, 'Current password verification failed');
+          return reply.status(401).send({ error: 'Current password is incorrect' });
         }
 
-        app.logger.info({ userId }, 'Current password verified successfully');
+        app.logger.info({ userId, hashType }, 'Current password verified successfully');
       } else {
         // User is setting password for first time - skip currentPassword verification
-        app.logger.info({ userId }, 'Skipping currentPassword verification (first-time password setup)');
+        app.logger.info({ userId }, 'First-time password setup - skipping currentPassword verification');
       }
 
       // Step 4: Hash new password
       const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-      app.logger.info({ userId }, 'New password hashed');
+      app.logger.info({ userId }, 'New password hashed with bcrypt (10 rounds)');
 
       // Step 5: Update account with new password hash
       await app.db.update(authSchema.account)
@@ -136,16 +155,16 @@ export function registerUserRoutes(app: App) {
           eq(authSchema.account.userId, userId)
         ));
 
-      app.logger.info({ userId, accountId: credentialAccount.id }, 'Account password updated');
+      app.logger.info({ userId, accountId: credentialAccount.id }, 'Account password hash updated in database');
 
       // Step 6: Clear requirePasswordChange flag
       await app.db.update(authSchema.user)
         .set({ requirePasswordChange: false, updatedAt: new Date() })
         .where(eq(authSchema.user.id, userId));
 
-      app.logger.info({ userId }, 'requirePasswordChange flag cleared');
+      app.logger.info({ userId }, 'User require_password_change flag set to false');
 
-      return reply.status(200).send({ message: 'Password changed successfully' });
+      return reply.status(200).send({ message: 'Password updated successfully' });
 
     } catch (error) {
       app.logger.error({ err: error, userId }, 'Error changing password');
