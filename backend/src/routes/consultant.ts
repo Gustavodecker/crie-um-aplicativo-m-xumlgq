@@ -83,6 +83,105 @@ export function registerConsultantRoutes(app: App) {
     }
   });
 
+  // POST /api/consultant/register-baby-and-mother - Register a baby and mother together
+  app.fastify.post('/api/consultant/register-baby-and-mother', {
+    schema: {
+      description: 'Register a baby and mother together for the authenticated consultant',
+      tags: ['consultant', 'babies'],
+      body: {
+        type: 'object',
+        required: ['baby_name', 'birth_date', 'mother_name', 'mother_phone'],
+        properties: {
+          baby_name: { type: 'string', description: 'Baby name' },
+          birth_date: { type: 'string', format: 'date', description: 'Birth date in YYYY-MM-DD format' },
+          mother_name: { type: 'string', description: 'Mother name' },
+          mother_phone: { type: 'string', description: 'Mother phone' },
+          mother_email: { type: ['string', 'null'], description: 'Mother email (optional)' },
+          objectives: { type: ['string', 'null'], description: 'Objectives (optional)' },
+        },
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            baby: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                name: { type: 'string' },
+                birthDate: { type: 'string', format: 'date' },
+                motherName: { type: 'string' },
+                motherPhone: { type: 'string' },
+                motherEmail: { type: ['string', 'null'] },
+                motherUserId: { type: ['string', 'null'] },
+                consultantId: { type: 'string', format: 'uuid' },
+                objectives: { type: ['string', 'null'] },
+                conclusion: { type: ['string', 'null'] },
+                archived: { type: 'boolean' },
+                createdAt: { type: 'string', format: 'date-time' },
+              },
+            },
+          },
+        },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
+        500: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Body: { baby_name: string; birth_date: string; mother_name: string; mother_phone: string; mother_email?: string | null; objectives?: string | null } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    const { baby_name, birth_date, mother_name, mother_phone, mother_email, objectives } = request.body;
+    const userId = session.user.id;
+
+    app.logger.info({ userId, baby_name, birth_date, mother_name }, 'Registering baby and mother');
+
+    // Validate required fields
+    if (!baby_name || !birth_date || !mother_name || !mother_phone) {
+      app.logger.warn({ userId }, 'Missing required fields for baby and mother registration');
+      return reply.status(400).send({ error: 'Missing required fields' });
+    }
+
+    try {
+      // Look up consultant
+      const consultant = await app.db.query.consultants.findFirst({
+        where: eq(schema.consultants.userId, userId),
+      });
+
+      if (!consultant) {
+        app.logger.warn({ userId }, 'User is not a consultant');
+        return reply.status(403).send({ error: 'User is not a consultant' });
+      }
+
+      app.logger.info({ userId, consultantId: consultant.id }, 'Found consultant');
+
+      // Insert baby record
+      const [baby] = await app.db.insert(schema.babies).values({
+        name: baby_name,
+        birthDate: birth_date,
+        motherName: mother_name,
+        motherPhone: mother_phone,
+        motherEmail: mother_email || null,
+        motherUserId: null,
+        objectives: objectives || null,
+        consultantId: consultant.id,
+        archived: false,
+      }).returning();
+
+      app.logger.info(
+        { babyId: baby.id, consultantId: consultant.id, motherName: mother_name },
+        'Baby and mother registered successfully'
+      );
+
+      return reply.status(201).send({ baby });
+    } catch (err) {
+      app.logger.error({ err, userId, baby_name, mother_name }, 'Failed to register baby and mother');
+      return reply.status(500).send({ error: 'Internal server error' });
+    }
+  });
+
   // POST /api/consultants/create-profile - Create consultant profile after signup
   app.fastify.post('/api/consultants/create-profile', {
     schema: {
@@ -445,209 +544,6 @@ export function registerConsultantRoutes(app: App) {
 
     app.logger.info({ consultantId: consultant.id, motherUserId: session.user.id }, 'Consultant profile fetched for mother');
     return consultant;
-  });
-
-  // POST /api/consultant/register-baby-and-mother - Register baby and create mother account
-  app.fastify.post('/api/consultant/register-baby-and-mother', {
-    schema: {
-      description: 'Register a baby and create mother account with provisional password',
-      tags: ['consultant', 'babies', 'mother'],
-      body: {
-        type: 'object',
-        required: ['babyName', 'birthDate', 'motherName', 'motherPhone', 'motherEmail'],
-        properties: {
-          babyName: { type: 'string', description: 'Baby name' },
-          birthDate: { type: 'string', format: 'date', description: 'Baby birth date (YYYY-MM-DD)' },
-          motherName: { type: 'string', description: 'Mother name' },
-          motherPhone: { type: 'string', description: 'Mother phone' },
-          motherEmail: { type: 'string', format: 'email', description: 'Mother email' },
-          objectives: { type: ['string', 'null'], description: 'Baby care objectives' },
-        },
-      },
-      response: {
-        201: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            babyId: { type: 'string', format: 'uuid' },
-            motherUserId: { type: 'string' },
-            motherEmail: { type: 'string' },
-            provisionalPassword: { type: 'string', description: 'Provisional password for mother to use on first login' },
-          },
-        },
-        400: { type: 'object', properties: { error: { type: 'string' } } },
-        401: { type: 'object', properties: { error: { type: 'string' } } },
-        409: { type: 'object', properties: { error: { type: 'string' } } },
-        500: { type: 'object', properties: { error: { type: 'string' } } },
-      },
-    },
-  }, async (request: FastifyRequest<{ Body: { babyName: string; birthDate: string; motherName: string; motherPhone: string; motherEmail: string; objectives?: string } }>, reply: FastifyReply) => {
-    const session = await requireAuth(request, reply);
-    if (!session) return;
-
-    const { babyName, birthDate, motherName, motherPhone, motherEmail: rawMotherEmail, objectives } = request.body;
-
-    // Normalize email to lowercase
-    const motherEmail = rawMotherEmail.toLowerCase().trim();
-
-    app.logger.info(
-      { consultantUserId: session.user.id, babyName, motherEmail },
-      'Registering baby and creating mother account'
-    );
-
-    // Validate required fields
-    if (!babyName || babyName.trim().length === 0) {
-      return reply.status(400).send({ error: 'Baby name is required' });
-    }
-    if (!birthDate || birthDate.trim().length === 0) {
-      return reply.status(400).send({ error: 'Birth date is required' });
-    }
-    if (!motherName || motherName.trim().length === 0) {
-      return reply.status(400).send({ error: 'Mother name is required' });
-    }
-    if (!motherPhone || motherPhone.trim().length === 0) {
-      return reply.status(400).send({ error: 'Mother phone is required' });
-    }
-    if (!motherEmail || motherEmail.length === 0) {
-      return reply.status(400).send({ error: 'Mother email is required' });
-    }
-
-    try {
-
-      // Step 2: Get consultant
-      const consultant = await app.db.query.consultants.findFirst({
-        where: eq(schema.consultants.userId, session.user.id),
-      });
-
-      if (!consultant) {
-        app.logger.warn({ userId: session.user.id }, 'Consultant not found');
-        return reply.status(401).send({ error: 'Not a consultant' });
-      }
-
-      // Step 3: Generate provisional password (8 alphanumeric characters)
-      const provisionalPassword = Math.random().toString(36).slice(2, 10).toUpperCase();
-
-      app.logger.debug({ provisionalPasswordLength: provisionalPassword.length }, 'Generated provisional password');
-
-      // Step 4: Use Better Auth's signup endpoint to create the mother account
-      // This ensures password hashing is handled entirely by Better Auth
-      let motherUserId: string;
-
-      try {
-        const signupResponse = await app.fastify.inject({
-          method: 'POST',
-          url: '/api/auth/sign-up/email',
-          payload: {
-            email: motherEmail,
-            password: provisionalPassword,
-            name: motherName,
-          },
-        });
-
-        if (signupResponse.statusCode !== 200 && signupResponse.statusCode !== 201) {
-          const errorData = signupResponse.json() as { error?: { message?: string }; message?: string };
-          const errorMessage = errorData.error?.message || errorData.message || '';
-
-          if (
-            signupResponse.statusCode === 409 ||
-            errorMessage.toLowerCase().includes('email') ||
-            errorMessage.toLowerCase().includes('already') ||
-            errorMessage.toLowerCase().includes('exists')
-          ) {
-            app.logger.warn({ motherEmail }, 'Email already exists');
-            return reply.status(409).send({ error: 'Email already exists. Please use a different email.' });
-          }
-
-          app.logger.error(
-            { status: signupResponse.statusCode, error: errorData, motherEmail },
-            'Failed to create mother account via Better Auth signup'
-          );
-          return reply.status(500).send({ error: 'Failed to create mother account' });
-        }
-
-        const signupData = signupResponse.json() as { user?: { id: string } };
-        motherUserId = signupData.user?.id;
-
-        if (!motherUserId) {
-          app.logger.error(
-            { responseData: JSON.stringify(signupData) },
-            'Failed to extract user ID from Better Auth signup response'
-          );
-          return reply.status(500).send({ error: 'Failed to create mother account' });
-        }
-
-        app.logger.info(
-          { motherUserId, motherEmail },
-          'Mother account created via Better Auth signup'
-        );
-      } catch (signupError) {
-        app.logger.error(
-          { err: signupError, motherEmail },
-          'Error calling Better Auth signup'
-        );
-        return reply.status(500).send({ error: 'Failed to create mother account' });
-      }
-
-      // Step 5: Update user to set role and requirePasswordChange flag
-      try {
-        await app.db.update(authSchema.user)
-          .set({
-            requirePasswordChange: true,
-            role: 'mother',
-          })
-          .where(eq(authSchema.user.id, motherUserId));
-
-        app.logger.info(
-          { motherUserId },
-          'User updated with mother role and requirePasswordChange flag'
-        );
-      } catch (updateError) {
-        app.logger.error(
-          { err: updateError, motherUserId },
-          'Failed to update user role and flags'
-        );
-        return reply.status(500).send({ error: 'Failed to create mother account' });
-      }
-
-      // Step 8: Create baby with motherUserId already set
-      const babyId = crypto.randomUUID();
-      await app.db.insert(schema.babies).values({
-        id: babyId,
-        name: babyName,
-        birthDate: birthDate,
-        motherName: motherName,
-        motherPhone: motherPhone,
-        motherEmail: motherEmail,
-        motherUserId: motherUserId,
-        consultantId: consultant.id,
-        objectives: objectives || null,
-      });
-
-      app.logger.info(
-        { babyId, motherUserId, consultantId: consultant.id },
-        'Baby created with mother linked'
-      );
-
-      app.logger.info(
-        { motherEmail, babyName, motherUserId },
-        'Baby and mother account created successfully'
-      );
-
-      return reply.status(201).send({
-        success: true,
-        babyId,
-        motherUserId,
-        motherEmail,
-        provisionalPassword,
-      });
-
-    } catch (error) {
-      app.logger.error(
-        { err: error, babyName, motherEmail },
-        'Error registering baby and creating mother account'
-      );
-      return reply.status(500).send({ error: 'Failed to register baby and create mother account' });
-    }
   });
 
   // DELETE /api/consultant/babies/:id - Delete a baby
