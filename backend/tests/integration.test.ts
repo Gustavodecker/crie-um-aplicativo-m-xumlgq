@@ -127,65 +127,48 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
-  test("Change password without auth returns 401", async () => {
-    const res = await api("/api/user/change-password", {
-      method: "PATCH",
+  test("Set password without auth returns 401", async () => {
+    const res = await api("/api/user/set-password", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        currentPassword: "TestPassword123!",
         newPassword: "newPassword456",
       }),
     });
     await expectStatus(res, 401);
   });
 
-  test("Change password successfully", async () => {
-    const res = await authenticatedApi("/api/user/change-password", authToken, {
-      method: "PATCH",
+  test("Set password successfully", async () => {
+    const res = await authenticatedApi("/api/user/set-password", authToken, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        currentPassword: "TestPassword123!",
         newPassword: "newPassword456",
       }),
     });
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.success).toBe(true);
-    expect(typeof data.message).toBe("string");
   });
 
-  test("Change password with missing currentPassword returns 400", async () => {
-    const res = await authenticatedApi("/api/user/change-password", authToken, {
-      method: "PATCH",
+  test("Set password with missing newPassword returns 400", async () => {
+    const res = await authenticatedApi("/api/user/set-password", authToken, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        newPassword: "newPassword456",
-      }),
+      body: JSON.stringify({}),
     });
     await expectStatus(res, 400);
   });
 
-  test("Change password with missing newPassword returns 400", async () => {
-    const res = await authenticatedApi("/api/user/change-password", authToken, {
-      method: "PATCH",
+  test("Set password with too short password returns 400", async () => {
+    const res = await authenticatedApi("/api/user/set-password", authToken, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        currentPassword: "TestPassword123!",
+        newPassword: "short",
       }),
     });
     await expectStatus(res, 400);
-  });
-
-  test("Change password with incorrect currentPassword returns 401", async () => {
-    const res = await authenticatedApi("/api/user/change-password", authToken, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        currentPassword: "WrongPassword",
-        newPassword: "newPassword456",
-      }),
-    });
-    await expectStatus(res, 401);
   });
 
   // ===== Create Consultant Profile Endpoint =====

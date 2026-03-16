@@ -8,26 +8,24 @@ import { hashPassword, verifyPassword } from 'better-auth/crypto';
 /**
  * User Routes
  *
- * POST /api/user/change-password - Change user password
+ * POST /api/user/set-password - Set user password (no current password required)
  *   - Requires authentication
- *   - Validates current password
- *   - Updates password and clears requirePasswordChange flag
+ *   - Sets new password and clears requirePasswordChange flag
  */
 
 export function registerUserRoutes(app: App) {
   const requireAuth = app.requireAuth();
 
-  // PATCH /api/user/change-password - Change user password
-  app.fastify.patch('/api/user/change-password', {
+  // POST /api/user/set-password - Set user password without verification
+  app.fastify.post('/api/user/set-password', {
     schema: {
-      description: 'Change user password',
+      description: 'Set user password',
       tags: ['user'],
       body: {
         type: 'object',
-        required: ['currentPassword', 'newPassword'],
+        required: ['newPassword'],
         properties: {
-          currentPassword: { type: 'string', description: 'Current password' },
-          newPassword: { type: 'string', description: 'New password' },
+          newPassword: { type: 'string', description: 'New password', minLength: 6 },
         },
       },
       response: {
@@ -35,7 +33,6 @@ export function registerUserRoutes(app: App) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            message: { type: 'string' },
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
@@ -43,28 +40,28 @@ export function registerUserRoutes(app: App) {
         500: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: { currentPassword: string; newPassword: string } }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: { newPassword: string } }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
-    const { currentPassword, newPassword } = request.body;
+    const { newPassword } = request.body;
     const userId = session.user.id;
 
-    // Validate inputs
-    if (!currentPassword || (typeof currentPassword === 'string' && currentPassword.trim().length === 0)) {
-      app.logger.warn({ userId }, 'currentPassword is required or empty');
-      return reply.status(400).send({ error: 'currentPassword is required' });
-    }
-
+    // Validate password
     if (!newPassword || (typeof newPassword === 'string' && newPassword.trim().length === 0)) {
       app.logger.warn({ userId }, 'newPassword is required or empty');
       return reply.status(400).send({ error: 'newPassword is required' });
     }
 
-    app.logger.info({ userId }, 'Password change request received');
+    if (newPassword.length < 6) {
+      app.logger.warn({ userId }, 'newPassword is too short');
+      return reply.status(400).send({ error: 'newPassword must be at least 6 characters' });
+    }
+
+    app.logger.info({ userId }, 'Password set request received');
 
     try {
-      // First, find the credential account to ensure it exists
+      // Find the credential account
       app.logger.info({ userId }, 'Looking up credential account');
 
       let credentialAccount;
@@ -78,33 +75,13 @@ export function registerUserRoutes(app: App) {
 
         if (!credentialAccount) {
           app.logger.warn({ userId }, 'No credential account found for user');
-          return reply.status(404).send({ error: 'No credential account found for this user' });
+          return reply.status(500).send({ error: 'Internal server error' });
         }
 
         app.logger.info({ userId, accountId: credentialAccount.id }, 'Found credential account');
       } catch (queryError) {
         app.logger.error({ err: queryError, userId }, 'Failed to query credential account');
-        return reply.status(500).send({ error: 'Failed to change password' });
-      }
-
-      // Verify current password
-      app.logger.info({ userId }, 'Verifying current password');
-
-      try {
-        const passwordMatches = await verifyPassword({
-          hash: credentialAccount.password || '',
-          password: currentPassword,
-        });
-
-        if (!passwordMatches) {
-          app.logger.warn({ userId }, 'Current password verification failed');
-          return reply.status(401).send({ error: 'Current password is incorrect' });
-        }
-
-        app.logger.info({ userId }, 'Current password verified successfully');
-      } catch (verifyError) {
-        app.logger.error({ err: verifyError, userId }, 'Error verifying current password');
-        return reply.status(500).send({ error: 'Failed to change password' });
+        return reply.status(500).send({ error: 'Internal server error' });
       }
 
       // Hash the new password using Better Auth's hash function
@@ -117,7 +94,7 @@ export function registerUserRoutes(app: App) {
         app.logger.info({ userId, hashLength: hashedPassword.length }, 'New password hashed successfully');
       } catch (hashError) {
         app.logger.error({ err: hashError, userId, errorMsg: (hashError as Error).message }, 'Failed to hash new password');
-        return reply.status(500).send({ error: 'Failed to change password' });
+        return reply.status(500).send({ error: 'Internal server error' });
       }
 
       // Update password and clear flag in atomic transaction
@@ -150,17 +127,17 @@ export function registerUserRoutes(app: App) {
           app.logger.debug({ userId }, 'Cleared requirePasswordChange flag');
         });
 
-        app.logger.info({ userId, accountId: credentialAccount.id }, 'Password changed successfully in transaction');
+        app.logger.info({ userId, accountId: credentialAccount.id }, 'Password set successfully in transaction');
       } catch (transactionError) {
-        app.logger.error({ err: transactionError, userId, accountId: credentialAccount.id }, 'Failed to change password in transaction');
-        return reply.status(500).send({ error: 'Failed to change password' });
+        app.logger.error({ err: transactionError, userId, accountId: credentialAccount.id }, 'Failed to set password in transaction');
+        return reply.status(500).send({ error: 'Internal server error' });
       }
 
-      return reply.status(200).send({ success: true, message: 'Password changed successfully' });
+      return reply.status(200).send({ success: true });
 
     } catch (error) {
-      app.logger.error({ err: error, userId }, 'Unexpected error changing password');
-      return reply.status(500).send({ error: 'Failed to change password' });
+      app.logger.error({ err: error, userId }, 'Unexpected error setting password');
+      return reply.status(500).send({ error: 'Internal server error' });
     }
   });
 
