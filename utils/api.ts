@@ -122,8 +122,17 @@ export const apiCall = async <T = any>(
       let errorMsg = `API error: ${response.status}`;
       try {
         const errJson = JSON.parse(text);
-        if (errJson.error) errorMsg = errJson.error;
-      } catch {}
+        // Try common error message fields in order of preference
+        errorMsg = errJson.message || errJson.error || errJson.detail || errJson.msg || errorMsg;
+      } catch {
+        // Response was not JSON — use raw text if short enough
+        if (text && text.length < 200 && !text.trim().startsWith('<')) {
+          errorMsg = text.trim();
+        }
+      }
+      if (!suppressErrorLog) {
+        console.error("[API] ❌ Error message:", errorMsg);
+      }
       throw new Error(errorMsg);
     }
 
@@ -142,7 +151,8 @@ export const apiCall = async <T = any>(
     return data;
   } catch (error) {
     if (!suppressErrorLog) {
-      console.error("[API] ❌ Request failed:", error);
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("[API] ❌ Request failed:", msg);
     }
     throw error;
   }
