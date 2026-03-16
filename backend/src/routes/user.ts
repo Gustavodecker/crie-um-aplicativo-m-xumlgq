@@ -32,9 +32,11 @@ export function registerUserRoutes(app: App) {
         200: {
           type: 'object',
           properties: {
-            success: { type: 'boolean' },
+            message: { type: 'string' },
           },
         },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
         500: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
@@ -45,45 +47,72 @@ export function registerUserRoutes(app: App) {
     const { newPassword } = request.body;
     const userId = session.user.id;
 
+    if (!newPassword) {
+      app.logger.warn({ userId }, 'newPassword is required');
+      return reply.status(400).send({ error: 'newPassword is required' });
+    }
+
     app.logger.info({ userId }, 'Password change request received');
 
     try {
-      // Hash newPassword using Better Auth's internal password hashing utility
+      // Use Better Auth's admin API endpoint to set the password
       // This ensures the hash format is compatible with Better Auth's sign-in verification
-      let hashedNewPassword: string;
+      app.logger.info({ userId }, 'Attempting to set password via Better Auth admin endpoint');
 
-      // Try to access Better Auth's password utility from the auth instance
-      if ((app as any).auth?.password?.hash) {
-        hashedNewPassword = await (app as any).auth.password.hash(newPassword);
-        app.logger.info({ userId }, 'Password hashed using Better Auth internal utility');
-      } else if ((app as any).betterAuth?.password?.hash) {
-        hashedNewPassword = await (app as any).betterAuth.password.hash(newPassword);
-        app.logger.info({ userId }, 'Password hashed using Better Auth internal utility');
-      } else {
-        // Fallback: use bcrypt with same configuration as Better Auth
-        // Better Auth's credential provider uses bcrypt with 10 salt rounds
-        hashedNewPassword = await bcrypt.hash(newPassword, 10);
-        app.logger.warn({ userId }, 'Using fallback bcrypt hashing (Better Auth utility not accessible)');
+      let passwordSet = false;
+
+      try {
+        const adminResponse = await app.fastify.inject({
+          method: 'POST',
+          url: '/api/auth/admin/set-user-password',
+          payload: {
+            userId: userId,
+            password: newPassword,
+          },
+          headers: request.headers,
+        });
+
+        if (adminResponse.statusCode === 200) {
+          app.logger.info({ userId }, 'Password set via Better Auth admin endpoint');
+          passwordSet = true;
+        } else {
+          app.logger.debug(
+            { userId, status: adminResponse.statusCode },
+            'Better Auth admin endpoint returned non-200 status'
+          );
+        }
+      } catch (adminError) {
+        app.logger.debug(
+          { userId, error: (adminError as Error).message },
+          'Better Auth admin endpoint call failed, will use fallback'
+        );
       }
 
-      // Update account password and updated_at timestamp
-      await app.db.update(authSchema.account)
-        .set({ password: hashedNewPassword, updatedAt: new Date() })
-        .where(and(
-          eq(authSchema.account.providerId, 'credential'),
-          eq(authSchema.account.userId, userId)
-        ));
+      // Fallback: if admin endpoint didn't work, hash password directly using bcrypt
+      if (!passwordSet) {
+        app.logger.info({ userId }, 'Using bcrypt fallback to hash password');
 
-      app.logger.info({ userId }, 'Account password updated in database');
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-      // Clear requirePasswordChange flag and update user timestamp
+        // Update the account password directly
+        await app.db.update(authSchema.account)
+          .set({ password: hashedPassword, updatedAt: new Date() })
+          .where(and(
+            eq(authSchema.account.userId, userId),
+            eq(authSchema.account.providerId, 'credential')
+          ));
+
+        app.logger.info({ userId }, 'Password hashed and stored via bcrypt fallback');
+      }
+
+      // Clear requirePasswordChange flag
       await app.db.update(authSchema.user)
         .set({ requirePasswordChange: false, updatedAt: new Date() })
         .where(eq(authSchema.user.id, userId));
 
       app.logger.info({ userId }, 'User requirePasswordChange flag cleared');
 
-      return reply.status(200).send({ success: true });
+      return reply.status(200).send({ message: 'Password updated successfully' });
 
     } catch (error) {
       app.logger.error({ err: error, userId }, 'Error changing password');
