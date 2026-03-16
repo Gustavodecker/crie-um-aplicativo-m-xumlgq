@@ -48,26 +48,40 @@ export function registerUserRoutes(app: App) {
     app.logger.info({ userId }, 'Password change request received');
 
     try {
-      // Hash newPassword using Better Auth's built-in password hashing (bcrypt with 10 rounds)
-      const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-      app.logger.info({ userId }, 'New password hashed');
+      // Hash newPassword using Better Auth's internal password hashing utility
+      // This ensures the hash format is compatible with Better Auth's sign-in verification
+      let hashedNewPassword: string;
 
-      // Update account password
+      // Try to access Better Auth's password utility from the auth instance
+      if ((app as any).auth?.password?.hash) {
+        hashedNewPassword = await (app as any).auth.password.hash(newPassword);
+        app.logger.info({ userId }, 'Password hashed using Better Auth internal utility');
+      } else if ((app as any).betterAuth?.password?.hash) {
+        hashedNewPassword = await (app as any).betterAuth.password.hash(newPassword);
+        app.logger.info({ userId }, 'Password hashed using Better Auth internal utility');
+      } else {
+        // Fallback: use bcrypt with same configuration as Better Auth
+        // Better Auth's credential provider uses bcrypt with 10 salt rounds
+        hashedNewPassword = await bcrypt.hash(newPassword, 10);
+        app.logger.warn({ userId }, 'Using fallback bcrypt hashing (Better Auth utility not accessible)');
+      }
+
+      // Update account password and updated_at timestamp
       await app.db.update(authSchema.account)
-        .set({ password: hashedNewPassword })
+        .set({ password: hashedNewPassword, updatedAt: new Date() })
         .where(and(
           eq(authSchema.account.providerId, 'credential'),
           eq(authSchema.account.userId, userId)
         ));
 
-      app.logger.info({ userId }, 'Account password updated');
+      app.logger.info({ userId }, 'Account password updated in database');
 
-      // Clear requirePasswordChange flag
+      // Clear requirePasswordChange flag and update user timestamp
       await app.db.update(authSchema.user)
-        .set({ requirePasswordChange: false })
+        .set({ requirePasswordChange: false, updatedAt: new Date() })
         .where(eq(authSchema.user.id, userId));
 
-      app.logger.info({ userId }, 'requirePasswordChange flag cleared');
+      app.logger.info({ userId }, 'User requirePasswordChange flag cleared');
 
       return reply.status(200).send({ success: true });
 

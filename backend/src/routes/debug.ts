@@ -1,6 +1,6 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
 
 export function registerDebugRoutes(app: App) {
@@ -166,6 +166,64 @@ export function registerDebugRoutes(app: App) {
     } catch (error) {
       app.logger.error({ err: error }, 'Debug: Error fetching mother account diagnostics');
       return reply.status(500).send({ error: 'Failed to fetch diagnostics' });
+    }
+  });
+
+  // GET /api/debug/password-status?email=... - Inspect password hash for a specific user
+  app.fastify.get<{ Querystring: { email?: string } }>('/api/debug/password-status-by-email', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { email } = request.query as { email?: string };
+
+    app.logger.info({ email }, 'Debug: Fetching password status for email');
+
+    if (!email) {
+      return reply.status(400).send({ error: 'email query parameter is required' });
+    }
+
+    try {
+      // Look up user by email
+      const user = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, email),
+      });
+
+      if (!user) {
+        app.logger.info({ email }, 'Debug: User not found');
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Find credential account for this user
+      const credentialAccount = await app.db.query.account.findFirst({
+        where: and(
+          eq(authSchema.account.userId, user.id),
+          eq(authSchema.account.providerId, 'credential')
+        ),
+      });
+
+      if (!credentialAccount) {
+        app.logger.info({ email, userId: user.id }, 'Debug: Credential account not found');
+        return reply.status(404).send({ error: 'Credential account not found' });
+      }
+
+      const passwordPrefix = credentialAccount.password ? credentialAccount.password.substring(0, 20) : null;
+      const passwordLength = credentialAccount.password ? credentialAccount.password.length : 0;
+
+      const response = {
+        email: user.email,
+        userId: user.id,
+        hasPassword: !!credentialAccount.password,
+        passwordPrefix: passwordPrefix,
+        passwordLength: passwordLength,
+        requirePasswordChange: user.requirePasswordChange,
+      };
+
+      app.logger.info(
+        { email, userId: user.id, hasPassword: !!credentialAccount.password, passwordLength },
+        'Debug: Returning password status for email'
+      );
+
+      return reply.status(200).send(response);
+    } catch (error) {
+      app.logger.error({ err: error, email }, 'Debug: Error fetching password status for email');
+      return reply.status(500).send({ error: 'Failed to fetch password status' });
     }
   });
 }

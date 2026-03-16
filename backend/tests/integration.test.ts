@@ -2148,4 +2148,14 @@ describe("API Integration Tests", () => {
     const res = await api("/api/debug/mother-account");
     await expectStatus(res, 200);
   });
+
+  test("Debug password status by email returns 200", async () => {
+    const res = await api(`/api/debug/password-status-by-email?email=${encodeURIComponent(userEmail)}`);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.email).toBe(userEmail);
+    expect(data.userId).toBeDefined();
+    expect(data.hasPassword).toBeDefined();
+    expect(data.requirePasswordChange).toBeDefined();
+  });
 });
