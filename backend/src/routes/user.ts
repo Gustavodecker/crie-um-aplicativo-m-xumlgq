@@ -2,7 +2,7 @@ import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
-import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 
 /**
  * User Routes
@@ -33,12 +33,11 @@ export function registerUserRoutes(app: App) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            rowsAffected: { type: 'number' },
+            message: { type: 'string' },
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
         401: { type: 'object', properties: { error: { type: 'string' } } },
-        404: { type: 'object', properties: { error: { type: 'string' } } },
         500: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
@@ -49,68 +48,92 @@ export function registerUserRoutes(app: App) {
     const { newPassword } = request.body;
     const userId = session.user.id;
 
-    if (!newPassword) {
-      app.logger.warn({ userId }, 'newPassword is required');
+    if (!newPassword || (typeof newPassword === 'string' && newPassword.trim().length === 0)) {
+      app.logger.warn({ userId, hasPassword: !!newPassword }, 'newPassword is required or empty');
       return reply.status(400).send({ error: 'newPassword is required' });
     }
 
     app.logger.info({ userId }, 'Password change request received');
 
     try {
-      // Hash the new password using Node.js crypto.scrypt (same as Better Auth's default)
-      app.logger.info({ userId }, 'Hashing password using scrypt');
+      // Hash the new password using bcrypt (Better Auth's default)
+      app.logger.info({ userId }, 'Hashing password using bcrypt');
 
-      // Better Auth uses scrypt with N=16384, r=16, p=1, keylen=64
-      const salt = crypto.randomBytes(16);
+      let hashedPassword: string;
 
-      // crypto.scryptSync(password, salt, keylen, options)
-      const hash = crypto.scryptSync(newPassword, salt, 64, {
-        N: 16384,
-        r: 16,
-        p: 1,
-      });
+      try {
+        // Use bcrypt with default rounds (10)
+        hashedPassword = await bcrypt.hash(newPassword, 10);
 
-      // Format: $s0$salt$hash (Better Auth's scrypt format)
-      const hashedPassword = '$s0$' + salt.toString('hex') + '$' + (hash as Buffer).toString('hex');
-      app.logger.info({ userId }, 'Password hashed using crypto.scrypt');
+        app.logger.info({ userId, hashLength: hashedPassword.length }, 'Password hashed successfully');
+      } catch (hashError) {
+        app.logger.error({ err: hashError, userId, errorMsg: (hashError as Error).message }, 'Failed to hash password');
+        return reply.status(500).send({ error: 'Failed to change password' });
+      }
 
       // First, find the credential account to ensure it exists
       app.logger.info({ userId }, 'Looking up credential account');
 
-      const credentialAccount = await app.db.query.account.findFirst({
-        where: and(
-          eq(authSchema.account.userId, userId),
-          eq(authSchema.account.providerId, 'credential')
-        ),
-      });
+      let credentialAccount;
+      try {
+        credentialAccount = await app.db.query.account.findFirst({
+          where: and(
+            eq(authSchema.account.userId, userId),
+            eq(authSchema.account.providerId, 'credential')
+          ),
+        });
 
-      if (!credentialAccount) {
-        app.logger.warn({ userId }, 'No credential account found for user');
-        return reply.status(404).send({ error: 'No credential account found for this user' });
+        if (!credentialAccount) {
+          app.logger.warn({ userId }, 'No credential account found for user');
+          return reply.status(404).send({ error: 'No credential account found for this user' });
+        }
+
+        app.logger.info({ userId, accountId: credentialAccount.id }, 'Found credential account');
+      } catch (queryError) {
+        app.logger.error({ err: queryError, userId }, 'Failed to query credential account');
+        return reply.status(500).send({ error: 'Failed to change password' });
       }
 
-      // Update account password
-      app.logger.info({ userId, accountId: credentialAccount.id }, 'Updating account password in database');
+      // Update password and clear flag in atomic transaction
+      try {
+        await app.db.transaction(async (tx) => {
+          app.logger.debug({ userId, accountId: credentialAccount.id }, 'Updating account password in transaction');
 
-      await app.db.update(authSchema.account)
-        .set({ password: hashedPassword, updatedAt: new Date() })
-        .where(eq(authSchema.account.id, credentialAccount.id));
+          const accountUpdateResult = await tx.update(authSchema.account)
+            .set({ password: hashedPassword })
+            .where(eq(authSchema.account.id, credentialAccount.id))
+            .returning();
 
-      const rowsAffected = 1; // We know the account exists, so 1 row was affected
+          if (!accountUpdateResult.length) {
+            throw new Error('Failed to update account password - no rows affected');
+          }
 
-      app.logger.info({ userId, rowsAffected }, 'Password updated in account table');
+          app.logger.debug({ userId, accountId: credentialAccount.id }, 'Password updated in account');
 
-      // Clear requirePasswordChange flag on user table
-      await app.db.update(authSchema.user)
-        .set({ requirePasswordChange: false, updatedAt: new Date() })
-        .where(eq(authSchema.user.id, userId));
+          app.logger.debug({ userId }, 'Clearing requirePasswordChange flag in transaction');
 
-      app.logger.info({ userId }, 'User requirePasswordChange flag cleared');
+          const userUpdateResult = await tx.update(authSchema.user)
+            .set({ requirePasswordChange: false })
+            .where(eq(authSchema.user.id, userId))
+            .returning();
 
-      return reply.status(200).send({ success: true, rowsAffected });
+          if (!userUpdateResult.length) {
+            throw new Error('Failed to clear requirePasswordChange flag - no rows affected');
+          }
+
+          app.logger.debug({ userId }, 'Cleared requirePasswordChange flag');
+        });
+
+        app.logger.info({ userId, accountId: credentialAccount.id }, 'Password changed successfully in transaction');
+      } catch (transactionError) {
+        app.logger.error({ err: transactionError, userId, accountId: credentialAccount.id }, 'Failed to change password in transaction');
+        return reply.status(500).send({ error: 'Failed to change password' });
+      }
+
+      return reply.status(200).send({ success: true, message: 'Password changed successfully' });
 
     } catch (error) {
-      app.logger.error({ err: error, userId }, 'Error changing password');
+      app.logger.error({ err: error, userId }, 'Unexpected error changing password');
       return reply.status(500).send({ error: 'Failed to change password' });
     }
   });
