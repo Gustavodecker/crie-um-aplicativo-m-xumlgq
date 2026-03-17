@@ -7,10 +7,18 @@ import { BEARER_TOKEN_KEY, setBearerToken as libSetBearerToken, getBearerToken a
 export { BEARER_TOKEN_KEY };
 
 /**
- * Backend URL is configured in app.json under expo.extra.backendUrl
- * It is set automatically when the backend is deployed
+ * Backend URL is configured in app.json under expo.extra.backendUrl.
+ * The hardcoded fallback ensures production builds (Google Play / App Store)
+ * always reach the correct backend even if Constants.expoConfig is unavailable
+ * at runtime (which can happen in standalone/EAS production builds).
  */
-export const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || "";
+const PRODUCTION_BACKEND_URL = "https://wge47dvbdvqm7g2vmsdnz45beh8s73xx.app.specular.dev";
+
+export const BACKEND_URL: string =
+  Constants.expoConfig?.extra?.backendUrl ||
+  PRODUCTION_BACKEND_URL;
+
+console.log("[API] 🌐 BACKEND_URL resolved to:", BACKEND_URL);
 
 /**
  * Check if backend is properly configured
