@@ -908,6 +908,148 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Archive consultant contract", async () => {
+    // Create a new baby and contract for archiving (to avoid breaking subsequent tests)
+    const newBabyRes = await authenticatedApi("/api/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby for Archive Test",
+        birthDate: "2024-08-15",
+        motherName: "Archive Test Mother",
+        motherPhone: "+1234567890",
+      }),
+    });
+    const newBaby = await newBabyRes.json();
+
+    const newContractRes = await authenticatedApi("/api/contracts", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyId: newBaby.id,
+        startDate: "2024-08-15",
+        durationDays: 30,
+        status: "active",
+      }),
+    });
+    const newContract = await newContractRes.json();
+
+    // Now archive the new contract
+    const res = await authenticatedApi(
+      `/api/consultant/contracts/${newContract.id}/archive`,
+      authToken,
+      {
+        method: "PATCH",
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBe(newContract.id);
+    expect(data.status).toBe("archived");
+  });
+
+  test("Archive consultant contract with nonexistent ID returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/contracts/00000000-0000-0000-0000-000000000000/archive",
+      authToken,
+      {
+        method: "PATCH",
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Archive consultant contract with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/contracts/invalid-uuid/archive",
+      authToken,
+      {
+        method: "PATCH",
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Archive consultant contract without auth returns 401", async () => {
+    const res = await api(
+      `/api/consultant/contracts/${contractId}/archive`,
+      {
+        method: "PATCH",
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
+  test("Delete consultant contract", async () => {
+    // Create a new contract to delete
+    const newBabyRes = await authenticatedApi("/api/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby for Contract Delete",
+        birthDate: "2024-07-15",
+        motherName: "Mother Test",
+        motherPhone: "+1234567890",
+      }),
+    });
+    const newBaby = await newBabyRes.json();
+
+    const contractRes = await authenticatedApi("/api/contracts", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyId: newBaby.id,
+        startDate: "2026-03-01",
+        durationDays: 30,
+        status: "active",
+      }),
+    });
+    const newContract = await contractRes.json();
+
+    const res = await authenticatedApi(
+      `/api/consultant/contracts/${newContract.id}`,
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.message).toBeDefined();
+  });
+
+  test("Delete consultant contract with nonexistent ID returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/contracts/00000000-0000-0000-0000-000000000000",
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Delete consultant contract with invalid UUID returns 400", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/contracts/invalid-uuid",
+      authToken,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 400);
+  });
+
+  test("Delete consultant contract without auth returns 401", async () => {
+    const res = await api(
+      `/api/consultant/contracts/${contractId}`,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 401);
+  });
+
   // ===== Routines =====
 
   test("Create routine", async () => {
@@ -1993,22 +2135,24 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baby_name: "Baby Registered",
-          birth_date: "2024-05-15",
-          mother_name: "Registered Mother",
-          mother_phone: "+1234567890",
-          mother_email: `mother+${uniqueId}@example.com`,
-          objectives: "Sleep training",
+          baby: {
+            name: "Baby Registered",
+            birth_date: "2024-05-15",
+          },
+          mother: {
+            name: "Registered Mother",
+            phone: "+1234567890",
+            email: `mother+${uniqueId}@example.com`,
+          },
         }),
       }
     );
     await expectStatus(res, 201);
     const data = await res.json();
-    expect(data.baby).toBeDefined();
-    expect(data.baby.id).toBeDefined();
-    expect(data.baby.name).toBe("Baby Registered");
-    expect(data.baby.motherName).toBe("Registered Mother");
-    expect(data.baby.motherEmail).toBe(`mother+${uniqueId}@example.com`);
+    expect(data.id).toBeDefined();
+    expect(data.name).toBe("Baby Registered");
+    expect(data.motherName).toBe("Registered Mother");
+    expect(data.motherEmail).toBe(`mother+${uniqueId}@example.com`);
   });
 
   test("Register baby and mother without required fields returns 400", async () => {
@@ -2019,8 +2163,13 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baby_name: "Baby",
-          // Missing other required fields
+          baby: {
+            name: "Baby",
+            // Missing birth_date
+          },
+          mother: {
+            name: "Mother",
+          },
         }),
       }
     );
@@ -2033,11 +2182,15 @@ describe("API Integration Tests", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        baby_name: "Baby",
-        birth_date: "2024-05-15",
-        mother_name: "Mother",
-        mother_phone: "+1234567890",
-        mother_email: `mother+${uniqueId}@example.com`,
+        baby: {
+          name: "Baby",
+          birth_date: "2024-05-15",
+        },
+        mother: {
+          name: "Mother",
+          phone: "+1234567890",
+          email: `mother+${uniqueId}@example.com`,
+        },
       }),
     });
     await expectStatus(res, 401);
@@ -2052,23 +2205,25 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baby_name: "Baby With All Fields",
-          birth_date: "2024-06-15",
-          mother_name: "Complete Mother",
-          mother_phone: "+0987654321",
-          mother_email: `mother+${uniqueId}@example.com`,
-          objectives: "Complete sleep assessment",
+          baby: {
+            name: "Baby With All Fields",
+            birth_date: "2024-06-15",
+          },
+          mother: {
+            name: "Complete Mother",
+            phone: "+0987654321",
+            email: `mother+${uniqueId}@example.com`,
+          },
         }),
       }
     );
     await expectStatus(res, 201);
     const data = await res.json();
-    expect(data.baby).toBeDefined();
-    expect(data.baby.motherEmail).toBe(`mother+${uniqueId}@example.com`);
-    expect(data.baby.objectives).toBe("Complete sleep assessment");
+    expect(data.id).toBeDefined();
+    expect(data.motherEmail).toBe(`mother+${uniqueId}@example.com`);
   });
 
-  test("Register baby and mother with missing baby_name returns 400", async () => {
+  test("Register baby and mother with missing baby name returns 400", async () => {
     const uniqueId = crypto.randomUUID();
     const res = await authenticatedApi(
       "/api/consultant/register-baby-and-mother",
@@ -2077,17 +2232,21 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          birth_date: "2024-05-15",
-          mother_name: "Mother",
-          mother_phone: "+1234567890",
-          mother_email: `mother+${uniqueId}@example.com`,
+          baby: {
+            birth_date: "2024-05-15",
+          },
+          mother: {
+            name: "Mother",
+            phone: "+1234567890",
+            email: `mother+${uniqueId}@example.com`,
+          },
         }),
       }
     );
     await expectStatus(res, 400);
   });
 
-  test("Register baby and mother with missing motherEmail (optional field) succeeds", async () => {
+  test("Register baby and mother with missing mother email (optional field) succeeds", async () => {
     const res = await authenticatedApi(
       "/api/consultant/register-baby-and-mother",
       authToken,
@@ -2095,17 +2254,21 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baby_name: "Baby Without Email",
-          birth_date: "2024-05-15",
-          mother_name: "Mother",
-          mother_phone: "+1234567890",
+          baby: {
+            name: "Baby Without Email",
+            birth_date: "2024-05-15",
+          },
+          mother: {
+            name: "Mother",
+            phone: "+1234567890",
+          },
         }),
       }
     );
     await expectStatus(res, 201);
     const data = await res.json();
-    expect(data.baby).toBeDefined();
-    expect(data.baby.motherEmail).toBeNull();
+    expect(data.id).toBeDefined();
+    expect(data.motherEmail).toBeNull();
   });
 
   // ===== Mother Baby Access =====
