@@ -2,8 +2,6 @@ import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
-import * as authSchema from '../db/schema/auth-schema.js';
-import crypto from 'crypto';
 
 export function registerConsultantRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -83,20 +81,24 @@ export function registerConsultantRoutes(app: App) {
     }
   });
 
-  // POST /api/consultant/register-baby-and-mother - Register a baby and create mother account
+  // POST /api/consultant/register-baby-and-mother - Register a baby with camelCase/snake_case field support
   app.fastify.post('/api/consultant/register-baby-and-mother', {
     schema: {
-      description: 'Register a baby and create mother account for the authenticated consultant',
-      tags: ['consultant', 'babies', 'mother'],
+      description: 'Register a baby for the authenticated consultant (accepts both camelCase and snake_case fields)',
+      tags: ['consultant', 'babies'],
       body: {
         type: 'object',
-        required: ['babyName', 'birthDate', 'motherName', 'motherPhone', 'motherEmail'],
         properties: {
-          babyName: { type: 'string', description: 'Baby name' },
-          birthDate: { type: 'string', format: 'date', description: 'Birth date in YYYY-MM-DD format' },
-          motherName: { type: 'string', description: 'Mother name' },
-          motherPhone: { type: 'string', description: 'Mother phone' },
-          motherEmail: { type: 'string', format: 'email', description: 'Mother email' },
+          babyName: { type: 'string', description: 'Baby name (camelCase)' },
+          baby_name: { type: 'string', description: 'Baby name (snake_case)' },
+          birthDate: { type: 'string', format: 'date', description: 'Birth date in YYYY-MM-DD format (camelCase)' },
+          birth_date: { type: 'string', format: 'date', description: 'Birth date in YYYY-MM-DD format (snake_case)' },
+          motherName: { type: 'string', description: 'Mother name (camelCase)' },
+          mother_name: { type: 'string', description: 'Mother name (snake_case)' },
+          motherPhone: { type: 'string', description: 'Mother phone (camelCase)' },
+          mother_phone: { type: 'string', description: 'Mother phone (snake_case)' },
+          motherEmail: { type: ['string', 'null'], description: 'Mother email (camelCase, optional)' },
+          mother_email: { type: ['string', 'null'], description: 'Mother email (snake_case, optional)' },
           objectives: { type: ['string', 'null'], description: 'Baby care objectives (optional)' },
         },
       },
@@ -104,55 +106,58 @@ export function registerConsultantRoutes(app: App) {
         201: {
           type: 'object',
           properties: {
-            success: { type: 'boolean' },
-            babyId: { type: 'string', format: 'uuid' },
-            motherUserId: { type: 'string' },
-            motherEmail: { type: 'string' },
-            provisionalPassword: { type: 'string' },
+            id: { type: 'string', format: 'uuid' },
+            name: { type: 'string' },
+            birthDate: { type: 'string', format: 'date' },
+            motherName: { type: 'string' },
+            motherPhone: { type: 'string' },
+            motherEmail: { type: ['string', 'null'] },
+            motherUserId: { type: ['string', 'null'] },
+            consultantId: { type: 'string', format: 'uuid' },
+            objectives: { type: ['string', 'null'] },
+            conclusion: { type: ['string', 'null'] },
+            archived: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
         401: { type: 'object', properties: { error: { type: 'string' } } },
-        409: { type: 'object', properties: { error: { type: 'string' } } },
         500: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: { babyName: string; birthDate: string; motherName: string; motherPhone: string; motherEmail: string; objectives?: string } }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: Record<string, any> }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
-    const { babyName, birthDate, motherName, motherPhone, motherEmail, objectives } = request.body;
     const userId = session.user.id;
+    const body = request.body;
 
-    app.logger.info({ userId, babyName, motherEmail }, 'Registering baby and mother');
+    // Extract fields with camelCase/snake_case fallback
+    const babyName = body.babyName || body.baby_name;
+    const birthDate = body.birthDate || body.birth_date;
+    const motherName = body.motherName || body.mother_name;
+    const motherPhone = body.motherPhone || body.mother_phone;
+    const motherEmail = body.motherEmail || body.mother_email || null;
+    const objectives = body.objectives || null;
+
+    app.logger.info({ userId, babyName }, 'Registering baby');
 
     // Validate required fields
-    if (!babyName || babyName.trim().length === 0) {
+    if (!babyName || (typeof babyName === 'string' && babyName.trim().length === 0)) {
       app.logger.warn({ userId }, 'Baby name is required');
       return reply.status(400).send({ error: 'Baby name is required' });
     }
-    if (!birthDate || birthDate.trim().length === 0) {
+    if (!birthDate || (typeof birthDate === 'string' && birthDate.trim().length === 0)) {
       app.logger.warn({ userId }, 'Birth date is required');
       return reply.status(400).send({ error: 'Birth date is required' });
     }
-    if (!motherName || motherName.trim().length === 0) {
+    if (!motherName || (typeof motherName === 'string' && motherName.trim().length === 0)) {
       app.logger.warn({ userId }, 'Mother name is required');
       return reply.status(400).send({ error: 'Mother name is required' });
     }
-    if (!motherPhone || motherPhone.trim().length === 0) {
+    if (!motherPhone || (typeof motherPhone === 'string' && motherPhone.trim().length === 0)) {
       app.logger.warn({ userId }, 'Mother phone is required');
       return reply.status(400).send({ error: 'Mother phone is required' });
-    }
-    if (!motherEmail || motherEmail.trim().length === 0) {
-      app.logger.warn({ userId }, 'Mother email is required');
-      return reply.status(400).send({ error: 'Mother email is required' });
-    }
-
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(motherEmail)) {
-      app.logger.warn({ userId, motherEmail }, 'Invalid email format');
-      return reply.status(400).send({ error: 'Invalid email format' });
     }
 
     try {
@@ -163,88 +168,33 @@ export function registerConsultantRoutes(app: App) {
 
       if (!consultant) {
         app.logger.warn({ userId }, 'Consultant profile not found');
-        return reply.status(404).send({ error: 'Consultant profile not found' });
+        return reply.status(401).send({ error: 'Not a consultant' });
       }
 
       app.logger.info({ userId, consultantId: consultant.id }, 'Found consultant');
 
-      // Check if email already exists
-      const existingUser = await app.db.query.user.findFirst({
-        where: eq(authSchema.user.email, motherEmail.toLowerCase()),
-      });
-
-      if (existingUser) {
-        app.logger.warn({ motherEmail }, 'Email already exists');
-        return reply.status(409).send({ error: 'Este email já está cadastrado' });
-      }
-
-      // Generate provisional password (8 alphanumeric characters)
-      const provisionalPassword = Math.random().toString(36).slice(2, 10).toUpperCase();
-      app.logger.debug({ passwordLength: provisionalPassword.length }, 'Generated provisional password');
-
-      // Hash the provisional password using bcrypt
-      const hashedPassword = await (await import('bcrypt')).default.hash(provisionalPassword, 10);
-
-      // Create mother user account in transaction
-      let motherUserId: string;
-      const motherId = crypto.randomUUID();
-      const accountId = crypto.randomUUID();
-
-      await app.db.transaction(async (tx) => {
-        // Create user
-        await tx.insert(authSchema.user).values({
-          id: motherId,
-          name: motherName,
-          email: motherEmail.toLowerCase(),
-          emailVerified: false,
-          requirePasswordChange: true,
-          role: 'mother',
-        });
-
-        app.logger.debug({ motherId, motherEmail }, 'Mother user created');
-
-        // Create account for the user
-        await tx.insert(authSchema.account).values({
-          id: accountId,
-          accountId: motherEmail.toLowerCase(),
-          providerId: 'credential',
-          userId: motherId,
-          password: hashedPassword,
-        });
-
-        app.logger.debug({ accountId, motherId }, 'Mother account created');
-
-        motherUserId = motherId;
-      });
-
       // Create baby record
-      const [babyRecord] = await app.db.insert(schema.babies).values({
+      const [baby] = await app.db.insert(schema.babies).values({
         name: babyName,
         birthDate: birthDate,
         motherName: motherName,
         motherPhone: motherPhone,
-        motherEmail: motherEmail.toLowerCase(),
-        motherUserId: motherUserId,
+        motherEmail: motherEmail ? (typeof motherEmail === 'string' ? motherEmail.toLowerCase() : null) : null,
+        motherUserId: null,
         consultantId: consultant.id,
         objectives: objectives || null,
         archived: false,
       }).returning();
 
       app.logger.info(
-        { babyId: babyRecord.id, motherUserId, consultantId: consultant.id },
-        'Baby and mother registered successfully'
+        { babyId: baby.id, consultantId: consultant.id },
+        'Baby registered successfully'
       );
 
-      return reply.status(201).send({
-        success: true,
-        babyId: babyRecord.id,
-        motherUserId,
-        motherEmail: motherEmail.toLowerCase(),
-        provisionalPassword,
-      });
+      return reply.status(201).send(baby);
     } catch (err) {
-      app.logger.error({ err, userId, babyName, motherEmail }, 'Failed to register baby and mother');
-      return reply.status(500).send({ error: 'Failed to register baby and mother' });
+      app.logger.error({ err, userId, babyName }, 'Failed to register baby');
+      return reply.status(500).send({ error: 'Failed to register baby' });
     }
   });
 
