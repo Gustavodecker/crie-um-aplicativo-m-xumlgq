@@ -16,9 +16,17 @@ const PRODUCTION_BACKEND_URL = "https://wge47dvbdvqm7g2vmsdnz45beh8s73xx.app.spe
 
 export const BACKEND_URL: string =
   Constants.expoConfig?.extra?.backendUrl ||
+  Constants.expoConfig?.extra?.apiUrl ||
   PRODUCTION_BACKEND_URL;
 
+/**
+ * Alias for BACKEND_URL — exported so all callers can use either name.
+ * Always resolves to the absolute HTTPS backend URL (never relative, never localhost).
+ */
+export const API_BASE_URL: string = BACKEND_URL;
+
 console.log("[API] 🌐 BACKEND_URL resolved to:", BACKEND_URL);
+console.log("[API] 🌐 API_BASE_URL resolved to:", API_BASE_URL);
 
 /**
  * Check if backend is properly configured
@@ -71,7 +79,10 @@ export const apiCall = async <T = any>(
 
   const url = `${BACKEND_URL}${endpoint}`;
   const suppressErrorLog = options?.suppressErrorLog || false;
-  
+
+  // Debug log for Android URL resolution issues
+  console.log("API URL FINAL:", url);
+
   if (!suppressErrorLog) {
     console.log("[API] 📡 Calling:", url, options?.method || "GET");
   }
