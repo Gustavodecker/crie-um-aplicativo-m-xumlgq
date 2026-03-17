@@ -90,56 +90,62 @@ export function registerConsultantRoutes(app: App) {
       tags: ['consultant', 'babies'],
       body: {
         type: 'object',
-        required: ['baby_name', 'birth_date', 'mother_name', 'mother_phone'],
+        required: ['baby', 'mother'],
         properties: {
-          baby_name: { type: 'string', description: 'Baby name' },
-          birth_date: { type: 'string', format: 'date', description: 'Birth date in YYYY-MM-DD format' },
-          mother_name: { type: 'string', description: 'Mother name' },
-          mother_phone: { type: 'string', description: 'Mother phone' },
-          mother_email: { type: ['string', 'null'], description: 'Mother email (optional)' },
-          objectives: { type: ['string', 'null'], description: 'Objectives (optional)' },
+          baby: {
+            type: 'object',
+            required: ['name', 'birth_date'],
+            properties: {
+              name: { type: 'string', description: 'Baby name' },
+              birth_date: { type: 'string', format: 'date', description: 'Birth date in YYYY-MM-DD format' },
+            },
+          },
+          mother: {
+            type: 'object',
+            required: ['name'],
+            properties: {
+              name: { type: 'string', description: 'Mother name' },
+              phone: { type: ['string', 'null'], description: 'Mother phone (optional)' },
+              email: { type: ['string', 'null'], description: 'Mother email (optional)' },
+            },
+          },
         },
       },
       response: {
         201: {
           type: 'object',
           properties: {
-            baby: {
-              type: 'object',
-              properties: {
-                id: { type: 'string', format: 'uuid' },
-                name: { type: 'string' },
-                birthDate: { type: 'string', format: 'date' },
-                motherName: { type: 'string' },
-                motherPhone: { type: 'string' },
-                motherEmail: { type: ['string', 'null'] },
-                motherUserId: { type: ['string', 'null'] },
-                consultantId: { type: 'string', format: 'uuid' },
-                objectives: { type: ['string', 'null'] },
-                conclusion: { type: ['string', 'null'] },
-                archived: { type: 'boolean' },
-                createdAt: { type: 'string', format: 'date-time' },
-              },
-            },
+            id: { type: 'string', format: 'uuid' },
+            name: { type: 'string' },
+            birthDate: { type: 'string', format: 'date' },
+            motherName: { type: 'string' },
+            motherPhone: { type: 'string' },
+            motherEmail: { type: ['string', 'null'] },
+            motherUserId: { type: ['string', 'null'] },
+            consultantId: { type: 'string', format: 'uuid' },
+            objectives: { type: ['string', 'null'] },
+            conclusion: { type: ['string', 'null'] },
+            archived: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
         401: { type: 'object', properties: { error: { type: 'string' } } },
-        403: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
         500: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: { baby_name: string; birth_date: string; mother_name: string; mother_phone: string; mother_email?: string | null; objectives?: string | null } }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: { baby: { name: string; birth_date: string }; mother: { name: string; phone?: string | null; email?: string | null } } }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
-    const { baby_name, birth_date, mother_name, mother_phone, mother_email, objectives } = request.body;
+    const { baby, mother } = request.body;
     const userId = session.user.id;
 
-    app.logger.info({ userId, baby_name, birth_date, mother_name }, 'Registering baby and mother');
+    app.logger.info({ userId, babyName: baby.name, motherName: mother.name }, 'Registering baby and mother');
 
     // Validate required fields
-    if (!baby_name || !birth_date || !mother_name || !mother_phone) {
+    if (!baby.name || !baby.birth_date || !mother.name) {
       app.logger.warn({ userId }, 'Missing required fields for baby and mother registration');
       return reply.status(400).send({ error: 'Missing required fields' });
     }
@@ -151,33 +157,32 @@ export function registerConsultantRoutes(app: App) {
       });
 
       if (!consultant) {
-        app.logger.warn({ userId }, 'User is not a consultant');
-        return reply.status(403).send({ error: 'User is not a consultant' });
+        app.logger.warn({ userId }, 'Consultant profile not found');
+        return reply.status(404).send({ error: 'Consultant profile not found' });
       }
 
       app.logger.info({ userId, consultantId: consultant.id }, 'Found consultant');
 
       // Insert baby record
-      const [baby] = await app.db.insert(schema.babies).values({
-        name: baby_name,
-        birthDate: birth_date,
-        motherName: mother_name,
-        motherPhone: mother_phone,
-        motherEmail: mother_email || null,
+      const [babyRecord] = await app.db.insert(schema.babies).values({
+        name: baby.name,
+        birthDate: baby.birth_date,
+        motherName: mother.name,
+        motherPhone: mother.phone || '',
+        motherEmail: mother.email || null,
         motherUserId: null,
-        objectives: objectives || null,
         consultantId: consultant.id,
         archived: false,
       }).returning();
 
       app.logger.info(
-        { babyId: baby.id, consultantId: consultant.id, motherName: mother_name },
+        { babyId: babyRecord.id, consultantId: consultant.id, motherName: mother.name },
         'Baby and mother registered successfully'
       );
 
-      return reply.status(201).send({ baby });
+      return reply.status(201).send(babyRecord);
     } catch (err) {
-      app.logger.error({ err, userId, baby_name, mother_name }, 'Failed to register baby and mother');
+      app.logger.error({ err, userId, babyName: baby.name, motherName: mother.name }, 'Failed to register baby and mother');
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
@@ -781,6 +786,174 @@ export function registerConsultantRoutes(app: App) {
     } catch (error) {
       app.logger.error({ err: error, babyId }, 'Error unarchiving baby');
       return reply.status(500).send({ error: 'Failed to unarchive baby' });
+    }
+  });
+
+  // PATCH /api/consultant/contracts/:id/archive - Archive a contract
+  app.fastify.patch('/api/consultant/contracts/:id/archive', {
+    schema: {
+      description: 'Archive a contract for the authenticated consultant',
+      tags: ['consultant', 'contracts'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid', description: 'Contract ID' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            babyId: { type: 'string', format: 'uuid' },
+            consultantId: { type: 'string', format: 'uuid' },
+            status: { type: 'string' },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+        500: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    const contractId = request.params.id;
+    const userId = session.user.id;
+
+    app.logger.info({ userId, contractId }, 'Archive contract request received');
+
+    try {
+      // Look up consultant
+      const consultant = await app.db.query.consultants.findFirst({
+        where: eq(schema.consultants.userId, userId),
+      });
+
+      if (!consultant) {
+        app.logger.warn({ userId }, 'Consultant not found');
+        return reply.status(403).send({ error: 'Access denied' });
+      }
+
+      // Look up contract
+      const contract = await app.db.query.contracts.findFirst({
+        where: eq(schema.contracts.id, contractId),
+      });
+
+      if (!contract) {
+        app.logger.warn({ contractId }, 'Contract not found');
+        return reply.status(404).send({ error: 'Contract not found' });
+      }
+
+      // Verify ownership: contract's baby_id belongs to consultant
+      const baby = await app.db.query.babies.findFirst({
+        where: and(
+          eq(schema.babies.id, contract.babyId),
+          eq(schema.babies.consultantId, consultant.id)
+        ),
+      });
+
+      if (!baby) {
+        app.logger.warn({ contractId, consultantId: consultant.id }, 'Contract does not belong to consultant');
+        return reply.status(403).send({ error: 'Access denied' });
+      }
+
+      // Archive the contract
+      const [updatedContract] = await app.db.update(schema.contracts)
+        .set({ status: 'archived' })
+        .where(eq(schema.contracts.id, contractId))
+        .returning();
+
+      app.logger.info({ contractId, consultantId: consultant.id }, 'Contract archived successfully');
+
+      return reply.status(200).send(updatedContract);
+    } catch (error) {
+      app.logger.error({ err: error, contractId, userId }, 'Failed to archive contract');
+      return reply.status(500).send({ error: 'Internal server error' });
+    }
+  });
+
+  // DELETE /api/consultant/contracts/:id - Delete a contract
+  app.fastify.delete('/api/consultant/contracts/:id', {
+    schema: {
+      description: 'Delete a contract for the authenticated consultant',
+      tags: ['consultant', 'contracts'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid', description: 'Contract ID' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+        500: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    const contractId = request.params.id;
+    const userId = session.user.id;
+
+    app.logger.info({ userId, contractId }, 'Delete contract request received');
+
+    try {
+      // Look up consultant
+      const consultant = await app.db.query.consultants.findFirst({
+        where: eq(schema.consultants.userId, userId),
+      });
+
+      if (!consultant) {
+        app.logger.warn({ userId }, 'Consultant not found');
+        return reply.status(403).send({ error: 'Access denied' });
+      }
+
+      // Look up contract
+      const contract = await app.db.query.contracts.findFirst({
+        where: eq(schema.contracts.id, contractId),
+      });
+
+      if (!contract) {
+        app.logger.warn({ contractId }, 'Contract not found');
+        return reply.status(404).send({ error: 'Contract not found' });
+      }
+
+      // Verify ownership: contract's baby_id belongs to consultant
+      const baby = await app.db.query.babies.findFirst({
+        where: and(
+          eq(schema.babies.id, contract.babyId),
+          eq(schema.babies.consultantId, consultant.id)
+        ),
+      });
+
+      if (!baby) {
+        app.logger.warn({ contractId, consultantId: consultant.id }, 'Contract does not belong to consultant');
+        return reply.status(403).send({ error: 'Access denied' });
+      }
+
+      // Delete the contract
+      await app.db.delete(schema.contracts)
+        .where(eq(schema.contracts.id, contractId));
+
+      app.logger.info({ contractId, consultantId: consultant.id }, 'Contract deleted successfully');
+
+      return reply.status(200).send({ message: 'Contract deleted successfully' });
+    } catch (error) {
+      app.logger.error({ err: error, contractId, userId }, 'Failed to delete contract');
+      return reply.status(500).send({ error: 'Internal server error' });
     }
   });
 }
