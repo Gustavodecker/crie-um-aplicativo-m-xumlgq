@@ -830,8 +830,9 @@ export default function ConsultantDashboardScreen() {
     const isLoadingAction = actionLoadingId === baby.id;
 
     return (
-      <TouchableOpacity key={baby.id} style={styles.babyCard} onPress={() => handleSelectBaby(baby)} activeOpacity={0.7}>
-        <View style={styles.babyCardContent}>
+      <View key={baby.id} style={styles.babyCard}>
+        {/* Tappable info area — navigates to baby detail */}
+        <TouchableOpacity style={styles.babyCardContent} onPress={() => handleSelectBaby(baby)} activeOpacity={0.7}>
           <View style={styles.babyIcon}>
             <IconSymbol ios_icon_name="person.circle" android_material_icon_name="account-circle" size={48} color={colors.primary} />
           </View>
@@ -849,13 +850,17 @@ export default function ConsultantDashboardScreen() {
             </View>
           </View>
           <IconSymbol ios_icon_name="chevron.right" android_material_icon_name="chevron-right" size={24} color={colors.textSecondary} />
-        </View>
+        </TouchableOpacity>
 
+        {/* Action buttons in a plain View — no touch event bubbling to parent */}
         <View style={styles.babyCardActions}>
           {!baby.archived && (
             <TouchableOpacity
               style={styles.archiveButton}
-              onPress={(e) => { e.stopPropagation(); handleArchiveBaby(baby.id, baby.name); }}
+              onPress={() => {
+                console.log(`📦 [Archive Button] Tapped for baby: ${baby.name} (${baby.id})`);
+                handleArchiveBaby(baby.id, baby.name);
+              }}
               disabled={isLoadingAction}
               activeOpacity={0.7}
             >
@@ -870,7 +875,10 @@ export default function ConsultantDashboardScreen() {
           {baby.archived && (
             <TouchableOpacity
               style={styles.unarchiveButton}
-              onPress={(e) => { e.stopPropagation(); console.log(`📤 [Unarchive Button] Tapped for baby: ${baby.name} (${baby.id})`); handleUnarchiveBaby(baby.id, baby.name); }}
+              onPress={() => {
+                console.log(`📤 [Unarchive Button] Tapped for baby: ${baby.name} (${baby.id})`);
+                handleUnarchiveBaby(baby.id, baby.name);
+              }}
               disabled={isLoadingAction}
               activeOpacity={0.7}
             >
@@ -884,7 +892,10 @@ export default function ConsultantDashboardScreen() {
           )}
           <TouchableOpacity
             style={styles.deleteBabyButton}
-            onPress={(e) => { e.stopPropagation(); handleDeleteBabyConfirm(baby.id, baby.name); }}
+            onPress={() => {
+              console.log(`🗑️ [Delete Button] Tapped for baby: ${baby.name} (${baby.id})`);
+              handleDeleteBabyConfirm(baby.id, baby.name);
+            }}
             disabled={isLoadingAction}
             activeOpacity={0.7}
           >
@@ -892,7 +903,7 @@ export default function ConsultantDashboardScreen() {
             <Text style={styles.deleteBabyButtonText}>Excluir</Text>
           </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
