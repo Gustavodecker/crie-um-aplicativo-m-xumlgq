@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "crie-um-aplicativo-m",
-    "slug": "crie-um-aplicativo-m",
-    "version": "1.0.1",
+    "slug": "crie-um-aplicativo-m-xumlgq",
+    "version": "1.0.41",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-afq.png",
     "userInterfaceStyle": "automatic",
@@ -27,7 +27,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.todanoite.baby",
-      "versionCode": 2,
+      "versionCode": 41,
       "edgeToEdgeEnabled": false,
       "userInterfaceStyle": "automatic",
       "permissions": [
