@@ -18,7 +18,7 @@ import { ConfirmModal } from "@/components/ConfirmModal";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as DocumentPicker from "expo-document-picker";
 import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
-import { apiGet, apiPost, apiPut, BACKEND_URL, getBearerToken } from "@/utils/api";
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, BACKEND_URL, getBearerToken } from "@/utils/api";
 
 interface Contract {
   id: string;
@@ -219,6 +219,57 @@ export default function ContractDetailsScreen() {
     setShowDeleteModal(false);
   };
 
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showContractDeleteModal, setShowContractDeleteModal] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleArchive = () => {
+    console.log("User tapped ARQUIVAR button for contract:", contract?.id);
+    setShowArchiveModal(true);
+  };
+
+  const confirmArchive = async () => {
+    if (!contract) return;
+    try {
+      setArchiving(true);
+      setShowArchiveModal(false);
+      console.log("[API] Archiving contract:", contract.id);
+      await apiPatch(`/api/consultant/contracts/${contract.id}/archive`, {});
+      console.log("[API] Contract archived successfully");
+      Alert.alert("Sucesso", "Contrato arquivado com sucesso!");
+      router.back();
+    } catch (error) {
+      console.error("Error archiving contract:", error);
+      Alert.alert("Erro", "Falha ao arquivar o contrato. Tente novamente.");
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  const handleDelete = () => {
+    console.log("User tapped EXCLUIR button for contract:", contract?.id);
+    setShowContractDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!contract) return;
+    try {
+      setDeleting(true);
+      setShowContractDeleteModal(false);
+      console.log("[API] Deleting contract:", contract.id);
+      await apiDelete(`/api/consultant/contracts/${contract.id}`);
+      console.log("[API] Contract deleted successfully");
+      Alert.alert("Sucesso", "Contrato excluído com sucesso!");
+      router.back();
+    } catch (error) {
+      console.error("Error deleting contract:", error);
+      Alert.alert("Erro", "Falha ao excluir o contrato. Tente novamente.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const formatDateToBR = (date: Date): string => {
     const day = date.getDate().toString().padStart(2, "0");
     const month = (date.getMonth() + 1).toString().padStart(2, "0");
@@ -402,6 +453,34 @@ export default function ContractDetailsScreen() {
             )}
           </TouchableOpacity>
         </View>
+
+        {contract && (
+          <View style={styles.dangerButtons}>
+            <TouchableOpacity
+              style={[styles.archiveButton, archiving && styles.dangerButtonDisabled]}
+              onPress={handleArchive}
+              disabled={archiving || deleting}
+            >
+              {archiving ? (
+                <ActivityIndicator size="small" color={colors.warning} />
+              ) : (
+                <Text style={styles.archiveButtonText}>ARQUIVAR</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.deleteButton, deleting && styles.dangerButtonDisabled]}
+              onPress={handleDelete}
+              disabled={archiving || deleting}
+            >
+              {deleting ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.deleteButtonText}>EXCLUIR</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {showDatePicker && (
@@ -419,6 +498,22 @@ export default function ContractDetailsScreen() {
         message="Tem certeza que deseja remover o arquivo do contrato?"
         onConfirm={confirmRemovePdf}
         onCancel={() => setShowDeleteModal(false)}
+      />
+
+      <ConfirmModal
+        visible={showArchiveModal}
+        title="Arquivar Contrato"
+        message="Tem certeza que deseja arquivar este contrato? Ele não aparecerá mais na lista ativa."
+        onConfirm={confirmArchive}
+        onCancel={() => setShowArchiveModal(false)}
+      />
+
+      <ConfirmModal
+        visible={showContractDeleteModal}
+        title="Excluir Contrato"
+        message="Tem certeza que deseja excluir permanentemente este contrato? Esta ação não pode ser desfeita."
+        onConfirm={confirmDelete}
+        onCancel={() => setShowContractDeleteModal(false)}
       />
     </SafeAreaView>
   );
@@ -567,6 +662,43 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     padding: spacing.sm,
+  },
+  dangerButtons: {
+    flexDirection: "row",
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  archiveButton: {
+    flex: 1,
+    paddingVertical: spacing.lg,
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: colors.warning,
+    backgroundColor: "transparent",
+  },
+  archiveButtonText: {
+    fontSize: 15,
+    fontWeight: "700" as const,
+    color: colors.warning,
+    letterSpacing: 0.5,
+  },
+  deleteButton: {
+    flex: 1,
+    paddingVertical: spacing.lg,
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+    backgroundColor: colors.error,
+  },
+  deleteButtonText: {
+    fontSize: 15,
+    fontWeight: "700" as const,
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+  },
+  dangerButtonDisabled: {
+    opacity: 0.5,
   },
   actionButtons: {
     flexDirection: "row",
