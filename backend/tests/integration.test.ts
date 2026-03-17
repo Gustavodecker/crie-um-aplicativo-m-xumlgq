@@ -2235,7 +2235,7 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  test("Register baby and mother with missing mother email succeeds", async () => {
+  test("Register baby and mother with missing motherEmail returns 400", async () => {
     const res = await authenticatedApi(
       "/api/consultant/register-baby-and-mother",
       authToken,
@@ -2247,14 +2247,11 @@ describe("API Integration Tests", () => {
           birthDate: "2024-05-15",
           motherName: "Mother",
           motherPhone: "+1234567890",
-          // Missing motherEmail - should be optional
+          // Missing motherEmail - required field per spec
         }),
       }
     );
-    await expectStatus(res, 201);
-    const data = await res.json();
-    expect(data.id).toBeDefined();
-    expect(data.motherEmail).toBeNull();
+    await expectStatus(res, 400);
   });
 
   test("Register baby and mother with optional objectives field", async () => {
