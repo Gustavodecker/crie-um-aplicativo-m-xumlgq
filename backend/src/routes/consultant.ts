@@ -83,71 +83,76 @@ export function registerConsultantRoutes(app: App) {
     }
   });
 
-  // POST /api/consultant/register-baby-and-mother - Register a baby and mother together
+  // POST /api/consultant/register-baby-and-mother - Register a baby and create mother account
   app.fastify.post('/api/consultant/register-baby-and-mother', {
     schema: {
-      description: 'Register a baby and mother together for the authenticated consultant',
-      tags: ['consultant', 'babies'],
+      description: 'Register a baby and create mother account for the authenticated consultant',
+      tags: ['consultant', 'babies', 'mother'],
       body: {
         type: 'object',
-        required: ['baby', 'mother'],
+        required: ['babyName', 'birthDate', 'motherName', 'motherPhone', 'motherEmail'],
         properties: {
-          baby: {
-            type: 'object',
-            required: ['name', 'birth_date'],
-            properties: {
-              name: { type: 'string', description: 'Baby name' },
-              birth_date: { type: 'string', format: 'date', description: 'Birth date in YYYY-MM-DD format' },
-            },
-          },
-          mother: {
-            type: 'object',
-            required: ['name'],
-            properties: {
-              name: { type: 'string', description: 'Mother name' },
-              phone: { type: ['string', 'null'], description: 'Mother phone (optional)' },
-              email: { type: ['string', 'null'], description: 'Mother email (optional)' },
-            },
-          },
+          babyName: { type: 'string', description: 'Baby name' },
+          birthDate: { type: 'string', format: 'date', description: 'Birth date in YYYY-MM-DD format' },
+          motherName: { type: 'string', description: 'Mother name' },
+          motherPhone: { type: 'string', description: 'Mother phone' },
+          motherEmail: { type: 'string', format: 'email', description: 'Mother email' },
+          objectives: { type: ['string', 'null'], description: 'Baby care objectives (optional)' },
         },
       },
       response: {
         201: {
           type: 'object',
           properties: {
-            id: { type: 'string', format: 'uuid' },
-            name: { type: 'string' },
-            birthDate: { type: 'string', format: 'date' },
-            motherName: { type: 'string' },
-            motherPhone: { type: 'string' },
-            motherEmail: { type: ['string', 'null'] },
-            motherUserId: { type: ['string', 'null'] },
-            consultantId: { type: 'string', format: 'uuid' },
-            objectives: { type: ['string', 'null'] },
-            conclusion: { type: ['string', 'null'] },
-            archived: { type: 'boolean' },
-            createdAt: { type: 'string', format: 'date-time' },
+            success: { type: 'boolean' },
+            babyId: { type: 'string', format: 'uuid' },
+            motherUserId: { type: 'string' },
+            motherEmail: { type: 'string' },
+            provisionalPassword: { type: 'string' },
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
         401: { type: 'object', properties: { error: { type: 'string' } } },
-        404: { type: 'object', properties: { error: { type: 'string' } } },
+        409: { type: 'object', properties: { error: { type: 'string' } } },
         500: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: { baby: { name: string; birth_date: string }; mother: { name: string; phone?: string | null; email?: string | null } } }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: { babyName: string; birthDate: string; motherName: string; motherPhone: string; motherEmail: string; objectives?: string } }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
-    const { baby, mother } = request.body;
+    const { babyName, birthDate, motherName, motherPhone, motherEmail, objectives } = request.body;
     const userId = session.user.id;
 
-    app.logger.info({ userId, babyName: baby.name, motherName: mother.name }, 'Registering baby and mother');
+    app.logger.info({ userId, babyName, motherEmail }, 'Registering baby and mother');
 
     // Validate required fields
-    if (!baby.name || !baby.birth_date || !mother.name) {
-      app.logger.warn({ userId }, 'Missing required fields for baby and mother registration');
-      return reply.status(400).send({ error: 'Missing required fields' });
+    if (!babyName || babyName.trim().length === 0) {
+      app.logger.warn({ userId }, 'Baby name is required');
+      return reply.status(400).send({ error: 'Baby name is required' });
+    }
+    if (!birthDate || birthDate.trim().length === 0) {
+      app.logger.warn({ userId }, 'Birth date is required');
+      return reply.status(400).send({ error: 'Birth date is required' });
+    }
+    if (!motherName || motherName.trim().length === 0) {
+      app.logger.warn({ userId }, 'Mother name is required');
+      return reply.status(400).send({ error: 'Mother name is required' });
+    }
+    if (!motherPhone || motherPhone.trim().length === 0) {
+      app.logger.warn({ userId }, 'Mother phone is required');
+      return reply.status(400).send({ error: 'Mother phone is required' });
+    }
+    if (!motherEmail || motherEmail.trim().length === 0) {
+      app.logger.warn({ userId }, 'Mother email is required');
+      return reply.status(400).send({ error: 'Mother email is required' });
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(motherEmail)) {
+      app.logger.warn({ userId, motherEmail }, 'Invalid email format');
+      return reply.status(400).send({ error: 'Invalid email format' });
     }
 
     try {
@@ -163,27 +168,83 @@ export function registerConsultantRoutes(app: App) {
 
       app.logger.info({ userId, consultantId: consultant.id }, 'Found consultant');
 
-      // Insert baby record
+      // Check if email already exists
+      const existingUser = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, motherEmail.toLowerCase()),
+      });
+
+      if (existingUser) {
+        app.logger.warn({ motherEmail }, 'Email already exists');
+        return reply.status(409).send({ error: 'Este email já está cadastrado' });
+      }
+
+      // Generate provisional password (8 alphanumeric characters)
+      const provisionalPassword = Math.random().toString(36).slice(2, 10).toUpperCase();
+      app.logger.debug({ passwordLength: provisionalPassword.length }, 'Generated provisional password');
+
+      // Hash the provisional password using bcrypt
+      const hashedPassword = await (await import('bcrypt')).default.hash(provisionalPassword, 10);
+
+      // Create mother user account in transaction
+      let motherUserId: string;
+      const motherId = crypto.randomUUID();
+      const accountId = crypto.randomUUID();
+
+      await app.db.transaction(async (tx) => {
+        // Create user
+        await tx.insert(authSchema.user).values({
+          id: motherId,
+          name: motherName,
+          email: motherEmail.toLowerCase(),
+          emailVerified: false,
+          requirePasswordChange: true,
+          role: 'mother',
+        });
+
+        app.logger.debug({ motherId, motherEmail }, 'Mother user created');
+
+        // Create account for the user
+        await tx.insert(authSchema.account).values({
+          id: accountId,
+          accountId: motherEmail.toLowerCase(),
+          providerId: 'credential',
+          userId: motherId,
+          password: hashedPassword,
+        });
+
+        app.logger.debug({ accountId, motherId }, 'Mother account created');
+
+        motherUserId = motherId;
+      });
+
+      // Create baby record
       const [babyRecord] = await app.db.insert(schema.babies).values({
-        name: baby.name,
-        birthDate: baby.birth_date,
-        motherName: mother.name,
-        motherPhone: mother.phone || '',
-        motherEmail: mother.email || null,
-        motherUserId: null,
+        name: babyName,
+        birthDate: birthDate,
+        motherName: motherName,
+        motherPhone: motherPhone,
+        motherEmail: motherEmail.toLowerCase(),
+        motherUserId: motherUserId,
         consultantId: consultant.id,
+        objectives: objectives || null,
         archived: false,
       }).returning();
 
       app.logger.info(
-        { babyId: babyRecord.id, consultantId: consultant.id, motherName: mother.name },
+        { babyId: babyRecord.id, motherUserId, consultantId: consultant.id },
         'Baby and mother registered successfully'
       );
 
-      return reply.status(201).send(babyRecord);
+      return reply.status(201).send({
+        success: true,
+        babyId: babyRecord.id,
+        motherUserId,
+        motherEmail: motherEmail.toLowerCase(),
+        provisionalPassword,
+      });
     } catch (err) {
-      app.logger.error({ err, userId, babyName: baby.name, motherName: mother.name }, 'Failed to register baby and mother');
-      return reply.status(500).send({ error: 'Internal server error' });
+      app.logger.error({ err, userId, babyName, motherEmail }, 'Failed to register baby and mother');
+      return reply.status(500).send({ error: 'Failed to register baby and mother' });
     }
   });
 
