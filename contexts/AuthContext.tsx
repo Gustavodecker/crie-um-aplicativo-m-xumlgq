@@ -2,8 +2,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-import { setBearerToken, clearAuthTokens, getBearerToken } from "@/lib/auth";
-import { BACKEND_URL } from "@/utils/api";
+import { clearAuthTokens } from "@/lib/auth";
+import { BACKEND_URL, setBearerToken, getBearerToken, clearTokenCache } from "@/utils/api";
 
 /**
  * Build headers for Better Auth endpoints.
@@ -448,6 +448,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserRole(null);
     
     try {
+      // Clear in-memory token cache immediately so no subsequent request uses a stale token
+      clearTokenCache();
       // Clear tokens and storage
       await Promise.all([
         clearAuthTokens(),

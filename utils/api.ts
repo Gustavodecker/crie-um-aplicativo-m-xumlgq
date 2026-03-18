@@ -1,10 +1,17 @@
 
 import Constants from "expo-constants";
-import { Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BEARER_TOKEN_KEY, setBearerToken as libSetBearerToken, getBearerToken as libGetBearerToken } from "@/lib/auth";
 
 export { BEARER_TOKEN_KEY };
+
+/**
+ * In-memory token cache to avoid AsyncStorage latency on Android.
+ * Android AsyncStorage reads can be slow or return null during cold starts,
+ * causing authenticated requests to fire without a token even when the user
+ * is logged in. We keep a module-level cache that is populated on first read
+ * and invalidated whenever the token is written or cleared.
+ */
+let _cachedToken: string | null | undefined = undefined; // undefined = not yet loaded
 
 /**
  * HARDCODED production backend URL — this is the source of truth.
@@ -39,25 +46,47 @@ export const isBackendConfigured = (): boolean => {
 };
 
 /**
- * Set bearer token to platform-specific storage
- * Web: localStorage
- * Native: AsyncStorage
+ * Set bearer token to platform-specific storage AND update the in-memory cache.
+ * Keeping the cache in sync here ensures that any subsequent apiCall within the
+ * same JS turn (e.g. right after login) sees the token immediately on Android,
+ * where AsyncStorage writes are async and a read issued too soon can return null.
  *
- * @param token - JWT token to store
+ * @param token - JWT token to store, or null to clear
  */
 export const setBearerToken = async (token: string | null): Promise<void> => {
+  _cachedToken = token || null;
+  console.log("[API] 🔑 Token cache updated:", token ? `${token.substring(0, 20)}...` : "null");
   return libSetBearerToken(token || "");
 };
 
 /**
- * Get bearer token from platform-specific storage
- * Web: localStorage
- * Native: AsyncStorage
+ * Get bearer token — returns the in-memory cache if already populated,
+ * otherwise reads from AsyncStorage (and populates the cache for future calls).
+ * This prevents Android AsyncStorage latency from causing unauthenticated requests
+ * on cold starts or immediately after login.
  *
  * @returns Bearer token or null if not found
  */
 export const getBearerToken = async (): Promise<string | null> => {
-  return libGetBearerToken();
+  if (_cachedToken !== undefined) {
+    // Cache hit — skip AsyncStorage round-trip
+    console.log("[API] 🔑 Token from cache:", _cachedToken ? `length=${_cachedToken.length}` : "null");
+    return _cachedToken;
+  }
+  // Cache miss — read from storage and populate cache
+  const token = await libGetBearerToken();
+  _cachedToken = token;
+  console.log("[API] 🔑 Token loaded from storage:", token ? `length=${token.length}` : "null");
+  return token;
+};
+
+/**
+ * Clear the in-memory token cache.
+ * Must be called on sign-out so the next request does not use a stale token.
+ */
+export const clearTokenCache = (): void => {
+  _cachedToken = undefined;
+  console.log("[API] 🧹 Token cache cleared");
 };
 
 interface ApiCallOptions extends RequestInit {
