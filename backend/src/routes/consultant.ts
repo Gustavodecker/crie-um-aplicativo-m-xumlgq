@@ -174,8 +174,11 @@ export function registerConsultantRoutes(app: App) {
 
       const normalizedEmail = motherEmail.toLowerCase();
 
-      // Generate provisional password (8 uppercase alphanumeric characters)
-      const provisionalPassword = crypto.randomBytes(6).toString('hex').substring(0, 8).toUpperCase();
+      // Generate provisional password (6 uppercase alphanumeric characters: A-Z and 0-9)
+      const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      const provisionalPassword = Array.from(crypto.getRandomValues(new Uint8Array(6)))
+        .map(x => charset[x % charset.length])
+        .join('');
       app.logger.debug({ passwordLength: provisionalPassword.length }, 'Generated provisional password');
 
       // Hash the provisional password using bcrypt
@@ -183,6 +186,7 @@ export function registerConsultantRoutes(app: App) {
       const hashedPassword = await bcrypt.default.hash(provisionalPassword, 10);
 
       let motherUserId: string | null = null;
+      let isNewUser = false;
 
       // Check if user already exists with this email
       const existingUser = await app.db.query.user.findFirst({
@@ -250,6 +254,7 @@ export function registerConsultantRoutes(app: App) {
         });
 
         motherUserId = motherId;
+        isNewUser = true;
       }
 
       // Create baby record
@@ -275,11 +280,183 @@ export function registerConsultantRoutes(app: App) {
         babyId: babyRecord.id,
         motherUserId,
         motherEmail: normalizedEmail,
-        provisionalPassword,
+        provisionalPassword: isNewUser ? provisionalPassword : '',
       });
     } catch (err) {
       app.logger.error({ err, userId, babyName, motherEmail }, 'Failed to register baby and mother');
       return reply.status(500).send({ error: 'Failed to register baby and mother' });
+    }
+  });
+
+  // DELETE /api/consultant/contracts/:id - Delete a contract
+  app.fastify.delete('/api/consultant/contracts/:id', {
+    schema: {
+      description: 'Delete a contract permanently',
+      tags: ['consultant', 'contracts'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            message: { type: 'string' },
+          },
+        },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+        500: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    const userId = session.user.id;
+    const contractId = request.params.id;
+
+    app.logger.info({ userId, contractId }, 'Deleting contract');
+
+    try {
+      // Look up consultant
+      const consultant = await app.db.query.consultants.findFirst({
+        where: eq(schema.consultants.userId, userId),
+      });
+
+      if (!consultant) {
+        app.logger.warn({ userId }, 'Consultant not found');
+        return reply.status(403).send({ error: 'Acesso negado' });
+      }
+
+      // Look up contract
+      const contract = await app.db.query.contracts.findFirst({
+        where: eq(schema.contracts.id, contractId),
+      });
+
+      if (!contract) {
+        app.logger.warn({ contractId }, 'Contract not found');
+        return reply.status(404).send({ error: 'Contrato não encontrado' });
+      }
+
+      // Look up baby to verify ownership
+      const baby = await app.db.query.babies.findFirst({
+        where: eq(schema.babies.id, contract.babyId),
+      });
+
+      if (!baby || baby.consultantId !== consultant.id) {
+        app.logger.warn({ contractId, babyId: contract.babyId, consultantId: consultant.id }, 'Unauthorized contract access');
+        return reply.status(403).send({ error: 'Acesso negado' });
+      }
+
+      // Delete the contract
+      await app.db.delete(schema.contracts).where(eq(schema.contracts.id, contractId));
+
+      app.logger.info({ contractId }, 'Contract deleted successfully');
+      return reply.status(200).send({
+        success: true,
+        message: 'Contrato excluído com sucesso',
+      });
+    } catch (err) {
+      app.logger.error({ err, userId, contractId }, 'Failed to delete contract');
+      return reply.status(500).send({ error: 'Erro interno do servidor' });
+    }
+  });
+
+  // PATCH /api/consultant/contracts/:id/archive - Archive a contract
+  app.fastify.patch('/api/consultant/contracts/:id/archive', {
+    schema: {
+      description: 'Archive a contract (soft-delete)',
+      tags: ['consultant', 'contracts'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            message: { type: 'string' },
+          },
+        },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+        500: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    const userId = session.user.id;
+    const contractId = request.params.id;
+
+    app.logger.info({ userId, contractId }, 'Archiving contract');
+
+    try {
+      // Look up consultant
+      const consultant = await app.db.query.consultants.findFirst({
+        where: eq(schema.consultants.userId, userId),
+      });
+
+      if (!consultant) {
+        app.logger.warn({ userId }, 'Consultant not found');
+        return reply.status(403).send({ error: 'Acesso negado' });
+      }
+
+      // Look up contract
+      const contract = await app.db.query.contracts.findFirst({
+        where: eq(schema.contracts.id, contractId),
+      });
+
+      if (!contract) {
+        app.logger.warn({ contractId }, 'Contract not found');
+        return reply.status(404).send({ error: 'Contrato não encontrado' });
+      }
+
+      // Look up baby to verify ownership
+      const baby = await app.db.query.babies.findFirst({
+        where: eq(schema.babies.id, contract.babyId),
+      });
+
+      if (!baby || baby.consultantId !== consultant.id) {
+        app.logger.warn({ contractId, babyId: contract.babyId, consultantId: consultant.id }, 'Unauthorized contract access');
+        return reply.status(403).send({ error: 'Acesso negado' });
+      }
+
+      // Archive contract and associated baby in transaction
+      await app.db.transaction(async (tx) => {
+        // Update contract status
+        await tx.update(schema.contracts).set({
+          status: 'archived',
+        }).where(eq(schema.contracts.id, contractId));
+
+        app.logger.debug({ contractId }, 'Contract status updated to archived');
+
+        // Archive associated baby
+        await tx.update(schema.babies).set({
+          archived: true,
+        }).where(eq(schema.babies.id, contract.babyId));
+
+        app.logger.debug({ babyId: contract.babyId }, 'Baby archived');
+      });
+
+      app.logger.info({ contractId, babyId: contract.babyId }, 'Contract and baby archived successfully');
+      return reply.status(200).send({
+        success: true,
+        message: 'Contrato arquivado com sucesso',
+      });
+    } catch (err) {
+      app.logger.error({ err, userId, contractId }, 'Failed to archive contract');
+      return reply.status(500).send({ error: 'Erro interno do servidor' });
     }
   });
 
@@ -882,174 +1059,6 @@ export function registerConsultantRoutes(app: App) {
     } catch (error) {
       app.logger.error({ err: error, babyId }, 'Error unarchiving baby');
       return reply.status(500).send({ error: 'Failed to unarchive baby' });
-    }
-  });
-
-  // PATCH /api/consultant/contracts/:id/archive - Archive a contract
-  app.fastify.patch('/api/consultant/contracts/:id/archive', {
-    schema: {
-      description: 'Archive a contract for the authenticated consultant',
-      tags: ['consultant', 'contracts'],
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: {
-          id: { type: 'string', format: 'uuid', description: 'Contract ID' },
-        },
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            id: { type: 'string', format: 'uuid' },
-            babyId: { type: 'string', format: 'uuid' },
-            consultantId: { type: 'string', format: 'uuid' },
-            status: { type: 'string' },
-            createdAt: { type: 'string', format: 'date-time' },
-          },
-        },
-        401: { type: 'object', properties: { error: { type: 'string' } } },
-        403: { type: 'object', properties: { error: { type: 'string' } } },
-        404: { type: 'object', properties: { error: { type: 'string' } } },
-        500: { type: 'object', properties: { error: { type: 'string' } } },
-      },
-    },
-  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const session = await requireAuth(request, reply);
-    if (!session) return;
-
-    const contractId = request.params.id;
-    const userId = session.user.id;
-
-    app.logger.info({ userId, contractId }, 'Archive contract request received');
-
-    try {
-      // Look up consultant
-      const consultant = await app.db.query.consultants.findFirst({
-        where: eq(schema.consultants.userId, userId),
-      });
-
-      if (!consultant) {
-        app.logger.warn({ userId }, 'Consultant not found');
-        return reply.status(403).send({ error: 'Access denied' });
-      }
-
-      // Look up contract
-      const contract = await app.db.query.contracts.findFirst({
-        where: eq(schema.contracts.id, contractId),
-      });
-
-      if (!contract) {
-        app.logger.warn({ contractId }, 'Contract not found');
-        return reply.status(404).send({ error: 'Contract not found' });
-      }
-
-      // Verify ownership: contract's baby_id belongs to consultant
-      const baby = await app.db.query.babies.findFirst({
-        where: and(
-          eq(schema.babies.id, contract.babyId),
-          eq(schema.babies.consultantId, consultant.id)
-        ),
-      });
-
-      if (!baby) {
-        app.logger.warn({ contractId, consultantId: consultant.id }, 'Contract does not belong to consultant');
-        return reply.status(403).send({ error: 'Access denied' });
-      }
-
-      // Archive the contract
-      const [updatedContract] = await app.db.update(schema.contracts)
-        .set({ status: 'archived' })
-        .where(eq(schema.contracts.id, contractId))
-        .returning();
-
-      app.logger.info({ contractId, consultantId: consultant.id }, 'Contract archived successfully');
-
-      return reply.status(200).send(updatedContract);
-    } catch (error) {
-      app.logger.error({ err: error, contractId, userId }, 'Failed to archive contract');
-      return reply.status(500).send({ error: 'Internal server error' });
-    }
-  });
-
-  // DELETE /api/consultant/contracts/:id - Delete a contract
-  app.fastify.delete('/api/consultant/contracts/:id', {
-    schema: {
-      description: 'Delete a contract for the authenticated consultant',
-      tags: ['consultant', 'contracts'],
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: {
-          id: { type: 'string', format: 'uuid', description: 'Contract ID' },
-        },
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            message: { type: 'string' },
-          },
-        },
-        401: { type: 'object', properties: { error: { type: 'string' } } },
-        403: { type: 'object', properties: { error: { type: 'string' } } },
-        404: { type: 'object', properties: { error: { type: 'string' } } },
-        500: { type: 'object', properties: { error: { type: 'string' } } },
-      },
-    },
-  }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
-    const session = await requireAuth(request, reply);
-    if (!session) return;
-
-    const contractId = request.params.id;
-    const userId = session.user.id;
-
-    app.logger.info({ userId, contractId }, 'Delete contract request received');
-
-    try {
-      // Look up consultant
-      const consultant = await app.db.query.consultants.findFirst({
-        where: eq(schema.consultants.userId, userId),
-      });
-
-      if (!consultant) {
-        app.logger.warn({ userId }, 'Consultant not found');
-        return reply.status(403).send({ error: 'Access denied' });
-      }
-
-      // Look up contract
-      const contract = await app.db.query.contracts.findFirst({
-        where: eq(schema.contracts.id, contractId),
-      });
-
-      if (!contract) {
-        app.logger.warn({ contractId }, 'Contract not found');
-        return reply.status(404).send({ error: 'Contract not found' });
-      }
-
-      // Verify ownership: contract's baby_id belongs to consultant
-      const baby = await app.db.query.babies.findFirst({
-        where: and(
-          eq(schema.babies.id, contract.babyId),
-          eq(schema.babies.consultantId, consultant.id)
-        ),
-      });
-
-      if (!baby) {
-        app.logger.warn({ contractId, consultantId: consultant.id }, 'Contract does not belong to consultant');
-        return reply.status(403).send({ error: 'Access denied' });
-      }
-
-      // Delete the contract
-      await app.db.delete(schema.contracts)
-        .where(eq(schema.contracts.id, contractId));
-
-      app.logger.info({ contractId, consultantId: consultant.id }, 'Contract deleted successfully');
-
-      return reply.status(200).send({ message: 'Contract deleted successfully' });
-    } catch (error) {
-      app.logger.error({ err: error, contractId, userId }, 'Failed to delete contract');
-      return reply.status(500).send({ error: 'Internal server error' });
     }
   });
 }
