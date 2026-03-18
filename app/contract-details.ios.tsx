@@ -234,14 +234,14 @@ export default function ContractDetailsScreen() {
     try {
       setArchiving(true);
       setShowArchiveModal(false);
-      console.log("[API] Archiving contract:", contract.id, "PATCH /api/contracts/" + contract.id + "/archive");
-      await apiPatch(`/api/contracts/${contract.id}/archive`, {});
+      console.log("[API] Archiving contract:", contract.id);
+      await apiPatch(`/api/consultant/contracts/${contract.id}/archive`, {});
       console.log("[API] Contract archived successfully");
       Alert.alert("Sucesso", "Contrato arquivado com sucesso!");
       router.back();
-    } catch (error: any) {
-      console.error("Error archiving contract:", error?.message || error);
-      Alert.alert("Erro", error?.message || "Falha ao arquivar o contrato. Tente novamente.");
+    } catch (error) {
+      console.error("Error archiving contract:", error);
+      Alert.alert("Erro", "Falha ao arquivar o contrato. Tente novamente.");
     } finally {
       setArchiving(false);
     }
@@ -257,14 +257,14 @@ export default function ContractDetailsScreen() {
     try {
       setDeleting(true);
       setShowContractDeleteModal(false);
-      console.log("[API] Deleting contract:", contract.id, "DELETE /api/contracts/" + contract.id);
-      await apiDelete(`/api/contracts/${contract.id}`);
+      console.log("[API] Deleting contract:", contract.id);
+      await apiDelete(`/api/consultant/contracts/${contract.id}`);
       console.log("[API] Contract deleted successfully");
       Alert.alert("Sucesso", "Contrato excluído com sucesso!");
       router.back();
-    } catch (error: any) {
-      console.error("Error deleting contract:", error?.message || error);
-      Alert.alert("Erro", error?.message || "Falha ao excluir o contrato. Tente novamente.");
+    } catch (error) {
+      console.error("Error deleting contract:", error);
+      Alert.alert("Erro", "Falha ao excluir o contrato. Tente novamente.");
     } finally {
       setDeleting(false);
     }
