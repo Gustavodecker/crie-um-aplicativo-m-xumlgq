@@ -7,26 +7,29 @@ import { BEARER_TOKEN_KEY, setBearerToken as libSetBearerToken, getBearerToken a
 export { BEARER_TOKEN_KEY };
 
 /**
- * Backend URL is configured in app.json under expo.extra.backendUrl.
- * The hardcoded fallback ensures production builds (Google Play / App Store)
- * always reach the correct backend even if Constants.expoConfig is unavailable
- * at runtime (which can happen in standalone/EAS production builds).
+ * HARDCODED production backend URL — this is the source of truth.
+ * Constants.expoConfig can be undefined or stale in Android AAB production builds,
+ * so we never rely on it as the primary source. It is only used as an override
+ * when explicitly set (e.g. for local dev overrides via app.config.js).
+ *
+ * CRITICAL: Do NOT change this to read from process.env or Constants first —
+ * that pattern breaks Android AAB release builds where __DEV__ is false and
+ * Constants.expoConfig may not be populated correctly.
  */
-const PRODUCTION_BACKEND_URL = "https://wge47dvbdvqm7g2vmsdnz45beh8s73xx.app.specular.dev";
-
-export const BACKEND_URL: string =
-  Constants.expoConfig?.extra?.backendUrl ||
-  Constants.expoConfig?.extra?.apiUrl ||
-  PRODUCTION_BACKEND_URL;
+export const API_BASE_URL = "https://wge47dvbdvqm7g2vmsdnz45beh8s73xx.app.specular.dev";
 
 /**
- * Alias for BACKEND_URL — exported so all callers can use either name.
- * Always resolves to the absolute HTTPS backend URL (never relative, never localhost).
+ * Allow app.json extra.backendUrl to override the hardcoded URL only if it is
+ * a valid HTTPS URL (guards against stale/wrong values being embedded in the build).
  */
-export const API_BASE_URL: string = BACKEND_URL;
+const configUrl: string | undefined = Constants.expoConfig?.extra?.backendUrl || Constants.expoConfig?.extra?.apiUrl;
+const isValidHttps = (url: string) => typeof url === "string" && url.startsWith("https://");
 
-console.log("[API] 🌐 BACKEND_URL resolved to:", BACKEND_URL);
-console.log("[API] 🌐 API_BASE_URL resolved to:", API_BASE_URL);
+export const BACKEND_URL: string = isValidHttps(configUrl ?? "") ? (configUrl as string) : API_BASE_URL;
+
+console.log("[API] BASE URL:", API_BASE_URL);
+console.log("[API] BACKEND_URL resolved to:", BACKEND_URL);
+console.log("[API] Constants.expoConfig?.extra:", JSON.stringify(Constants.expoConfig?.extra ?? null));
 
 /**
  * Check if backend is properly configured
