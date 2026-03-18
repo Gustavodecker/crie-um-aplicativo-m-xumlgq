@@ -2146,15 +2146,12 @@ describe("API Integration Tests", () => {
     );
     await expectStatus(res, 201);
     const data = await res.json();
-    expect(data.id).toBeDefined();
-    expect(data.name).toBe("Baby Registered");
-    expect(data.motherName).toBe("Registered Mother");
+    expect(data.success).toBe(true);
+    expect(data.babyId).toBeDefined();
+    expect(data.motherUserId).toBeDefined();
     expect(data.motherEmail).toBe(`mother+${uniqueId}@example.com`);
-    expect(data.motherPhone).toBe("+1234567890");
-    expect(data.birthDate).toBe("2024-05-15");
-    expect(data.consultantId).toBe(consultantId);
-    expect(data.objectives).toBe("Sleep training");
-    expect(data.archived).toBe(false);
+    expect(data.provisionalPassword).toBeDefined();
+    expect(data.provisionalPassword.length).toBe(8);
   });
 
   test("Register baby and mother without required fields returns 400", async () => {
@@ -2209,10 +2206,11 @@ describe("API Integration Tests", () => {
     );
     await expectStatus(res, 201);
     const data = await res.json();
-    expect(data.id).toBeDefined();
-    expect(data.name).toBe("Baby With All Fields");
+    expect(data.success).toBe(true);
+    expect(data.babyId).toBeDefined();
+    expect(data.motherUserId).toBeDefined();
     expect(data.motherEmail).toBe(`mother+${uniqueId}@example.com`);
-    expect(data.objectives).toBe("Complete sleep training");
+    expect(data.provisionalPassword).toBeDefined();
   });
 
   test("Register baby and mother with missing baby name returns 400", async () => {
@@ -2274,9 +2272,10 @@ describe("API Integration Tests", () => {
     );
     await expectStatus(res, 201);
     const data = await res.json();
-    expect(data.id).toBeDefined();
-    expect(data.name).toBe("Baby Without Objectives");
-    expect(data.objectives).toBeNull();
+    expect(data.success).toBe(true);
+    expect(data.babyId).toBeDefined();
+    expect(data.motherUserId).toBeDefined();
+    expect(data.provisionalPassword).toBeDefined();
   });
 
   test("Register baby and mother with snake_case field names", async () => {
@@ -2298,12 +2297,11 @@ describe("API Integration Tests", () => {
     );
     await expectStatus(res, 201);
     const data = await res.json();
-    expect(data.id).toBeDefined();
-    expect(data.name).toBe("Baby Snake Case");
-    expect(data.motherName).toBe("Snake Case Mother");
+    expect(data.success).toBe(true);
+    expect(data.babyId).toBeDefined();
+    expect(data.motherUserId).toBeDefined();
     expect(data.motherEmail).toBe(`mother+${uniqueId}@example.com`);
-    expect(data.motherPhone).toBe("+1111111111");
-    expect(data.birthDate).toBe("2024-07-15");
+    expect(data.provisionalPassword).toBeDefined();
   });
 
   test("Register baby and mother with duplicate email succeeds", async () => {
@@ -2328,9 +2326,12 @@ describe("API Integration Tests", () => {
     );
     await expectStatus(res1, 201);
     const data1 = await res1.json();
-    expect(data1.id).toBeDefined();
+    expect(data1.success).toBe(true);
+    expect(data1.babyId).toBeDefined();
+    expect(data1.motherUserId).toBeDefined();
+    const motherId1 = data1.motherUserId;
 
-    // Register again with same email - should succeed (no duplicate check)
+    // Register again with same email - should succeed and reuse mother user
     const res2 = await authenticatedApi(
       "/api/consultant/register-baby-and-mother",
       authToken,
@@ -2348,8 +2349,11 @@ describe("API Integration Tests", () => {
     );
     await expectStatus(res2, 201);
     const data2 = await res2.json();
-    expect(data2.id).toBeDefined();
+    expect(data2.success).toBe(true);
+    expect(data2.babyId).toBeDefined();
     expect(data2.motherEmail).toBe(email);
+    expect(data2.motherUserId).toBe(motherId1);
+    expect(data2.provisionalPassword).toBeDefined();
   });
 
   // ===== Mother Baby Access =====
