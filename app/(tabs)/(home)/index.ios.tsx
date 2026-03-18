@@ -1006,7 +1006,7 @@ export default function ConsultantDashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scrollView: { flex: 1 },
-  scrollViewContent: { paddingBottom: 100 },
+  scrollViewContent: { paddingBottom: 140 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: spacing.xl },
   greetingSection: { padding: spacing.lg, paddingTop: spacing.md },
   greetingText: { fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: spacing.xs },
@@ -1022,7 +1022,7 @@ const styles = StyleSheet.create({
   registerButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.primary, marginHorizontal: spacing.lg, marginBottom: spacing.md, paddingVertical: spacing.md, borderRadius: borderRadius.lg, gap: spacing.sm },
   registerButtonText: { fontSize: 16, fontWeight: "700", color: colors.card },
   babiesList: { paddingHorizontal: spacing.lg },
-  babyCard: { backgroundColor: colors.card, borderRadius: borderRadius.lg, marginBottom: spacing.md, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
+  babyCard: { backgroundColor: colors.card, borderRadius: borderRadius.lg, marginBottom: spacing.md, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 3 },
   babyCardContent: { flexDirection: "row", alignItems: "center", padding: spacing.md, gap: spacing.md },
   babyIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primary + "15", justifyContent: "center", alignItems: "center" },
   babyDetails: { flex: 1 },

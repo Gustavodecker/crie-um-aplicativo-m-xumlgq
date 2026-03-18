@@ -169,7 +169,7 @@ export default function RegisterBabyScreen() {
           headerShown: true,
         }}
       />
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollViewContent}>
         <View style={styles.content}>
           <View style={styles.header}>
             <IconSymbol
@@ -419,6 +419,9 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollViewContent: {
+    paddingBottom: 120,
   },
   content: {
     padding: spacing.lg,
