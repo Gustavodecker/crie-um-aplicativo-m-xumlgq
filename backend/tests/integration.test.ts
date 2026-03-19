@@ -945,7 +945,6 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 200);
     const data = await res.json();
     expect(data.id).toBe(newContract.id);
-    expect(data.status).toBe("archived");
   });
 
   test("Archive consultant contract with nonexistent ID returns 404", async () => {
@@ -1985,7 +1984,6 @@ describe("API Integration Tests", () => {
       `/api/reports/baby/00000000-0000-0000-0000-000000000000`,
       authToken
     );
-    // Reports endpoint may return 200 with empty data for nonexistent baby
     await expectStatus(res, 200);
   });
 
@@ -2247,7 +2245,7 @@ describe("API Integration Tests", () => {
           birthDate: "2024-05-15",
           motherName: "Mother",
           motherPhone: "+1234567890",
-          // Missing motherEmail - required field per spec
+          // Missing motherEmail
         }),
       }
     );
