@@ -12,6 +12,7 @@ import {
   TextInput,
   Platform,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { IconSymbol } from "@/components/IconSymbol";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -19,6 +20,7 @@ import { ConsultantProfileCard } from "@/components/ConsultantProfileCard";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Stack, useRouter } from "expo-router";
 import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Baby {
   id: string;
@@ -150,6 +152,7 @@ function diffTime(start: string | null | undefined, end: string | null | undefin
 
 export default function ConsultantDashboardScreen() {
   const router = useRouter();
+  const { loading: authLoading } = useAuth();
   const [babies, setBabies] = useState<Baby[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -208,10 +211,15 @@ export default function ConsultantDashboardScreen() {
     setRefreshing(false);
   }, [loadBabies, loadConsultantProfile, selectedBaby]);
 
+  // Gate initial data load on auth being ready.
+  // On Android, AsyncStorage is slower than iOS — firing API calls before the
+  // token cache is populated results in unauthenticated 401 responses.
   useEffect(() => {
+    if (authLoading) return;
+    console.log("[Dashboard] Auth ready, loading data...");
     loadConsultantProfile();
     loadBabies();
-  }, [loadConsultantProfile, loadBabies]);
+  }, [authLoading, loadConsultantProfile, loadBabies]);
 
   const loadRoutines = async (babyId: string) => {
     try {
@@ -388,7 +396,8 @@ export default function ConsultantDashboardScreen() {
       console.log(`✅ [Archive Baby] Successfully archived: ${babyName}`);
       await loadBabies(true);
     } catch (error) {
-      console.error(`❌ [Archive Baby] Error archiving baby ${babyName}:`, error);
+      console.error(`[Archive Baby] Error archiving baby ${babyName}:`, error);
+      Alert.alert("Erro", (error as any)?.message || "Falha ao arquivar bebê. Tente novamente.");
       setBabies((prev) => prev.map((b) => (b.id === babyId ? { ...b, archived: false } : b)));
     } finally {
       setActionLoadingId(null);
@@ -404,7 +413,8 @@ export default function ConsultantDashboardScreen() {
       console.log(`✅ [Unarchive Baby] Successfully unarchived: ${babyName}`);
       await loadBabies(true);
     } catch (error) {
-      console.error(`❌ [Unarchive Baby] Error unarchiving baby ${babyName}:`, error);
+      console.error(`[Unarchive Baby] Error unarchiving baby ${babyName}:`, error);
+      Alert.alert("Erro", (error as any)?.message || "Falha ao desarquivar bebê. Tente novamente.");
       setBabies((prev) => prev.map((b) => (b.id === babyId ? { ...b, archived: true } : b)));
     } finally {
       setActionLoadingId(null);
@@ -426,7 +436,9 @@ export default function ConsultantDashboardScreen() {
       setConfirmDeleteBaby({ visible: false, babyId: "", babyName: "" });
       await loadBabies();
     } catch (error) {
-      console.error(`❌ [Delete Baby] Error deleting baby ${babyName}:`, error);
+      console.error(`[Delete Baby] Error deleting baby ${babyName}:`, error);
+      setConfirmDeleteBaby({ visible: false, babyId: "", babyName: "" });
+      Alert.alert("Erro", (error as any)?.message || "Falha ao excluir bebê. Tente novamente.");
     } finally {
       setActionLoadingId(null);
     }
