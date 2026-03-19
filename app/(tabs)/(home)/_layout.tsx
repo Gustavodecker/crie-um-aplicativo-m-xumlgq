@@ -30,7 +30,7 @@ interface Baby {
 }
 
 export default function HomeLayout() {
-  const { user, userRole } = useAuth();
+  const { user, userRole, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [consultantProfile, setConsultantProfile] = useState<ConsultantProfile | null>(null);
   const [babies, setBabies] = useState<Baby[]>([]);
@@ -60,11 +60,14 @@ export default function HomeLayout() {
     }
   }, [userRole]);
 
+  // Gate data load on auth being ready — on Android, AsyncStorage is slower
+  // and the token cache may not be populated yet on cold start.
   useEffect(() => {
+    if (authLoading) return;
     loadConsultantData();
-  }, [loadConsultantData]);
+  }, [authLoading, loadConsultantData]);
 
-  if (loading && userRole === "consultant") {
+  if ((authLoading || loading) && userRole === "consultant") {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />

@@ -785,7 +785,10 @@ export default function ConsultantDashboardScreen() {
 
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => router.push({ pathname: "/acompanhamento", params: { babyId: selectedBaby.id, babyName: selectedBaby.name } })}
+              onPress={() => {
+                console.log(`[Acompanhamento] Navigating to acompanhamento for baby: ${selectedBaby.name} (${selectedBaby.id})`);
+                router.push({ pathname: "/(tabs)/(home)/acompanhamento", params: { babyId: selectedBaby.id, babyName: selectedBaby.name } });
+              }}
             >
               <IconSymbol ios_icon_name="chart.bar" android_material_icon_name="assessment" size={24} color={colors.primary} />
               <Text style={styles.actionButtonText}>Acompanhamento</Text>

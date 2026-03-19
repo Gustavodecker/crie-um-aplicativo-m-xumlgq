@@ -30,7 +30,7 @@ interface Baby {
 }
 
 export default function HomeLayout() {
-  const { user, userRole } = useAuth();
+  const { user, userRole, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [consultantProfile, setConsultantProfile] = useState<ConsultantProfile | null>(null);
   const [babies, setBabies] = useState<Baby[]>([]);
@@ -43,28 +43,30 @@ export default function HomeLayout() {
     }
 
     try {
-      console.log("[HomeLayout] Loading consultant profile and babies");
+      console.log("[HomeLayout.ios] Loading consultant profile and babies");
 
       const [profileData, babiesData] = await Promise.all([
         apiGet<ConsultantProfile>("/api/consultant/profile"),
         apiGet<Baby[]>("/api/consultant/babies"),
       ]);
 
-      console.log("[HomeLayout] Consultant data loaded successfully");
+      console.log("[HomeLayout.ios] Consultant data loaded successfully");
       setConsultantProfile(profileData);
       setBabies(babiesData);
     } catch (error) {
-      console.error("[HomeLayout] Error loading consultant data:", error);
+      console.error("[HomeLayout.ios] Error loading consultant data:", error);
     } finally {
       setLoading(false);
     }
   }, [userRole]);
 
+  // Gate data load on auth being ready — prevents unauthenticated requests on cold start.
   useEffect(() => {
+    if (authLoading) return;
     loadConsultantData();
-  }, [loadConsultantData]);
+  }, [authLoading, loadConsultantData]);
 
-  if (loading && userRole === "consultant") {
+  if ((authLoading || loading) && userRole === "consultant") {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.background }}>
         <ActivityIndicator size="large" color={colors.primary} />
