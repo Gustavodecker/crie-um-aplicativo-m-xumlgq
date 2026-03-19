@@ -174,8 +174,11 @@ export function registerConsultantRoutes(app: App) {
 
       const normalizedEmail = motherEmail.toLowerCase();
 
-      // Generate provisional password (8 uppercase alphanumeric characters)
-      const provisionalPassword = crypto.randomBytes(6).toString('hex').substring(0, 8).toUpperCase();
+      // Generate provisional password (6 uppercase alphanumeric characters: A-Z and 0-9)
+      const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      const provisionalPassword = Array.from(crypto.getRandomValues(new Uint8Array(6)))
+        .map(x => charset[x % charset.length])
+        .join('');
       app.logger.debug({ passwordLength: provisionalPassword.length }, 'Generated provisional password');
 
       // Hash the provisional password using bcrypt

@@ -2151,7 +2151,7 @@ describe("API Integration Tests", () => {
     expect(data.motherUserId).toBeDefined();
     expect(data.motherEmail).toBe(`mother+${uniqueId}@example.com`);
     expect(data.provisionalPassword).toBeDefined();
-    expect(data.provisionalPassword.length).toBe(8);
+    expect(data.provisionalPassword.length).toBe(6);
   });
 
   test("Register baby and mother without required fields returns 400", async () => {
