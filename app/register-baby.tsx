@@ -373,24 +373,23 @@ export default function RegisterBabyScreen() {
               </View>
               <View style={styles.credentialRow}>
                 <Text style={styles.credentialLabel}>Senha provisória:</Text>
-                <View style={styles.passwordBox}>
-                  <Text selectable style={styles.credentialValuePassword}>{successModal.provisionalPassword}</Text>
+                <View style={styles.passwordRow}>
+                  <Text style={styles.credentialValuePassword}>{successModal.provisionalPassword}</Text>
+                  <TouchableOpacity
+                    style={[styles.copyButton, copied && styles.copyButtonSuccess]}
+                    onPress={handleCopyPassword}
+                  >
+                    <IconSymbol
+                      ios_icon_name={copied ? "checkmark" : "doc.on.doc"}
+                      android_material_icon_name={copied ? "check" : "content-copy"}
+                      size={18}
+                      color={copied ? colors.success : colors.primary}
+                    />
+                    <Text style={[styles.copyButtonText, copied && styles.copyButtonTextSuccess]}>
+                      {copied ? "Copiado!" : "Copiar"}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={[styles.copyButton, copied && styles.copyButtonSuccess]}
-                  onPress={handleCopyPassword}
-                  activeOpacity={0.7}
-                >
-                  <IconSymbol
-                    ios_icon_name={copied ? "checkmark" : "doc.on.doc"}
-                    android_material_icon_name={copied ? "check" : "content-copy"}
-                    size={18}
-                    color={copied ? "#FFFFFF" : "#FFFFFF"}
-                  />
-                  <Text style={[styles.copyButtonText, copied && styles.copyButtonTextSuccess]}>
-                    {copied ? "Copiado!" : "Copiar senha"}
-                  </Text>
-                </TouchableOpacity>
               </View>
             </View>
             
@@ -609,44 +608,39 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: "600",
   },
-  passwordBox: {
-    backgroundColor: "#1F2933",
-    borderRadius: borderRadius.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm,
-    width: "100%",
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
   },
   credentialValuePassword: {
-    fontSize: 20,
-    color: "#FFFFFF",
+    flex: 1,
+    fontSize: 18,
+    color: colors.primary,
     fontWeight: "700",
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-    letterSpacing: 2,
-    textAlign: "center",
+    letterSpacing: 1,
   },
   copyButton: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary + "15",
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
     borderRadius: borderRadius.sm,
-    gap: 6,
-    width: "100%",
+    gap: 4,
   },
   copyButtonSuccess: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: colors.success + "15",
   },
   copyButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: colors.primary,
   },
   copyButtonTextSuccess: {
-    color: "#FFFFFF",
+    color: colors.success,
   },
   modalWarning: {
     fontSize: 13,

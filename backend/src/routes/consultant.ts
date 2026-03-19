@@ -108,11 +108,18 @@ export function registerConsultantRoutes(app: App) {
         201: {
           type: 'object',
           properties: {
-            success: { type: 'boolean' },
-            babyId: { type: 'string', format: 'uuid' },
-            motherUserId: { type: 'string' },
+            id: { type: 'string', format: 'uuid' },
+            name: { type: 'string' },
+            birthDate: { type: 'string', format: 'date' },
+            motherName: { type: 'string' },
+            motherPhone: { type: 'string' },
             motherEmail: { type: 'string' },
-            provisionalPassword: { type: 'string' },
+            motherUserId: { type: ['string', 'null'] },
+            consultantId: { type: 'string', format: 'uuid' },
+            objectives: { type: ['string', 'null'] },
+            conclusion: { type: ['string', 'null'] },
+            archived: { type: 'boolean' },
+            createdAt: { type: 'string', format: 'date-time' },
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
@@ -173,15 +180,6 @@ export function registerConsultantRoutes(app: App) {
       app.logger.info({ userId, consultantId: consultant.id }, 'Found consultant');
 
       const normalizedEmail = motherEmail.toLowerCase();
-
-      // Generate provisional password (8 uppercase alphanumeric characters)
-      const provisionalPassword = crypto.randomBytes(6).toString('hex').substring(0, 8).toUpperCase();
-      app.logger.debug({ passwordLength: provisionalPassword.length }, 'Generated provisional password');
-
-      // Hash the provisional password using bcrypt
-      const bcrypt = await import('bcrypt');
-      const hashedPassword = await bcrypt.default.hash(provisionalPassword, 10);
-
       let motherUserId: string | null = null;
 
       // Check if user already exists with this email
@@ -192,35 +190,16 @@ export function registerConsultantRoutes(app: App) {
       if (existingUser) {
         app.logger.info({ userId, motherEmail: normalizedEmail, existingUserId: existingUser.id }, 'Using existing mother user');
         motherUserId = existingUser.id;
-
-        // Check if credential account exists for this user
-        const existingAccount = await app.db.query.account.findFirst({
-          where: and(
-            eq(authSchema.account.userId, existingUser.id),
-            eq(authSchema.account.providerId, 'credential')
-          ),
-        });
-
-        if (existingAccount) {
-          // Update existing credential account with new password
-          await app.db.update(authSchema.account).set({
-            password: hashedPassword,
-          }).where(eq(authSchema.account.id, existingAccount.id));
-          app.logger.debug({ userId: existingUser.id }, 'Credential account password updated');
-        } else {
-          // Create credential account for existing user
-          const accountId = crypto.randomUUID();
-          await app.db.insert(authSchema.account).values({
-            id: accountId,
-            accountId: normalizedEmail,
-            providerId: 'credential',
-            userId: existingUser.id,
-            password: hashedPassword,
-          });
-          app.logger.debug({ accountId, userId: existingUser.id }, 'Credential account created for existing user');
-        }
       } else {
-        // Create new mother user account in transaction
+        // Generate provisional password (8 alphanumeric characters)
+        const provisionalPassword = crypto.randomBytes(6).toString('hex').substring(0, 8).toUpperCase();
+        app.logger.debug({ passwordLength: provisionalPassword.length }, 'Generated provisional password');
+
+        // Hash the provisional password using bcrypt
+        const bcrypt = await import('bcrypt');
+        const hashedPassword = await bcrypt.default.hash(provisionalPassword, 10);
+
+        // Create mother user account in transaction
         const motherId = crypto.randomUUID();
         const accountId = crypto.randomUUID();
 
@@ -270,13 +249,7 @@ export function registerConsultantRoutes(app: App) {
         'Baby and mother registered successfully'
       );
 
-      return reply.status(201).send({
-        success: true,
-        babyId: babyRecord.id,
-        motherUserId,
-        motherEmail: normalizedEmail,
-        provisionalPassword,
-      });
+      return reply.status(201).send(babyRecord);
     } catch (err) {
       app.logger.error({ err, userId, babyName, motherEmail }, 'Failed to register baby and mother');
       return reply.status(500).send({ error: 'Failed to register baby and mother' });
