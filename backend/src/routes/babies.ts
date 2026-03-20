@@ -2,6 +2,8 @@ import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
+import * as authSchema from '../db/schema/auth-schema.js';
+import crypto from 'crypto';
 
 export function registerBabiesRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -19,6 +21,7 @@ export function registerBabiesRoutes(app: App) {
           birthDate: { type: 'string', format: 'date' },
           motherName: { type: 'string' },
           motherPhone: { type: 'string' },
+          motherEmail: { type: ['string', 'null'] },
           objectives: { type: ['string', 'null'] },
         },
       },
@@ -38,12 +41,13 @@ export function registerBabiesRoutes(app: App) {
             conclusion: { type: ['string', 'null'] },
             archived: { type: 'boolean' },
             createdAt: { type: 'string', format: 'date-time' },
+            temporaryPassword: { type: ['string', 'null'] },
           },
         },
         401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: { name: string; birthDate: string; motherName: string; motherPhone: string; objectives?: string } }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: { name: string; birthDate: string; motherName: string; motherPhone: string; motherEmail?: string; objectives?: string } }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
@@ -59,19 +63,87 @@ export function registerBabiesRoutes(app: App) {
     }
 
     try {
+      let motherUserId: string | null = null;
+      let temporaryPassword: string | null = null;
+
+      // Handle mother user creation if motherEmail is provided
+      if (request.body.motherEmail) {
+        const normalizedEmail = request.body.motherEmail.toLowerCase();
+
+        // Check if user already exists
+        const existingUser = await app.db.query.user.findFirst({
+          where: eq(authSchema.user.email, normalizedEmail),
+        });
+
+        if (existingUser) {
+          app.logger.info({ motherEmail: normalizedEmail, existingUserId: existingUser.id }, 'Using existing mother user');
+          motherUserId = existingUser.id;
+        } else {
+          // Generate temporary password (8-12 alphanumeric characters)
+          const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+          const passwordLength = 10; // 8-12 range, using 10 as middle value
+          temporaryPassword = Array.from(crypto.getRandomValues(new Uint8Array(passwordLength)))
+            .map(x => charset[x % charset.length])
+            .join('');
+
+          app.logger.debug({ passwordLength: temporaryPassword.length }, 'Generated temporary password');
+
+          // Hash password
+          const bcrypt = await import('bcrypt');
+          const hashedPassword = await bcrypt.default.hash(temporaryPassword, 10);
+
+          // Create new mother user account in transaction
+          const motherId = crypto.randomUUID();
+          const accountId = crypto.randomUUID();
+
+          await app.db.transaction(async (tx) => {
+            // Create user
+            await tx.insert(authSchema.user).values({
+              id: motherId,
+              name: request.body.motherName,
+              email: normalizedEmail,
+              emailVerified: false,
+              requirePasswordChange: true,
+              role: 'mother',
+            });
+
+            app.logger.debug({ motherId, motherEmail: normalizedEmail }, 'Mother user created');
+
+            // Create credential account
+            await tx.insert(authSchema.account).values({
+              id: accountId,
+              accountId: normalizedEmail,
+              providerId: 'credential',
+              userId: motherId,
+              password: hashedPassword,
+            });
+
+            app.logger.debug({ accountId, motherId }, 'Mother credential account created');
+          });
+
+          motherUserId = motherId;
+        }
+      }
+
+      // Create baby record
       const [baby] = await app.db.insert(schema.babies).values({
         name: request.body.name,
         birthDate: request.body.birthDate,
         motherName: request.body.motherName,
         motherPhone: request.body.motherPhone,
-        motherEmail: null,
-        motherUserId: null,
+        motherEmail: request.body.motherEmail || null,
+        motherUserId: motherUserId,
         objectives: request.body.objectives || null,
         consultantId: consultant.id,
       }).returning();
 
       app.logger.info({ babyId: baby.id, consultantId: consultant.id }, 'Baby created successfully');
-      return reply.status(201).send(baby);
+
+      // Return baby with temporaryPassword if new user was created
+      return reply.status(201).send({
+        ...baby,
+        temporaryPassword,
+      });
     } catch (err) {
       app.logger.error({ err, userId: session.user.id }, 'Failed to create baby');
       return reply.status(500).send({ error: 'Failed to create baby' });
