@@ -18,6 +18,7 @@ import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles
 import { apiPost } from "@/utils/api";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Clipboard from "expo-clipboard";
+import { useAuth } from "@/contexts/AuthContext";
 
 
 interface BabyResponse {
@@ -30,6 +31,7 @@ interface BabyResponse {
 
 export default function RegisterBabyScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState("");
   const [birthDate, setBirthDate] = useState(new Date());
@@ -129,11 +131,12 @@ export default function RegisterBabyScreen() {
       setLoading(true);
       
       const requestBody = {
-        babyName: name.trim(),
-        birthDate: formatDateToISO(birthDate),
-        motherName: motherName.trim(),
-        motherPhone: motherPhone.trim(),
-        motherEmail: motherEmail.trim(),
+        name: name.trim(),
+        birth_date: formatDateToISO(birthDate),
+        mother_name: motherName.trim(),
+        mother_phone: motherPhone.trim(),
+        mother_email: motherEmail.trim(),
+        consultant_id: user?.id,
         objectives: objectives.trim() || undefined,
       };
       
