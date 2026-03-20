@@ -132,11 +132,11 @@ export default function RegisterBabyScreen() {
       
       const requestBody = {
         name: name.trim(),
-        birth_date: formatDateToISO(birthDate),
-        mother_name: motherName.trim(),
-        mother_phone: motherPhone.trim(),
-        mother_email: motherEmail.trim(),
-        consultant_id: user?.id,
+        birthDate: formatDateToISO(birthDate),
+        motherName: motherName.trim(),
+        motherPhone: motherPhone.trim(),
+        motherEmail: motherEmail.trim(),
+        consultantId: user?.id,
         objectives: objectives.trim() || undefined,
       };
       
