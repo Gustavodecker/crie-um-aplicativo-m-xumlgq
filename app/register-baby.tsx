@@ -50,6 +50,9 @@ export default function RegisterBabyScreen() {
     email: "",
     temporaryPassword: undefined,
   });
+  // Android-safe ref: holds the password synchronously so the Modal's first
+  // render always has the value, even before React flushes the state update.
+  const pendingPasswordRef = React.useRef<string | undefined>(undefined);
   const [copied, setCopied] = useState(false);
 
   const formatDateToBR = (date: Date): string => {
@@ -86,8 +89,11 @@ export default function RegisterBabyScreen() {
 
   const handleCopyPassword = async () => {
     console.log("User tapped Copy Password button");
+    // Use ref as fallback — on Android the state value may lag one render behind
+    const passwordToCopy = successModal.temporaryPassword || pendingPasswordRef.current || "";
+    console.log("[register-baby] handleCopyPassword — passwordToCopy:", passwordToCopy);
     try {
-      await Clipboard.setStringAsync(successModal.temporaryPassword || "");
+      await Clipboard.setStringAsync(passwordToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       console.log("Password copied to clipboard");
@@ -159,6 +165,13 @@ export default function RegisterBabyScreen() {
       // DEBUG: local variable before setting state
       console.log("[register-baby] tempPassword local var:", tempPassword, "| type:", typeof tempPassword);
 
+      // Android fix: write the password to the ref BEFORE opening the modal.
+      // On Android, Modal renders its children synchronously on the same frame
+      // that `visible` flips to true — before React's state batch containing
+      // `temporaryPassword` has been committed. Reading from the ref inside the
+      // modal guarantees the value is present on the very first render.
+      pendingPasswordRef.current = tempPassword;
+
       const nextModalState = {
         visible: true,
         email: motherEmail.trim(),
@@ -167,6 +180,7 @@ export default function RegisterBabyScreen() {
 
       // DEBUG: state object right before setSuccessModal is called
       console.log("[register-baby] successModal state about to be set:", JSON.stringify(nextModalState));
+      console.log("[register-baby] pendingPasswordRef.current set to:", pendingPasswordRef.current);
 
       setSuccessModal(nextModalState);
       setCopied(false);
@@ -180,11 +194,19 @@ export default function RegisterBabyScreen() {
 
   const birthDateDisplay = formatDateToBR(birthDate);
 
+  // Android fix: resolve the password from state first, then fall back to the
+  // ref. On Android, Modal children render on the same frame that `visible`
+  // flips to true — before the state batch containing `temporaryPassword` is
+  // committed — so the ref (written synchronously before setSuccessModal) is
+  // the only reliable source on that first render.
+  const displayPassword = successModal.temporaryPassword || pendingPasswordRef.current;
+
   // DEBUG: log successModal state on every render when modal is visible
   if (successModal.visible) {
     console.log("[register-baby] RENDER — successModal.visible=true");
     console.log("[register-baby] RENDER — successModal.temporaryPassword:", successModal.temporaryPassword);
-    console.log("[register-baby] RENDER — typeof successModal.temporaryPassword:", typeof successModal.temporaryPassword);
+    console.log("[register-baby] RENDER — pendingPasswordRef.current:", pendingPasswordRef.current);
+    console.log("[register-baby] RENDER — displayPassword (resolved):", displayPassword);
     console.log("[register-baby] RENDER — successModal.email:", successModal.email);
   }
 
@@ -398,11 +420,11 @@ export default function RegisterBabyScreen() {
                 <Text style={styles.credentialLabel}>Email:</Text>
                 <Text style={styles.credentialValue}>{successModal.email}</Text>
               </View>
-              {successModal.temporaryPassword ? (
+              {displayPassword ? (
                 <View style={styles.credentialRow}>
                   <Text style={styles.credentialLabel}>Senha provisória:</Text>
                   <View style={styles.passwordRow}>
-                    <Text style={styles.credentialValuePassword}>{successModal.temporaryPassword}</Text>
+                    <Text style={styles.credentialValuePassword}>{displayPassword}</Text>
                     <TouchableOpacity
                       style={[styles.copyButton, copied && styles.copyButtonSuccess]}
                       onPress={handleCopyPassword}
