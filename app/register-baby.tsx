@@ -44,12 +44,13 @@ export default function RegisterBabyScreen() {
   const [successModal, setSuccessModal] = useState<{
     visible: boolean;
     email: string;
-    temporaryPassword?: string;
   }>({
     visible: false,
     email: "",
-    temporaryPassword: undefined,
   });
+  // Separate state for the password so it is committed independently and is
+  // always available when the Modal renders on Android.
+  const [modalPassword, setModalPassword] = useState<string>("");
   // Android-safe ref: holds the password synchronously so the Modal's first
   // render always has the value, even before React flushes the state update.
   const pendingPasswordRef = React.useRef<string | undefined>(undefined);
@@ -89,8 +90,7 @@ export default function RegisterBabyScreen() {
 
   const handleCopyPassword = async () => {
     console.log("User tapped Copy Password button");
-    // Use ref as fallback — on Android the state value may lag one render behind
-    const passwordToCopy = successModal.temporaryPassword || pendingPasswordRef.current || "";
+    const passwordToCopy = modalPassword || pendingPasswordRef.current || "";
     console.log("[register-baby] handleCopyPassword — passwordToCopy:", passwordToCopy);
     try {
       await Clipboard.setStringAsync(passwordToCopy);
@@ -165,21 +165,21 @@ export default function RegisterBabyScreen() {
       // DEBUG: local variable before setting state
       console.log("[register-baby] tempPassword local var:", tempPassword, "| type:", typeof tempPassword);
 
-      // Android fix: write the password to the ref BEFORE opening the modal.
-      // On Android, Modal renders its children synchronously on the same frame
-      // that `visible` flips to true — before React's state batch containing
-      // `temporaryPassword` has been committed. Reading from the ref inside the
-      // modal guarantees the value is present on the very first render.
+      // Android fix: set the password in its own state variable AND in the ref
+      // BEFORE opening the modal. On Android, Modal children can render on the
+      // same frame that `visible` flips to true. Having a dedicated state for
+      // the password means it is already committed when the modal first renders.
       pendingPasswordRef.current = tempPassword;
+      setModalPassword(tempPassword || "");
 
       const nextModalState = {
         visible: true,
         email: motherEmail.trim(),
-        temporaryPassword: tempPassword,
       };
 
       // DEBUG: state object right before setSuccessModal is called
       console.log("[register-baby] successModal state about to be set:", JSON.stringify(nextModalState));
+      console.log("[register-baby] tempPassword being set to modalPassword:", tempPassword);
       console.log("[register-baby] pendingPasswordRef.current set to:", pendingPasswordRef.current);
 
       setSuccessModal(nextModalState);
@@ -194,19 +194,11 @@ export default function RegisterBabyScreen() {
 
   const birthDateDisplay = formatDateToBR(birthDate);
 
-  // Android fix: resolve the password from state first, then fall back to the
-  // ref. On Android, Modal children render on the same frame that `visible`
-  // flips to true — before the state batch containing `temporaryPassword` is
-  // committed — so the ref (written synchronously before setSuccessModal) is
-  // the only reliable source on that first render.
-  const displayPassword = successModal.temporaryPassword || pendingPasswordRef.current;
-
-  // DEBUG: log successModal state on every render when modal is visible
+  // DEBUG: log modal state on every render when modal is visible
   if (successModal.visible) {
     console.log("[register-baby] RENDER — successModal.visible=true");
-    console.log("[register-baby] RENDER — successModal.temporaryPassword:", successModal.temporaryPassword);
+    console.log("[register-baby] RENDER — modalPassword:", modalPassword);
     console.log("[register-baby] RENDER — pendingPasswordRef.current:", pendingPasswordRef.current);
-    console.log("[register-baby] RENDER — displayPassword (resolved):", displayPassword);
     console.log("[register-baby] RENDER — successModal.email:", successModal.email);
   }
 
@@ -394,7 +386,8 @@ export default function RegisterBabyScreen() {
         transparent
         animationType="fade"
         onRequestClose={() => {
-          setSuccessModal({ visible: false, email: "", temporaryPassword: undefined });
+          setSuccessModal({ visible: false, email: "" });
+          setModalPassword("");
           router.replace("/(tabs)/(home)");
         }}
       >
@@ -420,28 +413,28 @@ export default function RegisterBabyScreen() {
                 <Text style={styles.credentialLabel}>Email:</Text>
                 <Text style={styles.credentialValue}>{successModal.email}</Text>
               </View>
-              {displayPassword ? (
-                <View style={styles.credentialRow}>
-                  <Text style={styles.credentialLabel}>Senha provisória:</Text>
-                  <View style={styles.passwordRow}>
-                    <Text style={styles.credentialValuePassword}>{displayPassword}</Text>
-                    <TouchableOpacity
-                      style={[styles.copyButton, copied && styles.copyButtonSuccess]}
-                      onPress={handleCopyPassword}
-                    >
-                      <IconSymbol
-                        ios_icon_name={copied ? "checkmark" : "doc.on.doc"}
-                        android_material_icon_name={copied ? "check" : "content-copy"}
-                        size={18}
-                        color={copied ? colors.success : colors.primary}
-                      />
-                      <Text style={[styles.copyButtonText, copied && styles.copyButtonTextSuccess]}>
-                        {copied ? "Copiado!" : "Copiar"}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+              <View style={styles.credentialRow}>
+                <Text style={styles.credentialLabel}>Senha provisória:</Text>
+                <View style={styles.passwordRow}>
+                  <Text style={styles.credentialValuePassword}>
+                    {modalPassword || pendingPasswordRef.current || ""}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.copyButton, copied && styles.copyButtonSuccess]}
+                    onPress={handleCopyPassword}
+                  >
+                    <IconSymbol
+                      ios_icon_name={copied ? "checkmark" : "doc.on.doc"}
+                      android_material_icon_name={copied ? "check" : "content-copy"}
+                      size={18}
+                      color={copied ? colors.success : colors.primary}
+                    />
+                    <Text style={[styles.copyButtonText, copied && styles.copyButtonTextSuccess]}>
+                      {copied ? "Copiado!" : "Copiar"}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-              ) : null}
+              </View>
             </View>
             
             <Text style={styles.modalWarning}>
@@ -450,7 +443,8 @@ export default function RegisterBabyScreen() {
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => {
-                setSuccessModal({ visible: false, email: "", temporaryPassword: undefined });
+                setSuccessModal({ visible: false, email: "" });
+                setModalPassword("");
                 router.replace("/(tabs)/(home)");
               }}
             >
