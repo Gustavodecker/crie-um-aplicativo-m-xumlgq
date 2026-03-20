@@ -26,7 +26,7 @@ interface BabyResponse {
   babyId: string;
   motherUserId: string;
   motherEmail: string;
-  provisionalPassword?: string;
+  temporaryPassword?: string;
 }
 
 export default function RegisterBabyScreen() {
@@ -44,11 +44,11 @@ export default function RegisterBabyScreen() {
   const [successModal, setSuccessModal] = useState<{
     visible: boolean;
     email: string;
-    provisionalPassword: string;
+    temporaryPassword?: string;
   }>({
     visible: false,
     email: "",
-    provisionalPassword: "",
+    temporaryPassword: undefined,
   });
   const [copied, setCopied] = useState(false);
 
@@ -87,7 +87,7 @@ export default function RegisterBabyScreen() {
   const handleCopyPassword = async () => {
     console.log("User tapped Copy Password button");
     try {
-      await Clipboard.setStringAsync(successModal.provisionalPassword);
+      await Clipboard.setStringAsync(successModal.temporaryPassword || "");
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       console.log("Password copied to clipboard");
@@ -147,10 +147,11 @@ export default function RegisterBabyScreen() {
       console.log("Baby and mother registered successfully:", response);
       
       // Show success modal instead of Alert (web-compatible)
+      console.log("Temporary password returned:", response.temporaryPassword ? "yes" : "no");
       setSuccessModal({
         visible: true,
         email: motherEmail.trim(),
-        provisionalPassword: response.provisionalPassword || "",
+        temporaryPassword: response.temporaryPassword,
       });
       setCopied(false);
     } catch (err: any) {
@@ -347,7 +348,7 @@ export default function RegisterBabyScreen() {
         transparent
         animationType="fade"
         onRequestClose={() => {
-          setSuccessModal({ visible: false, email: "", provisionalPassword: "" });
+          setSuccessModal({ visible: false, email: "", temporaryPassword: undefined });
           router.replace("/(tabs)/(home)");
         }}
       >
@@ -373,26 +374,28 @@ export default function RegisterBabyScreen() {
                 <Text style={styles.credentialLabel}>Email:</Text>
                 <Text style={styles.credentialValue}>{successModal.email}</Text>
               </View>
-              <View style={styles.credentialRow}>
-                <Text style={styles.credentialLabel}>Senha provisória:</Text>
-                <View style={styles.passwordRow}>
-                  <Text style={styles.credentialValuePassword}>{successModal.provisionalPassword}</Text>
-                  <TouchableOpacity
-                    style={[styles.copyButton, copied && styles.copyButtonSuccess]}
-                    onPress={handleCopyPassword}
-                  >
-                    <IconSymbol
-                      ios_icon_name={copied ? "checkmark" : "doc.on.doc"}
-                      android_material_icon_name={copied ? "check" : "content-copy"}
-                      size={18}
-                      color={copied ? colors.success : colors.primary}
-                    />
-                    <Text style={[styles.copyButtonText, copied && styles.copyButtonTextSuccess]}>
-                      {copied ? "Copiado!" : "Copiar"}
-                    </Text>
-                  </TouchableOpacity>
+              {successModal.temporaryPassword ? (
+                <View style={styles.credentialRow}>
+                  <Text style={styles.credentialLabel}>Senha provisória:</Text>
+                  <View style={styles.passwordRow}>
+                    <Text style={styles.credentialValuePassword}>{successModal.temporaryPassword}</Text>
+                    <TouchableOpacity
+                      style={[styles.copyButton, copied && styles.copyButtonSuccess]}
+                      onPress={handleCopyPassword}
+                    >
+                      <IconSymbol
+                        ios_icon_name={copied ? "checkmark" : "doc.on.doc"}
+                        android_material_icon_name={copied ? "check" : "content-copy"}
+                        size={18}
+                        color={copied ? colors.success : colors.primary}
+                      />
+                      <Text style={[styles.copyButtonText, copied && styles.copyButtonTextSuccess]}>
+                        {copied ? "Copiado!" : "Copiar"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
+              ) : null}
             </View>
             
             <Text style={styles.modalWarning}>
@@ -401,7 +404,7 @@ export default function RegisterBabyScreen() {
             <TouchableOpacity
               style={styles.modalButton}
               onPress={() => {
-                setSuccessModal({ visible: false, email: "", provisionalPassword: "" });
+                setSuccessModal({ visible: false, email: "", temporaryPassword: undefined });
                 router.replace("/(tabs)/(home)");
               }}
             >
