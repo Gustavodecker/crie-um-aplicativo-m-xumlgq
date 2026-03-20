@@ -26,17 +26,14 @@ let _cachedToken: string | null | undefined = undefined; // undefined = not yet 
 export const API_BASE_URL = "https://wge47dvbdvqm7g2vmsdnz45beh8s73xx.app.specular.dev";
 
 /**
- * Allow app.json extra.backendUrl to override the hardcoded URL only if it is
- * a valid HTTPS URL (guards against stale/wrong values being embedded in the build).
+ * BACKEND_URL is always identical to API_BASE_URL.
+ * We do NOT read from Constants.expoConfig — on Android AAB production builds
+ * Constants.expoConfig can be stale, undefined, or contain a wrong value,
+ * which would silently override the correct hardcoded URL and break requests.
  */
-const configUrl: string | undefined = Constants.expoConfig?.extra?.backendUrl || Constants.expoConfig?.extra?.apiUrl;
-const isValidHttps = (url: string) => typeof url === "string" && url.startsWith("https://");
+export const BACKEND_URL: string = API_BASE_URL;
 
-export const BACKEND_URL: string = isValidHttps(configUrl ?? "") ? (configUrl as string) : API_BASE_URL;
-
-console.log("[API] BASE URL:", API_BASE_URL);
-console.log("[API] BACKEND_URL resolved to:", BACKEND_URL);
-console.log("[API] Constants.expoConfig?.extra:", JSON.stringify(Constants.expoConfig?.extra ?? null));
+console.log("[API] BACKEND_URL:", BACKEND_URL);
 
 /**
  * Check if backend is properly configured

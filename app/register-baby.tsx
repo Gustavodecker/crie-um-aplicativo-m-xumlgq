@@ -140,12 +140,12 @@ export default function RegisterBabyScreen() {
         objectives: objectives.trim() || undefined,
       };
       
-      console.log("Submitting baby and mother registration to /api/babies:", requestBody);
+      console.log("Submitting baby and mother registration to /api/consultant/register-baby-and-mother:", requestBody);
 
-      const response = await apiPost<BabyResponse>("/api/babies", requestBody);
+      const response = await apiPost<BabyResponse>("/api/consultant/register-baby-and-mother", requestBody);
 
       // DEBUG: full raw response object before any destructuring
-      console.log("[register-baby] RAW response from POST /api/babies:", JSON.stringify(response));
+      console.log("[register-baby] RAW response from POST /api/consultant/register-baby-and-mother:", JSON.stringify(response));
       console.log("[register-baby] response keys:", Object.keys(response || {}));
 
       // DEBUG: temporaryPassword field specifically
