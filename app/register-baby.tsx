@@ -144,15 +144,31 @@ export default function RegisterBabyScreen() {
 
       const response = await apiPost<BabyResponse>("/api/babies", requestBody);
 
-      console.log("Baby and mother registered successfully:", response);
-      
-      // Show success modal instead of Alert (web-compatible)
-      console.log("Temporary password returned:", response.temporaryPassword ? "yes" : "no");
-      setSuccessModal({
+      // DEBUG: full raw response object before any destructuring
+      console.log("[register-baby] RAW response from POST /api/babies:", JSON.stringify(response));
+      console.log("[register-baby] response keys:", Object.keys(response || {}));
+
+      // DEBUG: temporaryPassword field specifically
+      console.log("[register-baby] response.temporaryPassword value:", response.temporaryPassword);
+      console.log("[register-baby] typeof response.temporaryPassword:", typeof response.temporaryPassword);
+      console.log("[register-baby] response.success:", response.success);
+      console.log("[register-baby] response.motherEmail:", response.motherEmail);
+
+      const tempPassword = response.temporaryPassword;
+
+      // DEBUG: local variable before setting state
+      console.log("[register-baby] tempPassword local var:", tempPassword, "| type:", typeof tempPassword);
+
+      const nextModalState = {
         visible: true,
         email: motherEmail.trim(),
-        temporaryPassword: response.temporaryPassword,
-      });
+        temporaryPassword: tempPassword,
+      };
+
+      // DEBUG: state object right before setSuccessModal is called
+      console.log("[register-baby] successModal state about to be set:", JSON.stringify(nextModalState));
+
+      setSuccessModal(nextModalState);
       setCopied(false);
     } catch (err: any) {
       console.error("Error registering baby:", err);
@@ -163,6 +179,14 @@ export default function RegisterBabyScreen() {
   };
 
   const birthDateDisplay = formatDateToBR(birthDate);
+
+  // DEBUG: log successModal state on every render when modal is visible
+  if (successModal.visible) {
+    console.log("[register-baby] RENDER — successModal.visible=true");
+    console.log("[register-baby] RENDER — successModal.temporaryPassword:", successModal.temporaryPassword);
+    console.log("[register-baby] RENDER — typeof successModal.temporaryPassword:", typeof successModal.temporaryPassword);
+    console.log("[register-baby] RENDER — successModal.email:", successModal.email);
+  }
 
   return (
     <SafeAreaView style={styles.container}>
