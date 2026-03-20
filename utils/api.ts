@@ -226,6 +226,7 @@ export const apiPost = async <T = any>(
   endpoint: string,
   data: any
 ): Promise<T> => {
+  console.log("[API] apiPost →", `${BACKEND_URL}${endpoint}`);
   return apiCall<T>(endpoint, {
     method: "POST",
     body: JSON.stringify(data),

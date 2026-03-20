@@ -137,10 +137,9 @@ export default function RegisterBabyScreen() {
         objectives: objectives.trim() || undefined,
       };
       
-      console.log("Submitting baby and mother registration to /api/consultant/register-baby-and-mother:", requestBody);
+      console.log("Submitting baby and mother registration to /api/babies:", requestBody);
 
-      // New endpoint that creates both baby and mother account
-      const response = await apiPost<BabyResponse>("/api/consultant/register-baby-and-mother", requestBody);
+      const response = await apiPost<BabyResponse>("/api/babies", requestBody);
 
       console.log("Baby and mother registered successfully:", response);
       
