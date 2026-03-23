@@ -1,6 +1,6 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 import * as authSchema from '../db/schema/auth-schema.js';
 import crypto from 'crypto';
@@ -70,6 +70,15 @@ export function registerBabiesRoutes(app: App) {
       if (request.body.motherEmail) {
         const normalizedEmail = request.body.motherEmail.toLowerCase();
 
+        // Use fixed temporary password
+        temporaryPassword = 'todanoite123';
+
+        app.logger.debug({ password: temporaryPassword }, 'Using fixed temporary password');
+
+        // Hash password
+        const bcrypt = await import('bcrypt');
+        const hashedPassword = await bcrypt.default.hash(temporaryPassword, 10);
+
         // Check if user already exists
         const existingUser = await app.db.query.user.findFirst({
           where: eq(authSchema.user.email, normalizedEmail),
@@ -78,27 +87,54 @@ export function registerBabiesRoutes(app: App) {
         if (existingUser) {
           app.logger.info({ motherEmail: normalizedEmail, existingUserId: existingUser.id }, 'Using existing mother user');
           motherUserId = existingUser.id;
+
+          // Update existing user to ensure email_verified = true and create credential account
+          await app.db.transaction(async (tx) => {
+            // Update user to mark email as verified
+            await tx.update(authSchema.user)
+              .set({
+                emailVerified: true,
+                requirePasswordChange: true,
+              })
+              .where(eq(authSchema.user.id, existingUser.id));
+
+            app.logger.debug({ motherId: existingUser.id }, 'Mother user updated with email_verified=true');
+
+            // Delete existing credential account if it exists
+            await tx.delete(authSchema.account)
+              .where(
+                and(
+                  eq(authSchema.account.userId, existingUser.id),
+                  eq(authSchema.account.providerId, 'credential')
+                )
+              );
+
+            app.logger.debug({ motherId: existingUser.id }, 'Deleted existing credential account');
+
+            // Create new credential account with hashed password
+            const accountId = crypto.randomUUID();
+            await tx.insert(authSchema.account).values({
+              id: accountId,
+              accountId: normalizedEmail,
+              providerId: 'credential',
+              userId: existingUser.id,
+              password: hashedPassword,
+            });
+
+            app.logger.debug({ accountId, motherId: existingUser.id }, 'Credential account created for existing user');
+          });
         } else {
-          // Use fixed temporary password
-          temporaryPassword = 'todanoite123';
-
-          app.logger.debug({ password: temporaryPassword }, 'Using fixed temporary password');
-
-          // Hash password
-          const bcrypt = await import('bcrypt');
-          const hashedPassword = await bcrypt.default.hash(temporaryPassword, 10);
-
           // Create new mother user account in transaction
           const motherId = crypto.randomUUID();
           const accountId = crypto.randomUUID();
 
           await app.db.transaction(async (tx) => {
-            // Create user
+            // Create user with email_verified = true
             await tx.insert(authSchema.user).values({
               id: motherId,
               name: request.body.motherName,
               email: normalizedEmail,
-              emailVerified: false,
+              emailVerified: true,
               requirePasswordChange: true,
               role: 'mother',
             });

@@ -172,6 +172,14 @@ export function registerConsultantRoutes(app: App) {
       let motherUserId: string | null = null;
       let temporaryPassword: string | null = null;
 
+      // Use fixed provisional password
+      const provisionalPassword = 'todanoite123';
+      app.logger.debug({ password: provisionalPassword }, 'Using fixed provisional password');
+
+      // Hash the provisional password using bcrypt
+      const bcrypt = await import('bcrypt');
+      const hashedPassword = await bcrypt.default.hash(provisionalPassword, 10);
+
       // Check if user already exists with this email
       const existingUser = await app.db.query.user.findFirst({
         where: eq(authSchema.user.email, normalizedEmail),
@@ -180,26 +188,54 @@ export function registerConsultantRoutes(app: App) {
       if (existingUser) {
         app.logger.info({ userId, motherEmail: normalizedEmail, existingUserId: existingUser.id }, 'Using existing mother user');
         motherUserId = existingUser.id;
+
+        // Update existing user to ensure email_verified = true and create credential account
+        await app.db.transaction(async (tx) => {
+          // Update user to mark email as verified
+          await tx.update(authSchema.user)
+            .set({
+              emailVerified: true,
+              requirePasswordChange: true,
+            })
+            .where(eq(authSchema.user.id, existingUser.id));
+
+          app.logger.debug({ motherId: existingUser.id }, 'Mother user updated with email_verified=true');
+
+          // Delete existing credential account if it exists
+          await tx.delete(authSchema.account)
+            .where(
+              and(
+                eq(authSchema.account.userId, existingUser.id),
+                eq(authSchema.account.providerId, 'credential')
+              )
+            );
+
+          app.logger.debug({ motherId: existingUser.id }, 'Deleted existing credential account');
+
+          // Create new credential account with hashed password
+          const accountId = crypto.randomUUID();
+          await tx.insert(authSchema.account).values({
+            id: accountId,
+            accountId: normalizedEmail,
+            providerId: 'credential',
+            userId: existingUser.id,
+            password: hashedPassword,
+          });
+
+          app.logger.debug({ accountId, motherId: existingUser.id }, 'Credential account created for existing user');
+        });
       } else {
-        // Use fixed provisional password
-        const provisionalPassword = 'todanoite123';
-        app.logger.debug({ password: provisionalPassword }, 'Using fixed provisional password');
-
-        // Hash the provisional password using bcrypt
-        const bcrypt = await import('bcrypt');
-        const hashedPassword = await bcrypt.default.hash(provisionalPassword, 10);
-
         // Create mother user account in transaction
         const motherId = crypto.randomUUID();
         const accountId = crypto.randomUUID();
 
         await app.db.transaction(async (tx) => {
-          // Create user
+          // Create user with email_verified = true
           await tx.insert(authSchema.user).values({
             id: motherId,
             name: motherName,
             email: normalizedEmail,
-            emailVerified: false,
+            emailVerified: true,
             requirePasswordChange: true,
             role: 'mother',
           });
@@ -219,8 +255,9 @@ export function registerConsultantRoutes(app: App) {
         });
 
         motherUserId = motherId;
-        temporaryPassword = provisionalPassword;
       }
+
+      temporaryPassword = provisionalPassword;
 
       // Create baby record
       const [babyRecord] = await app.db.insert(schema.babies).values({
