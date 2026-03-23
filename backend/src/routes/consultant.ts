@@ -1056,4 +1056,209 @@ export function registerConsultantRoutes(app: App) {
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
+
+  // POST /api/consultant/repair-mother-accounts - Repair broken mother account rows
+  app.fastify.post('/api/consultant/repair-mother-accounts', {
+    schema: {
+      description: 'Repair broken mother account rows where account_id does not match email',
+      tags: ['consultant', 'maintenance'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+            repaired: { type: 'array', items: { type: 'object', properties: { userId: { type: 'string' }, email: { type: 'string' }, action: { type: 'string' } } } },
+            errors: { type: 'array', items: { type: 'object', properties: { userId: { type: 'string' }, email: { type: 'string' }, error: { type: 'string' } } } },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        500: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    app.logger.info({ userId: session.user.id }, 'Starting mother account repair');
+
+    try {
+      // Find all mother users that have babies linked
+      const motherUsers = await app.db.query.user.findMany({
+        where: eq(authSchema.user.role, 'mother'),
+      });
+
+      app.logger.debug({ count: motherUsers.length }, 'Found mother users');
+
+      const repaired: Array<{ userId: string; email: string; action: string }> = [];
+      const errors: Array<{ userId: string; email: string; error: string }> = [];
+
+      // For each mother user, check and fix their credential account
+      for (const user of motherUsers) {
+        try {
+          // Find their credential account
+          const credentialAccount = await app.db.query.account.findFirst({
+            where: and(
+              eq(authSchema.account.userId, user.id),
+              eq(authSchema.account.providerId, 'credential')
+            ),
+          });
+
+          if (credentialAccount) {
+            // Check if account_id matches email
+            if (credentialAccount.accountId !== user.email) {
+              app.logger.warn({ userId: user.id, email: user.email, currentAccountId: credentialAccount.accountId }, 'Fixing account_id mismatch');
+
+              // Update the account row to fix account_id
+              await app.db.update(authSchema.account)
+                .set({
+                  accountId: user.email,
+                })
+                .where(eq(authSchema.account.id, credentialAccount.id));
+
+              repaired.push({
+                userId: user.id,
+                email: user.email,
+                action: `Fixed account_id: ${credentialAccount.accountId} → ${user.email}`,
+              });
+
+              app.logger.info({ userId: user.id, email: user.email }, 'Repaired account_id mismatch');
+            }
+          } else {
+            // No credential account exists - log as warning but don't auto-create
+            app.logger.warn({ userId: user.id, email: user.email }, 'Mother user has no credential account');
+            errors.push({
+              userId: user.id,
+              email: user.email,
+              error: 'No credential account found (manual intervention may be needed)',
+            });
+          }
+        } catch (err) {
+          app.logger.error({ err, userId: user.id, email: user.email }, 'Error repairing mother account');
+          errors.push({
+            userId: user.id,
+            email: user.email,
+            error: String(err instanceof Error ? err.message : 'Unknown error'),
+          });
+        }
+      }
+
+      app.logger.info({ repaired: repaired.length, errors: errors.length }, 'Mother account repair completed');
+
+      return reply.status(200).send({
+        message: 'Repair completed',
+        repaired,
+        errors,
+      });
+    } catch (error) {
+      app.logger.error({ err: error }, 'Failed to repair mother accounts');
+      return reply.status(500).send({ error: 'Failed to repair mother accounts' });
+    }
+  });
+
+  // GET /api/consultant/diagnose-mother-account/:email - Diagnose a mother account issue
+  app.fastify.get('/api/consultant/diagnose-mother-account/:email', {
+    schema: {
+      description: 'Diagnose sign-in issues for a specific mother account',
+      tags: ['consultant', 'maintenance'],
+      params: {
+        type: 'object',
+        required: ['email'],
+        properties: {
+          email: { type: 'string', description: 'Mother email address' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            email: { type: 'string' },
+            userFound: { type: 'boolean' },
+            userId: { type: ['string', 'null'] },
+            emailVerified: { type: ['boolean', 'null'] },
+            credentialAccountFound: { type: 'boolean' },
+            accountIdMatches: { type: ['boolean', 'null'] },
+            passwordHashed: { type: ['boolean', 'null'] },
+            passwordLength: { type: ['integer', 'null'] },
+            issues: { type: 'array', items: { type: 'string' } },
+            recommendations: { type: 'array', items: { type: 'string' } },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Params: { email: string } }>, reply: FastifyReply) => {
+    const session = await requireAuth(request, reply);
+    if (!session) return;
+
+    const email = request.params.email.toLowerCase();
+    app.logger.info({ email }, 'Diagnosing mother account');
+
+    try {
+      const user = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, email),
+      });
+
+      if (!user) {
+        app.logger.info({ email }, 'User not found for diagnosis');
+        return reply.status(404).send({
+          email,
+          userFound: false,
+          userId: null,
+          emailVerified: null,
+          credentialAccountFound: false,
+          accountIdMatches: null,
+          passwordHashed: null,
+          passwordLength: null,
+          issues: ['User does not exist'],
+          recommendations: ['Create the user account using the registration endpoint'],
+        });
+      }
+
+      const credentialAccount = await app.db.query.account.findFirst({
+        where: and(
+          eq(authSchema.account.userId, user.id),
+          eq(authSchema.account.providerId, 'credential')
+        ),
+      });
+
+      const issues: string[] = [];
+      const recommendations: string[] = [];
+
+      if (!credentialAccount) {
+        issues.push('No credential account found');
+        recommendations.push('Create a credential account with the properly hashed password');
+      } else {
+        if (credentialAccount.accountId !== email) {
+          issues.push(`account_id mismatch: expected "${email}", found "${credentialAccount.accountId}"`);
+          recommendations.push('Run POST /api/consultant/repair-mother-accounts to fix');
+        }
+        if (!credentialAccount.password) {
+          issues.push('No password hash stored');
+          recommendations.push('Set a proper bcrypt-hashed password');
+        }
+      }
+
+      if (!user.emailVerified) {
+        issues.push('Email not verified (email_verified = false)');
+        recommendations.push('Update user to set email_verified = true');
+      }
+
+      return reply.status(200).send({
+        email,
+        userFound: true,
+        userId: user.id,
+        emailVerified: user.emailVerified,
+        credentialAccountFound: !!credentialAccount,
+        accountIdMatches: credentialAccount ? credentialAccount.accountId === email : null,
+        passwordHashed: credentialAccount ? !!credentialAccount.password : null,
+        passwordLength: credentialAccount && credentialAccount.password ? credentialAccount.password.length : null,
+        issues,
+        recommendations,
+      });
+    } catch (error) {
+      app.logger.error({ err: error, email }, 'Error diagnosing mother account');
+      return reply.status(500).send({ error: 'Failed to diagnose account' });
+    }
+  });
 }

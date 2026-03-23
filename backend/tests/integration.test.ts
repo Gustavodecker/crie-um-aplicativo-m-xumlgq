@@ -26,6 +26,65 @@ describe("API Integration Tests", () => {
     expect(userId).toBeDefined();
   });
 
+  test("Test sign-in with valid credentials", async () => {
+    const res = await api("/api/auth/test-signin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        password: "Password123!",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.email).toBe(userEmail);
+    expect(data.userFound).toBe(true);
+    expect(typeof data.passwordVerified).toBe("boolean");
+  });
+
+  test("Test sign-in with nonexistent email returns 200 with userFound false", async () => {
+    const res = await api("/api/auth/test-signin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "nonexistent@example.com",
+        password: "Password123!",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.email).toBe("nonexistent@example.com");
+    expect(data.userFound).toBe(false);
+  });
+
+  test("Test sign-in with wrong password returns 200 with passwordVerified false", async () => {
+    const res = await api("/api/auth/test-signin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        password: "WrongPassword123!",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.email).toBe(userEmail);
+    expect(data.userFound).toBe(true);
+    expect(data.passwordVerified).toBe(false);
+  });
+
+  test("Test sign-in without required fields returns 400", async () => {
+    const res = await api("/api/auth/test-signin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        // missing password
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Initialize consultant profile", async () => {
     const res = await authenticatedApi("/api/init/consultant", authToken, {
       method: "POST",
@@ -2347,6 +2406,43 @@ describe("API Integration Tests", () => {
     const { token: newMotherToken } = await signUpTestUser();
     const res = await authenticatedApi("/api/mother/consultant", newMotherToken);
     await expectStatus(res, 404);
+  });
+
+  // ===== Consultant Maintenance & Diagnostics =====
+
+  test("Diagnose mother account without auth returns 401", async () => {
+    const res = await api("/api/consultant/diagnose-mother-account/test@example.com");
+    await expectStatus(res, 401);
+  });
+
+  test("Diagnose nonexistent mother account returns 404", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/diagnose-mother-account/nonexistent@example.com",
+      authToken
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Repair mother accounts without auth returns 401", async () => {
+    const res = await api("/api/consultant/repair-mother-accounts", {
+      method: "POST",
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Repair mother accounts returns 200", async () => {
+    const res = await authenticatedApi(
+      "/api/consultant/repair-mother-accounts",
+      authToken,
+      {
+        method: "POST",
+      }
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.message).toBeDefined();
+    expect(Array.isArray(data.repaired)).toBe(true);
+    expect(Array.isArray(data.errors)).toBe(true);
   });
 
   // ===== Debug Endpoints =====
