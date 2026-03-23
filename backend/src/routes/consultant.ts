@@ -181,9 +181,9 @@ export function registerConsultantRoutes(app: App) {
         app.logger.info({ userId, motherEmail: normalizedEmail, existingUserId: existingUser.id }, 'Using existing mother user');
         motherUserId = existingUser.id;
       } else {
-        // Generate provisional password (8 alphanumeric characters)
-        const provisionalPassword = crypto.randomBytes(6).toString('hex').substring(0, 8).toUpperCase();
-        app.logger.debug({ passwordLength: provisionalPassword.length }, 'Generated provisional password');
+        // Use fixed provisional password
+        const provisionalPassword = 'todanoite123';
+        app.logger.debug({ password: provisionalPassword }, 'Using fixed provisional password');
 
         // Hash the provisional password using bcrypt
         const bcrypt = await import('bcrypt');

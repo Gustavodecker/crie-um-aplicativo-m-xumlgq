@@ -79,14 +79,10 @@ export function registerBabiesRoutes(app: App) {
           app.logger.info({ motherEmail: normalizedEmail, existingUserId: existingUser.id }, 'Using existing mother user');
           motherUserId = existingUser.id;
         } else {
-          // Generate temporary password (8-12 alphanumeric characters)
-          const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-          const passwordLength = 10; // 8-12 range, using 10 as middle value
-          temporaryPassword = Array.from(crypto.getRandomValues(new Uint8Array(passwordLength)))
-            .map(x => charset[x % charset.length])
-            .join('');
+          // Use fixed temporary password
+          temporaryPassword = 'todanoite123';
 
-          app.logger.debug({ passwordLength: temporaryPassword.length }, 'Generated temporary password');
+          app.logger.debug({ password: temporaryPassword }, 'Using fixed temporary password');
 
           // Hash password
           const bcrypt = await import('bcrypt');
