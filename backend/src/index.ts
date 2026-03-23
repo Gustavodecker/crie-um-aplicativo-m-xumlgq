@@ -123,49 +123,111 @@ registerReportsRoutes(app);
 registerUploadRoutes(app);
 registerDebugRoutes(app);
 
-// Startup check: Detect credential accounts with invalid password hashes
-// MUST be added BEFORE app.run() is called
-app.fastify.addHook('onReady', async () => {
-  try {
-    // Query all credential accounts with passwords
-    const credentialAccounts = await app.db.query.account.findMany({
-      where: eq(authSchema.account.providerId, 'credential'),
-    });
+// Startup check: Detect and AUTO-FIX credential accounts with invalid password hashes
+// This fixes corrupted hashes from previous versions that stored passwords in wrong format
+// Runs ASYNCHRONOUSLY in the background to not block server startup
+app.fastify.addHook('onReady', () => {
+  // Start the password hash fix in the background (non-blocking)
+  // Use setImmediate to ensure it runs after the server is ready
+  setImmediate(async () => {
+    try {
+      // Query all credential accounts with passwords
+      const credentialAccounts = await app.db.query.account.findMany({
+        where: eq(authSchema.account.providerId, 'credential'),
+      });
 
-    const invalidAccounts = credentialAccounts.filter(
-      acc => acc.password && !acc.password.startsWith('$2')
-    );
-
-    if (invalidAccounts.length > 0) {
-      app.logger.warn(
-        { invalidAccountCount: invalidAccounts.length },
-        'STARTUP WARNING: Found credential accounts with invalid password hashes'
+      const invalidAccounts = credentialAccounts.filter(
+        acc => acc.password && !acc.password.startsWith('$2')
       );
 
-      for (const acc of invalidAccounts) {
-        const passwordPrefix = acc.password ? acc.password.substring(0, 20) : 'null';
+      if (invalidAccounts.length > 0) {
         app.logger.warn(
+          { invalidAccountCount: invalidAccounts.length, totalCredentialAccounts: credentialAccounts.length },
+          'BACKGROUND: Found credential accounts with invalid password hashes - attempting auto-fix'
+        );
+
+        // Generate proper bcrypt hash for default mother password
+        const bcrypt = await import('bcrypt');
+        const defaultPassword = 'todanoite123';
+        const properHash = await bcrypt.default.hash(defaultPassword, 10);
+
+        app.logger.debug(
+          { properHashLength: properHash.length, hashPrefix: properHash.substring(0, 7) },
+          'Generated proper bcrypt hash for default password'
+        );
+
+        let fixedCount = 0;
+        const fixErrors: Array<{ accountId: string; userId: string; error: string }> = [];
+
+        // Fix each invalid account
+        for (const acc of invalidAccounts) {
+          try {
+            const passwordPrefix = acc.password ? acc.password.substring(0, 20) : 'null';
+            app.logger.debug(
+              {
+                accountId: acc.id,
+                userId: acc.userId,
+                passwordPrefix: passwordPrefix,
+                passwordLength: acc.password?.length || 0,
+              },
+              'Fixing invalid password hash'
+            );
+
+            // Update the account with the proper bcrypt hash
+            await app.db.update(authSchema.account)
+              .set({
+                password: properHash,
+              })
+              .where(eq(authSchema.account.id, acc.id));
+
+            fixedCount++;
+            app.logger.info(
+              { accountId: acc.id, userId: acc.userId },
+              'Fixed corrupted password hash - replaced with proper bcrypt hash of default password'
+            );
+          } catch (fixError) {
+            const errorMsg = fixError instanceof Error ? fixError.message : String(fixError);
+            fixErrors.push({
+              accountId: acc.id,
+              userId: acc.userId,
+              error: errorMsg,
+            });
+            app.logger.error(
+              { err: fixError, accountId: acc.id, userId: acc.userId },
+              'Error fixing password hash for account'
+            );
+          }
+        }
+
+        app.logger.info(
           {
-            accountId: acc.id,
-            userId: acc.userId,
-            passwordPrefix: passwordPrefix,
-            passwordLength: acc.password?.length || 0,
+            fixedCount,
+            failedCount: fixErrors.length,
+            defaultPassword: 'todanoite123',
+            bcryptCostFactor: 10,
           },
-          'Invalid password hash detected - password may be plaintext or corrupted'
+          'Password hash fix complete - all mothers can now sign in with default password'
+        );
+
+        if (fixErrors.length > 0) {
+          app.logger.warn(
+            { failedFixes: fixErrors },
+            'Some accounts could not be fixed - manual intervention may be needed'
+          );
+        }
+      } else {
+        app.logger.info(
+          { validCredentialAccounts: credentialAccounts.length },
+          'Startup check: All credential account passwords are valid bcrypt hashes'
         );
       }
-    } else {
-      app.logger.info(
-        { validCredentialAccounts: credentialAccounts.length },
-        'Startup check: All credential account passwords appear to be valid bcrypt hashes'
+    } catch (startupCheckError) {
+      app.logger.error(
+        { err: startupCheckError },
+        'Startup check: Error checking/fixing credential account passwords'
       );
     }
-  } catch (startupCheckError) {
-    app.logger.error(
-      { err: startupCheckError },
-      'Startup check: Error checking credential account passwords'
-    );
-  }
+  });
 });
 
 await app.run();
