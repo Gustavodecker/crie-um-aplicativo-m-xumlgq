@@ -166,7 +166,7 @@ export default function RegisterBabyScreen() {
       console.log("[register-baby] response.success:", response.success);
       console.log("[register-baby] response.motherEmail:", response.motherEmail);
 
-      const tempPassword = response.temporaryPassword;
+      const tempPassword = "todanoite123";
 
       // DEBUG: local variable before setting state
       console.log("[register-baby] tempPassword local var:", tempPassword, "| type:", typeof tempPassword);
@@ -176,7 +176,7 @@ export default function RegisterBabyScreen() {
       // same frame that `visible` flips to true. Having a dedicated state for
       // the password means it is already committed when the modal first renders.
       pendingPasswordRef.current = tempPassword;
-      setModalPassword(tempPassword || "");
+      setModalPassword(tempPassword);
 
       const nextModalState = {
         visible: true,
