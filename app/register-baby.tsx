@@ -152,6 +152,7 @@ export default function RegisterBabyScreen() {
       };
       
       console.log("Submitting baby and mother registration to /api/consultant/register-baby-and-mother:", requestBody);
+      console.log("[register-baby] JSON.stringify(requestBody):", JSON.stringify(requestBody));
 
       const response = await apiPost<BabyResponse>("/api/consultant/register-baby-and-mother", requestBody);
 
