@@ -104,9 +104,14 @@ export default function RegisterBabyScreen() {
 
   const handleSubmit = async () => {
     console.log("User tapped Submit button on Register Baby screen");
+    console.log("[register-baby] handleSubmit — name state value:", JSON.stringify(name));
     setError("");
 
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    console.log("[register-baby] handleSubmit — trimmedName:", JSON.stringify(trimmedName));
+
+    if (!trimmedName) {
+      console.log("[register-baby] Validation failed: baby name is empty");
       setError("Por favor, informe o nome do bebê");
       return;
     }
@@ -137,7 +142,7 @@ export default function RegisterBabyScreen() {
       setLoading(true);
       
       const requestBody = {
-        name: name.trim(),
+        name: trimmedName,
         birthDate: formatDateToISO(birthDate),
         motherName: motherName.trim(),
         motherPhone: motherPhone.trim(),
@@ -245,9 +250,14 @@ export default function RegisterBabyScreen() {
               <TextInput
                 style={styles.input}
                 value={name}
-                onChangeText={setName}
+                onChangeText={(text) => {
+                  console.log("[register-baby] Baby name field changed:", JSON.stringify(text));
+                  setName(text);
+                }}
                 placeholder="Ex: João Silva"
                 placeholderTextColor={colors.textSecondary}
+                autoCorrect={false}
+                autoCapitalize="words"
               />
             </View>
 
