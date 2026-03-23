@@ -116,6 +116,7 @@ export function registerConsultantRoutes(app: App) {
             conclusion: { type: ['string', 'null'] },
             archived: { type: 'boolean' },
             createdAt: { type: 'string', format: 'date-time' },
+            temporaryPassword: { type: ['string', 'null'] },
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
@@ -169,6 +170,7 @@ export function registerConsultantRoutes(app: App) {
 
       const normalizedEmail = motherEmail.toLowerCase();
       let motherUserId: string | null = null;
+      let temporaryPassword: string | null = null;
 
       // Check if user already exists with this email
       const existingUser = await app.db.query.user.findFirst({
@@ -217,6 +219,7 @@ export function registerConsultantRoutes(app: App) {
         });
 
         motherUserId = motherId;
+        temporaryPassword = provisionalPassword;
       }
 
       // Create baby record
@@ -237,7 +240,10 @@ export function registerConsultantRoutes(app: App) {
         'Baby and mother registered successfully'
       );
 
-      return reply.status(201).send(babyRecord);
+      return reply.status(201).send({
+        ...babyRecord,
+        temporaryPassword,
+      });
     } catch (err) {
       app.logger.error({ err, userId, name, motherEmail }, 'Failed to register baby and mother');
       return reply.status(500).send({ error: 'Failed to register baby and mother' });
