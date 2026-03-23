@@ -2133,7 +2133,7 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          babyName: "Baby Registered",
+          name: "Baby Registered",
           birthDate: "2024-05-15",
           motherName: "Registered Mother",
           motherPhone: "+1234567890",
@@ -2163,7 +2163,7 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          babyName: "Baby",
+          name: "Baby",
           // Missing birthDate, motherName, motherPhone, motherEmail
         }),
       }
@@ -2177,7 +2177,7 @@ describe("API Integration Tests", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        babyName: "Baby",
+        name: "Baby",
         birthDate: "2024-05-15",
         motherName: "Mother",
         motherPhone: "+1234567890",
@@ -2196,7 +2196,7 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          babyName: "Baby With All Fields",
+          name: "Baby With All Fields",
           birthDate: "2024-06-15",
           motherName: "Complete Mother",
           motherPhone: "+0987654321",
@@ -2213,7 +2213,7 @@ describe("API Integration Tests", () => {
     expect(data.objectives).toBe("Complete sleep training");
   });
 
-  test("Register baby and mother with missing baby name returns 400", async () => {
+  test("Register baby and mother with missing name returns 400", async () => {
     const uniqueId = crypto.randomUUID();
     const res = await authenticatedApi(
       "/api/consultant/register-baby-and-mother",
@@ -2222,7 +2222,7 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          // Missing babyName
+          // Missing name
           birthDate: "2024-05-15",
           motherName: "Mother",
           motherPhone: "+1234567890",
@@ -2241,7 +2241,7 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          babyName: "Baby",
+          name: "Baby",
           birthDate: "2024-05-15",
           motherName: "Mother",
           motherPhone: "+1234567890",
@@ -2261,7 +2261,7 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          babyName: "Baby Without Objectives",
+          name: "Baby Without Objectives",
           birthDate: "2024-05-15",
           motherName: "Mother",
           motherPhone: "+1234567890",
@@ -2277,33 +2277,6 @@ describe("API Integration Tests", () => {
     expect(data.objectives).toBeNull();
   });
 
-  test("Register baby and mother with snake_case field names", async () => {
-    const uniqueId = crypto.randomUUID();
-    const res = await authenticatedApi(
-      "/api/consultant/register-baby-and-mother",
-      authToken,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          baby_name: "Baby Snake Case",
-          birth_date: "2024-07-15",
-          mother_name: "Snake Case Mother",
-          mother_phone: "+1111111111",
-          mother_email: `mother+${uniqueId}@example.com`,
-        }),
-      }
-    );
-    await expectStatus(res, 201);
-    const data = await res.json();
-    expect(data.id).toBeDefined();
-    expect(data.name).toBe("Baby Snake Case");
-    expect(data.motherName).toBe("Snake Case Mother");
-    expect(data.motherEmail).toBe(`mother+${uniqueId}@example.com`);
-    expect(data.motherPhone).toBe("+1111111111");
-    expect(data.birthDate).toBe("2024-07-15");
-  });
-
   test("Register baby and mother with duplicate email succeeds", async () => {
     const uniqueId = crypto.randomUUID();
     const email = `mother+${uniqueId}@example.com`;
@@ -2316,7 +2289,7 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          babyName: "Baby 1",
+          name: "Baby 1",
           birthDate: "2024-05-15",
           motherName: "Mother",
           motherPhone: "+1234567890",
@@ -2336,7 +2309,7 @@ describe("API Integration Tests", () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          babyName: "Baby 2",
+          name: "Baby 2",
           birthDate: "2024-06-15",
           motherName: "Another Mother",
           motherPhone: "+0987654321",

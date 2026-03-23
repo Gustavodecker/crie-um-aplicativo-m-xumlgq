@@ -90,17 +90,13 @@ export function registerConsultantRoutes(app: App) {
       tags: ['consultant', 'babies', 'mother'],
       body: {
         type: 'object',
+        required: ['name', 'birthDate', 'motherName', 'motherPhone', 'motherEmail'],
         properties: {
-          babyName: { type: 'string', description: 'Baby name (camelCase)' },
-          baby_name: { type: 'string', description: 'Baby name (snake_case)' },
-          birthDate: { type: 'string', format: 'date', description: 'Birth date (camelCase)' },
-          birth_date: { type: 'string', format: 'date', description: 'Birth date (snake_case)' },
-          motherName: { type: 'string', description: 'Mother name (camelCase)' },
-          mother_name: { type: 'string', description: 'Mother name (snake_case)' },
-          motherPhone: { type: 'string', description: 'Mother phone (camelCase)' },
-          mother_phone: { type: 'string', description: 'Mother phone (snake_case)' },
-          motherEmail: { type: 'string', description: 'Mother email (camelCase)' },
-          mother_email: { type: 'string', description: 'Mother email (snake_case)' },
+          name: { type: 'string', description: 'Baby name' },
+          birthDate: { type: 'string', format: 'date', description: 'Birth date' },
+          motherName: { type: 'string', description: 'Mother name' },
+          motherPhone: { type: 'string', description: 'Mother phone' },
+          motherEmail: { type: 'string', description: 'Mother email' },
           objectives: { type: ['string', 'null'], description: 'Baby care objectives (optional)' },
         },
       },
@@ -127,41 +123,33 @@ export function registerConsultantRoutes(app: App) {
         500: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
-  }, async (request: FastifyRequest<{ Body: Record<string, any> }>, reply: FastifyReply) => {
+  }, async (request: FastifyRequest<{ Body: { name: string; birthDate: string; motherName: string; motherPhone: string; motherEmail: string; objectives?: string } }>, reply: FastifyReply) => {
     const session = await requireAuth(request, reply);
     if (!session) return;
 
     const userId = session.user.id;
-    const body = request.body;
+    const { name, birthDate, motherName, motherPhone, motherEmail, objectives } = request.body;
 
-    // Extract fields with camelCase/snake_case fallback
-    const babyName = body.babyName || body.baby_name;
-    const birthDate = body.birthDate || body.birth_date;
-    const motherName = body.motherName || body.mother_name;
-    const motherPhone = body.motherPhone || body.mother_phone;
-    const motherEmail = body.motherEmail || body.mother_email;
-    const objectives = body.objectives || null;
-
-    app.logger.info({ userId, babyName, motherEmail }, 'Registering baby and mother');
+    app.logger.info({ userId, name, motherEmail }, 'Registering baby and mother');
 
     // Validate required fields
-    if (!babyName || (typeof babyName === 'string' && babyName.trim().length === 0)) {
+    if (!name || !name.trim()) {
       app.logger.warn({ userId }, 'Baby name is required');
       return reply.status(400).send({ error: 'Baby name is required' });
     }
-    if (!birthDate || (typeof birthDate === 'string' && birthDate.trim().length === 0)) {
+    if (!birthDate || !birthDate.trim()) {
       app.logger.warn({ userId }, 'Birth date is required');
       return reply.status(400).send({ error: 'Birth date is required' });
     }
-    if (!motherName || (typeof motherName === 'string' && motherName.trim().length === 0)) {
+    if (!motherName || !motherName.trim()) {
       app.logger.warn({ userId }, 'Mother name is required');
       return reply.status(400).send({ error: 'Mother name is required' });
     }
-    if (!motherPhone || (typeof motherPhone === 'string' && motherPhone.trim().length === 0)) {
+    if (!motherPhone || !motherPhone.trim()) {
       app.logger.warn({ userId }, 'Mother phone is required');
       return reply.status(400).send({ error: 'Mother phone is required' });
     }
-    if (!motherEmail || (typeof motherEmail === 'string' && motherEmail.trim().length === 0)) {
+    if (!motherEmail || !motherEmail.trim()) {
       app.logger.warn({ userId }, 'Mother email is required');
       return reply.status(400).send({ error: 'Mother email is required' });
     }
@@ -233,7 +221,7 @@ export function registerConsultantRoutes(app: App) {
 
       // Create baby record
       const [babyRecord] = await app.db.insert(schema.babies).values({
-        name: babyName,
+        name: name,
         birthDate: birthDate,
         motherName: motherName,
         motherPhone: motherPhone,
@@ -251,7 +239,7 @@ export function registerConsultantRoutes(app: App) {
 
       return reply.status(201).send(babyRecord);
     } catch (err) {
-      app.logger.error({ err, userId, babyName, motherEmail }, 'Failed to register baby and mother');
+      app.logger.error({ err, userId, name, motherEmail }, 'Failed to register baby and mother');
       return reply.status(500).send({ error: 'Failed to register baby and mother' });
     }
   });
