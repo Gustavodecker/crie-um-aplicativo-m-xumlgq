@@ -2,21 +2,270 @@ import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
+import crypto from 'crypto';
 
-/**
- * NOTE: Custom auth endpoints should NOT be created under /api/auth/*
- * Better Auth automatically handles all /api/auth/* paths:
- * - POST /api/auth/sign-up/email - Standard email/password signup (password hashing included)
- * - POST /api/auth/sign-in/email - Standard email/password signin
- * - POST /api/auth/sign-out - Sign out
- * - GET /api/auth/get-session - Get current session
- * - POST /api/auth/change-password - Change password with hashing
- * etc.
- *
- * For mother token-based flows, see: src/routes/mother.ts
- * For consultant registration with auto-profile creation, see: src/index.ts withAuth hooks
- */
 export function registerAuthRoutes(app: App) {
+  // ==========================================
+  // CUSTOM SIGN-IN ENDPOINT
+  // Registered BEFORE Better Auth to take priority
+  // ==========================================
+  app.fastify.post('/api/auth/sign-in/email', {
+    schema: {
+      description: 'Sign in with email and password',
+      tags: ['auth'],
+      body: {
+        type: 'object',
+        required: ['email', 'password'],
+        properties: {
+          email: { type: 'string', format: 'email', description: 'User email address' },
+          password: { type: 'string', description: 'Plain-text password' },
+        },
+      },
+      response: {
+        200: {
+          description: 'Sign in successful',
+          type: 'object',
+          properties: {
+            token: { type: 'string' },
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                email: { type: 'string' },
+                name: { type: 'string' },
+                role: { type: ['string', 'null'] },
+                emailVerified: { type: 'boolean' },
+              },
+            },
+          },
+        },
+        401: {
+          description: 'Invalid email or password',
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+          },
+        },
+        500: {
+          description: 'Internal server error',
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (
+    request: FastifyRequest<{ Body: { email: string; password: string } }>,
+    reply: FastifyReply
+  ): Promise<void> => {
+    const { email, password } = request.body;
+    const normalizedEmail = email.toLowerCase();
+
+    app.logger.info({ email: normalizedEmail }, 'Custom sign-in endpoint called');
+
+    try {
+      // Look up user by email (case-insensitive)
+      const user = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, normalizedEmail),
+      });
+
+      if (!user) {
+        app.logger.warn({ email: normalizedEmail }, 'Sign-in failed - user not found');
+        return reply.status(401).send({ error: 'Invalid email or password' });
+      }
+
+      app.logger.debug({ userId: user.id }, 'User found, checking credential account');
+
+      // Find credential account for this user
+      const credentialAccounts = await app.db.query.account.findMany({
+        where: eq(authSchema.account.userId, user.id),
+      });
+
+      const credentialAccount = credentialAccounts.find(acc => acc.providerId === 'credential');
+
+      if (!credentialAccount || !credentialAccount.password) {
+        app.logger.warn({ userId: user.id, email: normalizedEmail }, 'Sign-in failed - no credential account or password');
+        return reply.status(401).send({ error: 'Invalid email or password' });
+      }
+
+      app.logger.debug({ userId: user.id, accountId: credentialAccount.id }, 'Credential account found, verifying password');
+
+      // Verify password
+      const bcrypt = await import('bcrypt');
+      const passwordValid = await bcrypt.default.compare(password, credentialAccount.password);
+
+      if (!passwordValid) {
+        app.logger.warn({ userId: user.id, email: normalizedEmail }, 'Sign-in failed - invalid password');
+        return reply.status(401).send({ error: 'Invalid email or password' });
+      }
+
+      // Create session
+      const sessionToken = crypto.randomBytes(16).toString('hex');
+      const sessionId = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+      const ipAddress = request.ip || '';
+      const userAgent = request.headers['user-agent'] || '';
+
+      await app.db.insert(authSchema.session).values({
+        id: sessionId,
+        token: sessionToken,
+        userId: user.id,
+        expiresAt,
+        ipAddress,
+        userAgent,
+      });
+
+      app.logger.info({ userId: user.id, email: normalizedEmail, sessionId }, 'Sign-in successful, session created');
+
+      return reply.status(200).send({
+        token: sessionToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          emailVerified: user.emailVerified,
+        },
+      });
+    } catch (error: unknown) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      app.logger.error({ err: error, email: normalizedEmail }, 'Sign-in error');
+      return reply.status(500).send({ error: 'Internal server error' });
+    }
+  });
+
+  // ==========================================
+  // CUSTOM SIGN-UP ENDPOINT
+  // Registered BEFORE Better Auth to take priority
+  // ==========================================
+  app.fastify.post('/api/auth/sign-up/email', {
+    schema: {
+      description: 'Sign up with email and password',
+      tags: ['auth'],
+      body: {
+        type: 'object',
+        required: ['email', 'password', 'name'],
+        properties: {
+          email: { type: 'string', format: 'email', description: 'Email address' },
+          password: { type: 'string', description: 'Password (will be hashed)' },
+          name: { type: 'string', description: 'User name' },
+        },
+      },
+      response: {
+        201: {
+          description: 'Sign up successful',
+          type: 'object',
+          properties: {
+            token: { type: 'string' },
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                email: { type: 'string' },
+                name: { type: 'string' },
+                role: { type: ['string', 'null'] },
+                emailVerified: { type: 'boolean' },
+              },
+            },
+          },
+        },
+        409: {
+          description: 'Email already exists',
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+          },
+        },
+        500: {
+          description: 'Internal server error',
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (
+    request: FastifyRequest<{ Body: { email: string; password: string; name: string } }>,
+    reply: FastifyReply
+  ): Promise<void> => {
+    const { email, password, name } = request.body;
+    const normalizedEmail = email.toLowerCase();
+
+    app.logger.info({ email: normalizedEmail, name }, 'Custom sign-up endpoint called');
+
+    try {
+      // Check if user already exists
+      const existingUser = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, normalizedEmail),
+      });
+
+      if (existingUser) {
+        app.logger.warn({ email: normalizedEmail }, 'Sign-up failed - email already exists');
+        return reply.status(409).send({ error: 'Email already exists' });
+      }
+
+      // Hash password
+      const bcrypt = await import('bcrypt');
+      const hashedPassword = await bcrypt.default.hash(password, 10);
+
+      app.logger.debug({ email: normalizedEmail }, 'Password hashed, creating user and account');
+
+      // Create user
+      const userId = crypto.randomUUID();
+      await app.db.insert(authSchema.user).values({
+        id: userId,
+        email: normalizedEmail,
+        name,
+        emailVerified: true,
+        requirePasswordChange: false,
+        role: null,
+      });
+
+      // Create credential account
+      const accountId = crypto.randomUUID();
+      await app.db.insert(authSchema.account).values({
+        id: accountId,
+        accountId: normalizedEmail,
+        providerId: 'credential',
+        userId,
+        password: hashedPassword,
+      });
+
+      // Create session
+      const sessionToken = crypto.randomBytes(16).toString('hex');
+      const sessionId = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+      const ipAddress = request.ip || '';
+      const userAgent = request.headers['user-agent'] || '';
+
+      await app.db.insert(authSchema.session).values({
+        id: sessionId,
+        token: sessionToken,
+        userId,
+        expiresAt,
+        ipAddress,
+        userAgent,
+      });
+
+      app.logger.info({ userId, email: normalizedEmail }, 'Sign-up successful');
+
+      return reply.status(201).send({
+        token: sessionToken,
+        user: {
+          id: userId,
+          email: normalizedEmail,
+          name,
+          role: null,
+          emailVerified: true,
+        },
+      });
+    } catch (error: unknown) {
+      app.logger.error({ err: error, email: normalizedEmail }, 'Sign-up error');
+      return reply.status(500).send({ error: 'Internal server error' });
+    }
+  });
   // POST /api/auth/test-signin - Test sign-in credentials without creating a session (for debugging)
   app.fastify.post('/api/auth/test-signin', {
     schema: {

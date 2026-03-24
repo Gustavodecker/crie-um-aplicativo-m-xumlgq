@@ -87,6 +87,15 @@ app.logger.info(
 // - COOKIE_DOMAIN: Cross-subdomain cookie domain (default: current domain)
 // - SESSION_STRICT: Enable strict validation (default: false)
 // - SESSION_COOKIE_CACHE: Enable cookie caching (default: true)
+
+// IMPORTANT: Register custom auth routes BEFORE app.withAuth() to take priority
+// This ensures custom sign-in/sign-up endpoints override Better Auth's default handlers
+registerAuthRoutes(app);
+
+// Enable storage
+app.withStorage();
+
+// Now initialize Better Auth (after custom routes are registered)
 app.withAuth({
   // Accept all origins - security is via token validation, not origin checking
   // Wildcard allows web browsers, mobile apps (via middleware), and any API client
@@ -116,11 +125,7 @@ app.fastify.addHook('onError', async (request, reply, error) => {
   }
 });
 
-// Enable storage
-app.withStorage();
-
-// Register all routes
-registerAuthRoutes(app);
+// Register all other routes (auth routes already registered above)
 registerInitRoutes(app);
 registerUserRoutes(app);
 registerConsultantRoutes(app);
@@ -362,6 +367,56 @@ app.fastify.addHook('onReady', () => {
       }
 
       // ==========================================
+      // STEP 5: Fix account_id for mother credential accounts
+      // ==========================================
+      app.logger.info('Step 5: Ensuring account_id matches email for mother credential accounts');
+
+      try {
+        // For each mother user with a credential account where account_id != email, update it
+        let fixedAccountIdCount = 0;
+
+        for (const mother of motherUsers) {
+          try {
+            const motherId = String(mother.id);
+            const motherEmail = String(mother.email);
+
+            const credAccount = credentialAccounts.find(
+              acc => acc.userId === motherId && acc.providerId === 'credential'
+            );
+
+            if (credAccount && credAccount.accountId !== motherEmail) {
+              app.logger.debug(
+                { userId: motherId, email: motherEmail, currentAccountId: credAccount.accountId },
+                'Fixing account_id to match email'
+              );
+
+              await app.db.update(authSchema.account)
+                .set({ accountId: motherEmail })
+                .where(eq(authSchema.account.id, credAccount.id));
+
+              fixedAccountIdCount++;
+              app.logger.info(
+                { userId: motherId, email: motherEmail },
+                'Fixed account_id to match email'
+              );
+            }
+          } catch (err: unknown) {
+            app.logger.error(
+              { err, userId: String(mother.id) },
+              'Error fixing account_id for mother'
+            );
+          }
+        }
+
+        app.logger.info(
+          { fixedAccountIdCount },
+          'Step 5 complete: account_id fixes for mother accounts'
+        );
+      } catch (err: unknown) {
+        app.logger.error({ err }, 'Error in Step 5 account_id fixes');
+      }
+
+      // ==========================================
       // Migration Summary
       // ==========================================
       app.logger.info(
@@ -369,6 +424,7 @@ app.fastify.addHook('onReady', () => {
           step1: { fixedPasswordCount, passwordFixErrors: passwordFixErrors.length },
           step2: { createdAccountCount, accountCreationErrors: accountCreationErrors.length },
           step3: { verifiedCount, verificationErrors: verificationErrors.length },
+          step5: 'Checked and fixed account_id for all mother credential accounts',
           totalMothers: motherUsers.length,
         },
         'Comprehensive credential account migration complete'
