@@ -1,7 +1,9 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
+import * as authSchema from '../db/schema/auth-schema.js';
+import crypto from 'crypto';
 
 export function registerInitRoutes(app: App) {
   const requireAuth = app.requireAuth();
@@ -66,5 +68,112 @@ export function registerInitRoutes(app: App) {
 
     app.logger.info({ consultantId: consultant.id, userId: session.user.id }, 'Consultant profile initialized');
     return reply.status(201).send(consultant);
+  });
+
+  // POST /api/init/fix-mother-account - Fix corrupted mother account (data migration endpoint)
+  app.fastify.post('/api/init/fix-mother-account', {
+    schema: {
+      description: 'Fix corrupted mother account with correct credential setup',
+      tags: ['init', 'maintenance'],
+      body: {
+        type: 'object',
+        required: ['email'],
+        properties: {
+          email: { type: 'string', description: 'Mother email to fix' },
+          password: { type: 'string', description: 'Password to set (default: todanoite123)', default: 'todanoite123' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+            userId: { type: 'string' },
+            email: { type: 'string' },
+            emailVerified: { type: 'boolean' },
+            accountCreated: { type: 'boolean' },
+          },
+        },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+        500: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request: FastifyRequest<{ Body: { email: string; password?: string } }>, reply: FastifyReply) => {
+    const email = request.body.email.toLowerCase();
+    const password = request.body.password || 'todanoite123';
+
+    app.logger.info({ email }, 'Fixing mother account');
+
+    try {
+      // Find user by email
+      const user = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, email),
+      });
+
+      if (!user) {
+        app.logger.warn({ email }, 'User not found for account fix');
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      app.logger.debug({ userId: user.id, email }, 'Found user');
+
+      // Hash the password using bcryptjs
+      const bcrypt = await import('bcrypt');
+      const hashedPassword = await bcrypt.default.hash(password, 10);
+
+      app.logger.debug({ userId: user.id }, 'Generated bcrypt hash');
+
+      // Fix account in transaction
+      let accountCreated = false;
+
+      await app.db.transaction(async (tx) => {
+        // Step 1: Ensure email_verified is true
+        await tx.update(authSchema.user)
+          .set({
+            emailVerified: true,
+          })
+          .where(eq(authSchema.user.id, user.id));
+
+        app.logger.debug({ userId: user.id }, 'Updated email_verified to true');
+
+        // Step 2: Delete any existing credential accounts for this user
+        await tx.delete(authSchema.account)
+          .where(
+            and(
+              eq(authSchema.account.userId, user.id),
+              eq(authSchema.account.providerId, 'credential')
+            )
+          );
+
+        app.logger.debug({ userId: user.id }, 'Deleted existing credential accounts');
+
+        // Step 3: Insert correct credential account with email as account_id
+        const accountId = crypto.randomUUID();
+        await tx.insert(authSchema.account).values({
+          id: accountId,
+          accountId: email,
+          providerId: 'credential',
+          userId: user.id,
+          password: hashedPassword,
+        });
+
+        accountCreated = true;
+        app.logger.info({ userId: user.id, accountId: email }, 'Created credential account with correct account_id');
+      });
+
+      app.logger.info({ userId: user.id, email }, 'Mother account fixed successfully');
+
+      return reply.status(200).send({
+        message: 'Mother account fixed successfully',
+        userId: user.id,
+        email: user.email,
+        emailVerified: true,
+        accountCreated,
+      });
+    } catch (error) {
+      app.logger.error({ err: error, email }, 'Error fixing mother account');
+      return reply.status(500).send({ error: 'Failed to fix mother account' });
+    }
   });
 }
