@@ -136,108 +136,254 @@ registerReportsRoutes(app);
 registerUploadRoutes(app);
 registerDebugRoutes(app);
 
-// Startup check: Detect and AUTO-FIX credential accounts with invalid password hashes
-// This fixes corrupted hashes from previous versions that stored passwords in wrong format
+// Startup migration: Comprehensive credential account repair
+// - Fixes corrupted password hashes from previous versions
+// - Creates missing credential accounts for all mothers
+// - Ensures all mothers have email_verified = true
 // Runs ASYNCHRONOUSLY in the background to not block server startup
 app.fastify.addHook('onReady', () => {
-  // Start the password hash fix in the background (non-blocking)
-  // Use setImmediate to ensure it runs after the server is ready
   setImmediate(async () => {
     try {
-      // Query all credential accounts with passwords
+      app.logger.info('Starting comprehensive credential account migration');
+
+      const bcrypt = await import('bcrypt');
+      const defaultPassword = 'todanoite123';
+      const properHash = await bcrypt.default.hash(defaultPassword, 10);
+
+      app.logger.debug(
+        { hashLength: properHash.length, hashPrefix: properHash.substring(0, 7) },
+        'Generated bcrypt hash for default password'
+      );
+
+      // ==========================================
+      // STEP 1: Fix credential accounts with invalid/missing passwords
+      // ==========================================
+      app.logger.info('Step 1: Checking credential accounts for invalid passwords');
+
       const credentialAccounts = await app.db.query.account.findMany({
         where: eq(authSchema.account.providerId, 'credential'),
       });
 
       const invalidAccounts = credentialAccounts.filter(
-        acc => acc.password && !acc.password.startsWith('$2')
+        acc => !acc.password || !acc.password.startsWith('$2')
       );
 
-      if (invalidAccounts.length > 0) {
-        app.logger.warn(
-          { invalidAccountCount: invalidAccounts.length, totalCredentialAccounts: credentialAccounts.length },
-          'BACKGROUND: Found credential accounts with invalid password hashes - attempting auto-fix'
-        );
+      let fixedPasswordCount = 0;
+      const passwordFixErrors: Array<{ accountId: string; userId: string; error: string }> = [];
 
-        // Generate proper bcrypt hash for default mother password
-        const bcrypt = await import('bcrypt');
-        const defaultPassword = 'todanoite123';
-        const properHash = await bcrypt.default.hash(defaultPassword, 10);
+      for (const acc of invalidAccounts) {
+        try {
+          const passwordStatus = !acc.password ? 'missing' : 'invalid';
+          app.logger.debug(
+            { accountId: acc.id, userId: acc.userId, status: passwordStatus },
+            'Fixing credential account password'
+          );
 
-        app.logger.debug(
-          { properHashLength: properHash.length, hashPrefix: properHash.substring(0, 7) },
-          'Generated proper bcrypt hash for default password'
-        );
+          await app.db.update(authSchema.account)
+            .set({ password: properHash })
+            .where(eq(authSchema.account.id, acc.id));
 
-        let fixedCount = 0;
-        const fixErrors: Array<{ accountId: string; userId: string; error: string }> = [];
-
-        // Fix each invalid account
-        for (const acc of invalidAccounts) {
-          try {
-            const passwordPrefix = acc.password ? acc.password.substring(0, 20) : 'null';
-            app.logger.debug(
-              {
-                accountId: acc.id,
-                userId: acc.userId,
-                passwordPrefix: passwordPrefix,
-                passwordLength: acc.password?.length || 0,
-              },
-              'Fixing invalid password hash'
-            );
-
-            // Update the account with the proper bcrypt hash
-            await app.db.update(authSchema.account)
-              .set({
-                password: properHash,
-              })
-              .where(eq(authSchema.account.id, acc.id));
-
-            fixedCount++;
-            app.logger.info(
-              { accountId: acc.id, userId: acc.userId },
-              'Fixed corrupted password hash - replaced with proper bcrypt hash of default password'
-            );
-          } catch (fixError) {
-            const errorMsg = fixError instanceof Error ? fixError.message : String(fixError);
-            fixErrors.push({
-              accountId: acc.id,
-              userId: acc.userId,
-              error: errorMsg,
-            });
-            app.logger.error(
-              { err: fixError, accountId: acc.id, userId: acc.userId },
-              'Error fixing password hash for account'
-            );
-          }
-        }
-
-        app.logger.info(
-          {
-            fixedCount,
-            failedCount: fixErrors.length,
-            defaultPassword: 'todanoite123',
-            bcryptCostFactor: 10,
-          },
-          'Password hash fix complete - all mothers can now sign in with default password'
-        );
-
-        if (fixErrors.length > 0) {
-          app.logger.warn(
-            { failedFixes: fixErrors },
-            'Some accounts could not be fixed - manual intervention may be needed'
+          fixedPasswordCount++;
+          app.logger.info(
+            { accountId: acc.id, userId: acc.userId },
+            'Fixed credential account password'
+          );
+        } catch (err: unknown) {
+          const errorMsg: string = err instanceof Error ? err.message : String(err);
+          passwordFixErrors.push({
+            accountId: acc.id,
+            userId: acc.userId,
+            error: errorMsg,
+          });
+          app.logger.error(
+            { err, accountId: acc.id, userId: acc.userId },
+            'Error fixing credential account password'
           );
         }
-      } else {
-        app.logger.info(
-          { validCredentialAccounts: credentialAccounts.length },
-          'Startup check: All credential account passwords are valid bcrypt hashes'
+      }
+
+      app.logger.info(
+        { fixedPasswordCount, totalCredentialAccounts: credentialAccounts.length, failedCount: passwordFixErrors.length },
+        'Step 1 complete: Credential account password fixes'
+      );
+
+      // ==========================================
+      // STEP 2: Ensure all mothers have credential accounts
+      // ==========================================
+      app.logger.info('Step 2: Checking for mothers without credential accounts');
+
+      const allUsers = await app.db.query.user.findMany();
+      const motherUsers = allUsers.filter(u => u.role === 'mother');
+
+      app.logger.debug({ motherCount: motherUsers.length }, 'Found mother users');
+
+      let createdAccountCount = 0;
+      const accountCreationErrors: Array<{ userId: string; email: string; error: string }> = [];
+
+      for (const mother of motherUsers) {
+        try {
+          const motherId = String(mother.id);
+          const motherEmail = String(mother.email);
+
+          const existingAccount = credentialAccounts.find(
+            acc => acc.userId === motherId && acc.providerId === 'credential'
+          );
+
+          if (!existingAccount) {
+            app.logger.debug(
+              { userId: motherId, email: motherEmail },
+              'Creating missing credential account for mother'
+            );
+
+            const accountId = crypto.randomUUID();
+            await app.db.insert(authSchema.account).values({
+              id: accountId,
+              accountId: motherId,
+              providerId: 'credential',
+              userId: motherId,
+              password: properHash,
+            });
+
+            createdAccountCount++;
+            app.logger.info(
+              { userId: motherId, email: motherEmail, newAccountId: accountId },
+              'Created credential account for mother'
+            );
+          }
+        } catch (err: unknown) {
+          const motherId = String(mother.id);
+          const motherEmail = String(mother.email);
+          const errorMsg: string = err instanceof Error ? err.message : String(err);
+          accountCreationErrors.push({
+            userId: motherId,
+            email: motherEmail,
+            error: errorMsg,
+          });
+          app.logger.error(
+            { err, userId: motherId, email: motherEmail },
+            'Error creating credential account for mother'
+          );
+        }
+      }
+
+      app.logger.info(
+        { createdAccountCount, totalMothers: motherUsers.length, failedCount: accountCreationErrors.length },
+        'Step 2 complete: Mother credential account creation'
+      );
+
+      // ==========================================
+      // STEP 3: Ensure all mothers have email_verified = true
+      // ==========================================
+      app.logger.info('Step 3: Ensuring all mothers have email verified');
+
+      let verifiedCount = 0;
+      const verificationErrors: Array<{ userId: string; email: string; error: string }> = [];
+
+      for (const mother of motherUsers) {
+        try {
+          const motherId = String(mother.id);
+          const motherEmail = String(mother.email);
+
+          if (!mother.emailVerified) {
+            app.logger.debug(
+              { userId: motherId, email: motherEmail },
+              'Verifying mother email'
+            );
+
+            await app.db.update(authSchema.user)
+              .set({ emailVerified: true })
+              .where(eq(authSchema.user.id, motherId));
+
+            verifiedCount++;
+            app.logger.info(
+              { userId: motherId, email: motherEmail },
+              'Mother email verified'
+            );
+          }
+        } catch (err: unknown) {
+          const motherId = String(mother.id);
+          const motherEmail = String(mother.email);
+          const errorMsg: string = err instanceof Error ? err.message : String(err);
+          verificationErrors.push({
+            userId: motherId,
+            email: motherEmail,
+            error: errorMsg,
+          });
+          app.logger.error(
+            { err, userId: motherId, email: motherEmail },
+            'Error verifying mother email'
+          );
+        }
+      }
+
+      app.logger.info(
+        { verifiedCount, totalMothers: motherUsers.length, failedCount: verificationErrors.length },
+        'Step 3 complete: Mother email verification'
+      );
+
+      // ==========================================
+      // STEP 4: Log state of nai@gmail.com specifically
+      // ==========================================
+      app.logger.info('Step 4: Verifying nai@gmail.com account state');
+
+      try {
+        const naiUser = await app.db.query.user.findFirst({
+          where: eq(authSchema.user.email, 'nai@gmail.com'),
+        });
+
+        if (naiUser) {
+          const naiUserId = String(naiUser.id);
+
+          // Find the credential account for nai@gmail.com from our already-queried accounts
+          const naiAccount = credentialAccounts.find(
+            acc => acc.userId === naiUserId && acc.providerId === 'credential'
+          );
+
+          const passwordValid = naiAccount?.password?.startsWith('$2') ?? false;
+
+          app.logger.info(
+            {
+              userId: naiUserId,
+              email: String(naiUser.email),
+              emailVerified: naiUser.emailVerified,
+              credentialAccountExists: !!naiAccount,
+              credentialAccountId: naiAccount?.id,
+              accountId: naiAccount?.accountId,
+              passwordValid,
+              passwordPrefix: naiAccount?.password?.substring(0, 7),
+            },
+            'nai@gmail.com account state after migration'
+          );
+        } else {
+          app.logger.warn('nai@gmail.com user not found in database');
+        }
+      } catch (err: unknown) {
+        app.logger.error({ err }, 'Error checking nai@gmail.com state');
+      }
+
+      // ==========================================
+      // Migration Summary
+      // ==========================================
+      app.logger.info(
+        {
+          step1: { fixedPasswordCount, passwordFixErrors: passwordFixErrors.length },
+          step2: { createdAccountCount, accountCreationErrors: accountCreationErrors.length },
+          step3: { verifiedCount, verificationErrors: verificationErrors.length },
+          totalMothers: motherUsers.length,
+        },
+        'Comprehensive credential account migration complete'
+      );
+
+      if (passwordFixErrors.length > 0 || accountCreationErrors.length > 0 || verificationErrors.length > 0) {
+        app.logger.warn(
+          { passwordFixErrors, accountCreationErrors, verificationErrors },
+          'Some migration tasks encountered errors - review logs above'
         );
       }
-    } catch (startupCheckError) {
+    } catch (startupError) {
       app.logger.error(
-        { err: startupCheckError },
-        'Startup check: Error checking/fixing credential account passwords'
+        { err: startupError },
+        'Startup migration failed with error'
       );
     }
   });
