@@ -103,6 +103,19 @@ app.logger.info(
   'Authentication initialized with Better Auth - Session persistence enabled'
 );
 
+// Add error handler for auth routes to log detailed errors
+app.fastify.addHook('onError', async (request, reply, error) => {
+  if (request.url.startsWith('/api/auth/')) {
+    app.logger.error({
+      err: error,
+      path: request.url,
+      method: request.method,
+      statusCode: reply.statusCode,
+      email: (request.body as any)?.email,
+    }, 'Auth endpoint error');
+  }
+});
+
 // Enable storage
 app.withStorage();
 

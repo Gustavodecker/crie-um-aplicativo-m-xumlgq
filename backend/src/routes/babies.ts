@@ -90,11 +90,11 @@ export function registerBabiesRoutes(app: App) {
 
           // Update existing user to ensure email_verified = true and create credential account
           await app.db.transaction(async (tx) => {
-            // Update user to mark email as verified
+            // Update user to mark email as verified and disable password change requirement
             await tx.update(authSchema.user)
               .set({
                 emailVerified: true,
-                requirePasswordChange: true,
+                requirePasswordChange: false,
               })
               .where(eq(authSchema.user.id, existingUser.id));
 
@@ -129,13 +129,13 @@ export function registerBabiesRoutes(app: App) {
           const accountId = crypto.randomUUID();
 
           await app.db.transaction(async (tx) => {
-            // Create user with email_verified = true
+            // Create user with email_verified = true and requirePasswordChange = false
             await tx.insert(authSchema.user).values({
               id: motherId,
               name: request.body.motherName,
               email: normalizedEmail,
               emailVerified: true,
-              requirePasswordChange: true,
+              requirePasswordChange: false,
               role: 'mother',
             });
 

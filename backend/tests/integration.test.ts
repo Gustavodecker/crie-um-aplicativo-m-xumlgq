@@ -172,6 +172,30 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  // ===== Fix Mother Account =====
+
+  test("Fix mother account with nonexistent email returns 404", async () => {
+    const res = await api("/api/init/fix-mother-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "nonexistent-mother@example.com",
+      }),
+    });
+    await expectStatus(res, 404);
+  });
+
+  test("Fix mother account without required email returns 400", async () => {
+    const res = await api("/api/init/fix-mother-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        password: "customPassword123",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ===== User =====
 
   test("Get user feature flags", async () => {
