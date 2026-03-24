@@ -1,4 +1,5 @@
 import type { App } from '../index.js';
+import { createCustomRequireAuth } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
@@ -14,7 +15,7 @@ import { hashPassword, verifyPassword } from 'better-auth/crypto';
  */
 
 export function registerUserRoutes(app: App) {
-  const requireAuth = app.requireAuth();
+  const requireAuth = createCustomRequireAuth(app);
 
   // POST /api/user/set-password - Set user password without verification
   app.fastify.post('/api/user/set-password', {

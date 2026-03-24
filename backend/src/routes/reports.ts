@@ -1,4 +1,5 @@
 import type { App } from '../index.js';
+import { createCustomRequireAuth } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and, gte, lte } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
@@ -25,7 +26,7 @@ function calculateSleepDuration(startTime: string | null, endTime: string | null
 }
 
 export function registerReportsRoutes(app: App) {
-  const requireAuth = app.requireAuth();
+  const requireAuth = createCustomRequireAuth(app);
 
   // GET /api/reports/baby/:babyId - Returns aggregated sleep data
   app.fastify.get('/api/reports/baby/:babyId', {

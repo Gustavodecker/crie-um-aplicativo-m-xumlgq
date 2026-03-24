@@ -1,4 +1,5 @@
 import type { App } from '../index.js';
+import { createCustomRequireAuth } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
@@ -6,7 +7,8 @@ import * as authSchema from '../db/schema/auth-schema.js';
 import crypto from 'crypto';
 
 export function registerConsultantRoutes(app: App) {
-  const requireAuth = app.requireAuth();
+  // Use custom auth resolver that properly filters by token (fixes critical bug)
+  const requireAuth = createCustomRequireAuth(app);
 
   // POST /api/consultant/babies - Creates baby for authenticated consultant
   app.fastify.post('/api/consultant/babies', {

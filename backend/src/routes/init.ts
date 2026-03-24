@@ -1,4 +1,5 @@
 import type { App } from '../index.js';
+import { createCustomRequireAuth } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
@@ -6,7 +7,7 @@ import * as authSchema from '../db/schema/auth-schema.js';
 import crypto from 'crypto';
 
 export function registerInitRoutes(app: App) {
-  const requireAuth = app.requireAuth();
+  const requireAuth = createCustomRequireAuth(app);
 
   // POST /api/init/consultant - Initialize consultant profile after signup
   app.fastify.post('/api/init/consultant', {

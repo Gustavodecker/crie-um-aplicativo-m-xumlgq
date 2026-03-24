@@ -1,4 +1,5 @@
 import type { App } from '../index.js';
+import { createCustomRequireAuth } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
@@ -12,7 +13,7 @@ import * as schema from '../db/schema/schema.js';
  */
 
 export function registerMotherRoutes(app: App) {
-  const requireAuth = app.requireAuth();
+  const requireAuth = createCustomRequireAuth(app);
 
   // GET /api/mother/baby - Returns the baby linked to authenticated mother
   app.fastify.get('/api/mother/baby', {

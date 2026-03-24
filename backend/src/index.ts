@@ -30,6 +30,62 @@ export const app = await createApplication(schema);
 // Export App type for use in route files
 export type App = typeof app;
 
+// Custom auth resolver - fixes critical bug where all requests resolve to wrong user
+// Properly filters sessions by exact token value instead of using unfiltered queries
+export function createCustomRequireAuth(app: App) {
+  return async function customRequireAuth(request: any, reply: any) {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      reply.status(401).send({ error: 'Unauthorized' });
+      return null;
+    }
+
+    const token = authHeader.slice(7); // Remove "Bearer " prefix
+
+    try {
+      app.logger.debug({ tokenPrefix: token.substring(0, 8) }, 'Resolving token to user');
+
+      // CRITICAL: Filter by EXACT token value - never use unfiltered queries
+      const session = await app.db.query.session.findFirst({
+        where: eq(authSchema.session.token, token),
+      });
+
+      if (!session) {
+        app.logger.warn({ tokenPrefix: token.substring(0, 8) }, 'Session not found for token');
+        reply.status(401).send({ error: 'Unauthorized' });
+        return null;
+      }
+
+      // Verify session is not expired
+      if (new Date() > new Date(session.expiresAt)) {
+        app.logger.warn({ sessionId: session.id, expiresAt: session.expiresAt }, 'Session expired');
+        reply.status(401).send({ error: 'Session expired' });
+        return null;
+      }
+
+      // Look up user by session's user_id
+      const user = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.id, session.userId),
+      });
+
+      if (!user) {
+        app.logger.error({ userId: session.userId }, 'User not found for session');
+        reply.status(401).send({ error: 'Unauthorized' });
+        return null;
+      }
+
+      app.logger.debug({ userId: user.id, email: user.email }, 'Token resolved to user successfully');
+
+      return { session, user };
+    } catch (error) {
+      app.logger.error({ err: error }, 'Error resolving token to user');
+      reply.status(500).send({ error: 'Internal server error' });
+      return null;
+    }
+  };
+}
+
 // Mobile apps (React Native/Expo) do NOT send Origin headers
 // This is standard behavior and should NOT block authentication
 // We need to explicitly allow requests without Origin in Better Auth config

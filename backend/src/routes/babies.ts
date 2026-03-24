@@ -1,4 +1,5 @@
 import type { App } from '../index.js';
+import { createCustomRequireAuth } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
@@ -6,7 +7,7 @@ import * as authSchema from '../db/schema/auth-schema.js';
 import crypto from 'crypto';
 
 export function registerBabiesRoutes(app: App) {
-  const requireAuth = app.requireAuth();
+  const requireAuth = createCustomRequireAuth(app);
 
   // POST /api/babies - Creates baby (consultant only)
   app.fastify.post('/api/babies', {

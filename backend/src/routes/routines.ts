@@ -1,4 +1,5 @@
 import type { App } from '../index.js';
+import { createCustomRequireAuth } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
@@ -25,7 +26,7 @@ function canEditRoutine(createdAt: Date): boolean {
 }
 
 export function registerRoutinesRoutes(app: App) {
-  const requireAuth = app.requireAuth();
+  const requireAuth = createCustomRequireAuth(app);
 
   // GET /api/routines/baby/:babyId - Returns all routines for baby
   app.fastify.get('/api/routines/baby/:babyId', {

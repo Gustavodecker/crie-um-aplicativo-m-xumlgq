@@ -1,10 +1,11 @@
 import type { App } from '../index.js';
+import { createCustomRequireAuth } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq } from 'drizzle-orm';
 import * as schema from '../db/schema/schema.js';
 
 export function registerOrientationsRoutes(app: App) {
-  const requireAuth = app.requireAuth();
+  const requireAuth = createCustomRequireAuth(app);
 
   // GET /api/orientations/baby/:babyId - Returns all orientations for baby
   app.fastify.get('/api/orientations/baby/:babyId', {
