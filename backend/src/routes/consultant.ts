@@ -191,15 +191,15 @@ export function registerConsultantRoutes(app: App) {
 
         // Update existing user to ensure email_verified = true and create credential account
         await app.db.transaction(async (tx) => {
-          // Update user to mark email as verified
+          // Update user to mark email as verified and disable password change requirement
           await tx.update(authSchema.user)
             .set({
               emailVerified: true,
-              requirePasswordChange: true,
+              requirePasswordChange: false,
             })
             .where(eq(authSchema.user.id, existingUser.id));
 
-          app.logger.debug({ motherId: existingUser.id }, 'Mother user updated with email_verified=true');
+          app.logger.debug({ motherId: existingUser.id }, 'Mother user updated with email_verified=true and requirePasswordChange=false');
 
           // Delete existing credential account if it exists
           await tx.delete(authSchema.account)
@@ -224,23 +224,25 @@ export function registerConsultantRoutes(app: App) {
 
           app.logger.debug({ accountId, motherId: existingUser.id }, 'Credential account created for existing user');
         });
+
+        app.logger.info({ motherEmail: normalizedEmail, userId: existingUser.id }, 'Mother account created/updated successfully');
       } else {
         // Create mother user account in transaction
         const motherId = crypto.randomUUID();
         const accountId = crypto.randomUUID();
 
         await app.db.transaction(async (tx) => {
-          // Create user with email_verified = true
+          // Create user with email_verified = true and requirePasswordChange = false
           await tx.insert(authSchema.user).values({
             id: motherId,
             name: motherName,
             email: normalizedEmail,
             emailVerified: true,
-            requirePasswordChange: true,
+            requirePasswordChange: false,
             role: 'mother',
           });
 
-          app.logger.debug({ motherId, motherEmail: normalizedEmail }, 'Mother user created');
+          app.logger.debug({ motherId, motherEmail: normalizedEmail }, 'Mother user created with email_verified=true and requirePasswordChange=false');
 
           // Create account for the user
           await tx.insert(authSchema.account).values({
@@ -255,6 +257,7 @@ export function registerConsultantRoutes(app: App) {
         });
 
         motherUserId = motherId;
+        app.logger.info({ motherEmail: normalizedEmail, userId: motherId }, 'Mother account created/updated successfully');
       }
 
       temporaryPassword = provisionalPassword;
