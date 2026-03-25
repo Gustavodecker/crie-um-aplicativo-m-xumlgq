@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "TodaNoite Baby",
-    "slug": "crie-um-aplicativo-m",
-    "version": "1.0.46",
+    "slug": "crie-um-aplicativo-m-xumlgq",
+    "version": "1.0.71",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -27,7 +27,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.todanoite.baby",
-      "versionCode": 46,
+      "versionCode": 71,
       "edgeToEdgeEnabled": false,
       "userInterfaceStyle": "automatic",
       "permissions": [
@@ -49,7 +49,7 @@
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://wge47dvbdvqm7g2vmsdnz45beh8s73xx.app.specular.dev",
+      "backendUrl": "https://prod-proj-5k9qncchwvt3rgmn6rvjs-liwg5h36mq-ey.a.run.app",
       "apiUrl": "https://wge47dvbdvqm7g2vmsdnz45beh8s73xx.app.specular.dev"
     }
   }
