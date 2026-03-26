@@ -247,6 +247,17 @@ export default function AuthScreen() {
                     <TouchableOpacity
                       style={styles.linkButton}
                       onPress={() => {
+                        console.log("User pressed 'Esqueci minha senha' link");
+                        router.push("/forgot-password");
+                      }}
+                      disabled={loading}
+                    >
+                      <Text style={styles.linkText}>Esqueci minha senha</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.linkButton}
+                      onPress={() => {
                         setConsultantStep("register");
                         handleResetFlow();
                       }}

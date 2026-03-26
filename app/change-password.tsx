@@ -1,6 +1,6 @@
 
 import React, { useState } from "react";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
-import { apiPost } from "@/utils/api";
+import { apiPost, BACKEND_URL } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { ChevronLeft } from "lucide-react-native";
 
@@ -29,15 +29,22 @@ export default function ChangePasswordScreen() {
 
   const { clearRequirePasswordChange, signOut } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams<{ token?: string }>();
+  const resetToken = params.token;
+
+  // If a reset token is present, this screen was opened via the forgot-password deep link
+  const isResetFlow = !!resetToken;
 
   const handleBackToLogin = async () => {
     console.log("[ChangePassword] User pressed 'Voltar para o login' button");
-    await signOut();
+    if (!isResetFlow) {
+      await signOut();
+    }
     router.replace("/auth");
   };
 
   const handleChangePassword = async () => {
-    console.log("[ChangePassword] User pressed 'Alterar Senha' button");
+    console.log("[ChangePassword] User pressed 'Alterar Senha' button, isResetFlow:", isResetFlow);
     setError("");
 
     if (!newPassword || !confirmPassword) {
@@ -58,11 +65,41 @@ export default function ChangePasswordScreen() {
     setLoading(true);
 
     try {
-      console.log("[API] POST /api/user/set-password — sending request...");
-      await apiPost("/api/user/set-password", { newPassword });
-      console.log("[ChangePassword] Password changed successfully");
-      await clearRequirePasswordChange();
-      console.log("[ChangePassword] requirePasswordChange cleared — NavigationGuard will redirect to /(tabs)");
+      if (isResetFlow) {
+        // Password reset via forgot-password link — use Better Auth reset endpoint
+        console.log("[API] POST /api/auth/reset-password — sending request with token...");
+        const response = await fetch(`${BACKEND_URL}/api/auth/reset-password`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Origin": BACKEND_URL,
+          },
+          body: JSON.stringify({ newPassword, token: resetToken }),
+        });
+
+        console.log("[ChangePassword] Reset password response status:", response.status);
+
+        if (!response.ok) {
+          const text = await response.text();
+          console.error("[ChangePassword] Reset password error:", response.status, text);
+          let errorMsg = "Erro ao redefinir senha";
+          try {
+            const errJson = JSON.parse(text);
+            errorMsg = errJson.message || errJson.error || errorMsg;
+          } catch {}
+          throw new Error(errorMsg);
+        }
+
+        console.log("[ChangePassword] Password reset successfully via token");
+        router.replace("/auth");
+      } else {
+        // Forced password change for mothers (first login)
+        console.log("[API] POST /api/user/set-password — sending request...");
+        await apiPost("/api/user/set-password", { newPassword });
+        console.log("[ChangePassword] Password changed successfully");
+        await clearRequirePasswordChange();
+        console.log("[ChangePassword] requirePasswordChange cleared — NavigationGuard will redirect to /(tabs)");
+      }
     } catch (err: any) {
       console.error("[ChangePassword] Password change error:", err);
       const errorMessage = err?.message || "Erro ao alterar senha";
