@@ -172,6 +172,109 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  // ===== Password Reset =====
+
+  test("Request password reset with valid email returns 200", async () => {
+    const res = await api("/api/password-reset/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Request password reset with nonexistent email returns 200", async () => {
+    const res = await api("/api/password-reset/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "nonexistent-reset@example.com",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Request password reset without email returns 400", async () => {
+    const res = await api("/api/password-reset/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Request password reset with invalid email format returns 400", async () => {
+    const res = await api("/api/password-reset/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "not-an-email",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Confirm password reset with invalid token returns 400", async () => {
+    const res = await api("/api/password-reset/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "invalid-token-xyz",
+        newPassword: "NewPassword456!",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Confirm password reset with expired token returns 400", async () => {
+    const res = await api("/api/password-reset/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "expired-token-12345",
+        newPassword: "NewPassword456!",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Confirm password reset without token returns 400", async () => {
+    const res = await api("/api/password-reset/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        newPassword: "NewPassword456!",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Confirm password reset without newPassword returns 400", async () => {
+    const res = await api("/api/password-reset/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: "some-token",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Confirm password reset with missing fields returns 400", async () => {
+    const res = await api("/api/password-reset/confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ===== Fix Mother Account =====
 
   test("Fix mother account with nonexistent email returns 404", async () => {

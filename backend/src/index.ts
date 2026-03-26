@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 
 // Import route registration functions
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerPasswordResetRoutes } from './routes/password-reset.js';
 import { registerInitRoutes } from './routes/init.js';
 import { registerUserRoutes } from './routes/user.js';
 import { registerConsultantRoutes } from './routes/consultant.js';
@@ -200,6 +201,7 @@ app.fastify.addHook('onError', async (request, reply, error) => {
 });
 
 // Register all other routes (auth routes already registered above)
+registerPasswordResetRoutes(app);
 registerInitRoutes(app);
 registerUserRoutes(app);
 registerConsultantRoutes(app);
