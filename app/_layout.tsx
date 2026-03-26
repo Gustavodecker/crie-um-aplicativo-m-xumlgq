@@ -37,8 +37,10 @@ function NavigationGuard({ children }: { children: React.ReactNode }) {
 
     const inAuthGroup = segments[0] === "auth";
     const inChangePassword = segments[0] === "change-password";
+    const inForgotPassword = segments[0] === "forgot-password";
+    const isPublicRoute = inAuthGroup || inForgotPassword;
 
-    if (!user && !inAuthGroup) {
+    if (!user && !isPublicRoute) {
       // User not logged in, redirect to auth
       console.log("[RootLayout] 🚪 No user, redirecting to /auth");
       router.replace("/auth");
