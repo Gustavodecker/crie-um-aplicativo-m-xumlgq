@@ -66,15 +66,12 @@ export default function ChangePasswordScreen() {
 
     try {
       if (isResetFlow) {
-        // Password reset via forgot-password link — use Better Auth reset endpoint
-        console.log("[API] POST /api/auth/reset-password — sending request with token...");
-        const response = await fetch(`${BACKEND_URL}/api/auth/reset-password`, {
+        // Password reset via forgot-password link — use custom reset endpoint
+        console.log("[API] POST /api/password-reset/confirm — sending request with token...");
+        const response = await fetch(`${BACKEND_URL}/api/password-reset/confirm`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Origin": BACKEND_URL,
-          },
-          body: JSON.stringify({ newPassword, token: resetToken }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: resetToken, newPassword }),
         });
 
         console.log("[ChangePassword] Reset password response status:", response.status);

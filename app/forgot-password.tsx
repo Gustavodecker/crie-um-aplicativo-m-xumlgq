@@ -43,16 +43,12 @@ export default function ForgotPasswordScreen() {
     setError("");
 
     try {
-      const redirectTo = "crie-um-aplicativo-m://change-password";
-      console.log("[API] POST /api/auth/forget-password — sending request for email:", email);
+      console.log("[API] POST /api/password-reset/request — sending request for email:", email);
 
-      const response = await fetch(`${BACKEND_URL}/api/auth/forget-password`, {
+      const response = await fetch(`${BACKEND_URL}/api/password-reset/request`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Origin": BACKEND_URL,
-        },
-        body: JSON.stringify({ email: email.trim(), redirectTo }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
       });
 
       console.log("[ForgotPassword] Response status:", response.status);
