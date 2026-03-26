@@ -26,6 +26,146 @@ describe("API Integration Tests", () => {
     expect(userId).toBeDefined();
   });
 
+  test("Sign in with valid credentials", async () => {
+    const res = await api("/api/auth-debug/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        password: "TestPassword123!",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.token).toBeDefined();
+    expect(data.user).toBeDefined();
+    expect(data.user.email).toBe(userEmail);
+    expect(data.user.id).toBe(userId);
+  });
+
+  test("Sign in with invalid email returns 401", async () => {
+    const res = await api("/api/auth-debug/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "nonexistent@example.com",
+        password: "Password123!",
+      }),
+    });
+    await expectStatus(res, 401);
+    const data = await res.json();
+    expect(data.error).toBeDefined();
+  });
+
+  test("Sign in with wrong password returns 401", async () => {
+    const res = await api("/api/auth-debug/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        password: "WrongPassword123!",
+      }),
+    });
+    await expectStatus(res, 401);
+    const data = await res.json();
+    expect(data.error).toBeDefined();
+  });
+
+  test("Sign in without email returns 400", async () => {
+    const res = await api("/api/auth-debug/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        password: "Password123!",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Sign in without password returns 400", async () => {
+    const res = await api("/api/auth-debug/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Sign up with valid data creates user", async () => {
+    const uniqueId = crypto.randomUUID();
+    const email = `testuser+${uniqueId}@example.com`;
+    const res = await api("/api/auth-debug/sign-up", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: email,
+        password: "NewPassword456!",
+        name: "Test New User",
+      }),
+    });
+    await expectStatus(res, 201);
+    const data = await res.json();
+    expect(data.token).toBeDefined();
+    expect(data.user).toBeDefined();
+    expect(data.user.email).toBe(email);
+    expect(data.user.name).toBe("Test New User");
+  });
+
+  test("Sign up with duplicate email returns 409", async () => {
+    const res = await api("/api/auth-debug/sign-up", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        password: "NewPassword456!",
+        name: "Duplicate User",
+      }),
+    });
+    await expectStatus(res, 409);
+    const data = await res.json();
+    expect(data.error).toBeDefined();
+  });
+
+  test("Sign up without email returns 400", async () => {
+    const res = await api("/api/auth-debug/sign-up", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        password: "NewPassword456!",
+        name: "Test User",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Sign up without password returns 400", async () => {
+    const uniqueId = crypto.randomUUID();
+    const res = await api("/api/auth-debug/sign-up", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `user+${uniqueId}@example.com`,
+        name: "Test User",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Sign up without name returns 400", async () => {
+    const uniqueId = crypto.randomUUID();
+    const res = await api("/api/auth-debug/sign-up", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: `user+${uniqueId}@example.com`,
+        password: "NewPassword456!",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   test("Test sign-in with valid credentials", async () => {
     const res = await api("/api/auth-debug/test-signin", {
       method: "POST",

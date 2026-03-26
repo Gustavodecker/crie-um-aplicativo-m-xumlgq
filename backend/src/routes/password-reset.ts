@@ -100,8 +100,6 @@ export function registerPasswordResetRoutes(app: App) {
       app.logger.info({ userId: user.id, email: normalizedEmail, verificationId }, 'Verification record created');
 
       // Send reset email
-      const resetUrl = `crie-um-aplicativo-m://change-password?token=${token}`;
-
       resend.emails.send({
         from: 'onboarding@resend.dev',
         to: normalizedEmail,
@@ -109,7 +107,7 @@ export function registerPasswordResetRoutes(app: App) {
         html: `
           <p>Olá, ${user.name}!</p>
           <p>Clique no link abaixo para redefinir sua senha:</p>
-          <p><a href="${resetUrl}">Redefinir senha</a></p>
+          <p><a href="crie-um-aplicativo-m://change-password?token=${token}">Redefinir senha</a></p>
           <p>Este link expira em 1 hora.</p>
           <p>Se você não solicitou a redefinição de senha, ignore este email.</p>
         `,
