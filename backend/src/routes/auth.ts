@@ -5,11 +5,14 @@ import * as authSchema from '../db/schema/auth-schema.js';
 import crypto from 'crypto';
 
 export function registerAuthRoutes(app: App) {
+  app.logger.info('Registering custom auth helper routes');
+
   // ==========================================
   // CUSTOM SIGN-IN ENDPOINT
-  // Registered BEFORE Better Auth to take priority
+  // Registered at /api/auth-debug/sign-in to avoid conflict with Better Auth
+  // This endpoint is for testing and debugging purposes only
   // ==========================================
-  app.fastify.post('/api/auth/sign-in/email', {
+  app.fastify.post('/api/auth-debug/sign-in', {
     schema: {
       description: 'Sign in with email and password',
       tags: ['auth'],
@@ -137,9 +140,10 @@ export function registerAuthRoutes(app: App) {
 
   // ==========================================
   // CUSTOM SIGN-UP ENDPOINT
-  // Registered BEFORE Better Auth to take priority
+  // Registered at /api/auth-debug/sign-up to avoid conflict with Better Auth
+  // This endpoint is for testing and debugging purposes only
   // ==========================================
-  app.fastify.post('/api/auth/sign-up/email', {
+  app.fastify.post('/api/auth-debug/sign-up', {
     schema: {
       description: 'Sign up with email and password',
       tags: ['auth'],
@@ -266,8 +270,8 @@ export function registerAuthRoutes(app: App) {
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
-  // POST /api/auth/test-signin - Test sign-in credentials without creating a session (for debugging)
-  app.fastify.post('/api/auth/test-signin', {
+  // POST /api/auth-debug/test-signin - Test sign-in credentials without creating a session (for debugging)
+  app.fastify.post('/api/auth-debug/test-signin', {
     schema: {
       description: 'Test sign-in credentials and diagnose authentication issues (no session created)',
       tags: ['auth', 'debug'],
@@ -411,5 +415,5 @@ export function registerAuthRoutes(app: App) {
     }
   });
 
-  app.logger.info('Auth routes configured - Better Auth handling /api/auth/* endpoints with automatic password hashing');
+  app.logger.info('Debug auth routes registered at /api/auth-debug/* - Better Auth handling all /api/auth/* endpoints');
 }

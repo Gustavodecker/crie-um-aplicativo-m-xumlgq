@@ -118,6 +118,9 @@ app.logger.info(
   'Session configuration loaded'
 );
 
+// Enable storage first
+app.withStorage();
+
 // Enable authentication with Better Auth
 // Configuration includes mobile app support with flexible Origin handling
 // Session Management Configuration:
@@ -135,6 +138,9 @@ app.logger.info(
 // - Authentication is protected by session tokens, NOT Origin header validation
 // - Security comes from token-based authentication, not CORS origin checks
 //
+// IMPORTANT: Better Auth reserves all /api/auth/* paths and must register them first
+// This ensures all endpoints including password reset, email verification, etc. are available
+//
 // Environment Variables (see .env.example):
 // - SESSION_EXPIRATION_TIME: Session duration in ms (default: 30 days)
 // - REFRESH_TOKEN_EXPIRATION_TIME: Refresh token duration in ms (default: 90 days)
@@ -144,14 +150,6 @@ app.logger.info(
 // - SESSION_STRICT: Enable strict validation (default: false)
 // - SESSION_COOKIE_CACHE: Enable cookie caching (default: true)
 
-// IMPORTANT: Register custom auth routes BEFORE app.withAuth() to take priority
-// This ensures custom sign-in/sign-up endpoints override Better Auth's default handlers
-registerAuthRoutes(app);
-
-// Enable storage
-app.withStorage();
-
-// Now initialize Better Auth (after custom routes are registered)
 app.withAuth({
   // Accept all origins - security is via token validation, not origin checking
   // Wildcard allows web browsers, mobile apps (via middleware), and any API client
@@ -173,6 +171,10 @@ app.withAuth({
     },
   },
 });
+
+// Register custom auth routes AFTER app.withAuth() to extend Better Auth functionality
+// Custom routes can coexist with Better Auth but should not duplicate /api/auth/* paths
+registerAuthRoutes(app);
 
 app.logger.info(
   { trustedOrigins: ["*"], mobileSupport: 'enabled', securityModel: 'token-based' },

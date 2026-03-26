@@ -27,7 +27,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Test sign-in with valid credentials", async () => {
-    const res = await api("/api/auth/test-signin", {
+    const res = await api("/api/auth-debug/test-signin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -43,7 +43,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Test sign-in with nonexistent email returns 200 with userFound false", async () => {
-    const res = await api("/api/auth/test-signin", {
+    const res = await api("/api/auth-debug/test-signin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -58,7 +58,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Test sign-in with wrong password returns 200 with passwordVerified false", async () => {
-    const res = await api("/api/auth/test-signin", {
+    const res = await api("/api/auth-debug/test-signin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -74,7 +74,7 @@ describe("API Integration Tests", () => {
   });
 
   test("Test sign-in without required fields returns 400", async () => {
-    const res = await api("/api/auth/test-signin", {
+    const res = await api("/api/auth-debug/test-signin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1062,6 +1062,46 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Archive consultant contract with different consultant returns 403", async () => {
+    // Sign up a different consultant
+    const { token: consultant2Token } = await signUpTestUser();
+
+    // Create a baby and contract under consultant1
+    const newBabyRes = await authenticatedApi("/api/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby for 403 Archive Test",
+        birthDate: "2024-09-15",
+        motherName: "Mother",
+        motherPhone: "+1234567890",
+      }),
+    });
+    const newBaby = await newBabyRes.json();
+
+    const contractRes = await authenticatedApi("/api/contracts", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyId: newBaby.id,
+        startDate: "2026-03-15",
+        durationDays: 30,
+        status: "active",
+      }),
+    });
+    const newContract = await contractRes.json();
+
+    // Try to archive with consultant2
+    const res = await authenticatedApi(
+      `/api/consultant/contracts/${newContract.id}/archive`,
+      consultant2Token,
+      {
+        method: "PATCH",
+      }
+    );
+    await expectStatus(res, 403);
+  });
+
   test("Delete consultant contract", async () => {
     // Create a new contract to delete
     const newBabyRes = await authenticatedApi("/api/babies", authToken, {
@@ -1130,6 +1170,46 @@ describe("API Integration Tests", () => {
       }
     );
     await expectStatus(res, 401);
+  });
+
+  test("Delete consultant contract with different consultant returns 403", async () => {
+    // Sign up a different consultant
+    const { token: consultant2Token } = await signUpTestUser();
+
+    // Create a baby and contract under consultant1
+    const newBabyRes = await authenticatedApi("/api/babies", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Baby for 403 Delete Test",
+        birthDate: "2024-10-15",
+        motherName: "Mother",
+        motherPhone: "+1234567890",
+      }),
+    });
+    const newBaby = await newBabyRes.json();
+
+    const contractRes = await authenticatedApi("/api/contracts", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        babyId: newBaby.id,
+        startDate: "2026-04-01",
+        durationDays: 30,
+        status: "active",
+      }),
+    });
+    const newContract = await contractRes.json();
+
+    // Try to delete with consultant2
+    const res = await authenticatedApi(
+      `/api/consultant/contracts/${newContract.id}`,
+      consultant2Token,
+      {
+        method: "DELETE",
+      }
+    );
+    await expectStatus(res, 403);
   });
 
   // ===== Routines =====
@@ -2417,6 +2497,57 @@ describe("API Integration Tests", () => {
     const { token: newMotherToken } = await signUpTestUser();
     const res = await authenticatedApi("/api/mother/baby", newMotherToken);
     await expectStatus(res, 404);
+  });
+
+  test("Mother can access baby after registration", async () => {
+    const uniqueId = crypto.randomUUID();
+    const motherEmail = `mother+${uniqueId}@example.com`;
+
+    // Register baby and mother
+    const registerRes = await authenticatedApi(
+      "/api/consultant/register-baby-and-mother",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Baby for Mother Access",
+          birthDate: "2024-10-15",
+          motherName: "Test Mother",
+          motherPhone: "+1234567890",
+          motherEmail: motherEmail,
+          objectives: "Test objectives",
+        }),
+      }
+    );
+    await expectStatus(registerRes, 201);
+    const baby = await registerRes.json();
+    expect(baby.id).toBeDefined();
+    expect(baby.temporaryPassword).toBeDefined();
+
+    // Sign in with temporary password
+    const signInRes = await api("/api/auth-debug/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: motherEmail,
+        password: baby.temporaryPassword,
+      }),
+    });
+    await expectStatus(signInRes, 200);
+    const signInData = await signInRes.json();
+    const motherToken = signInData.token;
+    expect(motherToken).toBeDefined();
+
+    // Access baby as mother
+    const babyRes = await authenticatedApi(
+      "/api/mother/baby",
+      motherToken
+    );
+    await expectStatus(babyRes, 200);
+    const babyData = await babyRes.json();
+    expect(babyData.id).toBe(baby.id);
+    expect(babyData.name).toBe("Baby for Mother Access");
   });
 
   // ===== Get Mother's Consultant =====

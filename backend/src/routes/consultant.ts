@@ -295,7 +295,7 @@ export function registerConsultantRoutes(app: App) {
   // POST /api/consultants/create-profile - Create consultant profile after signup
   app.fastify.post('/api/consultants/create-profile', {
     schema: {
-      description: 'Create consultant profile (called after signing up via /api/auth/sign-up/email)',
+      description: 'Create consultant profile (called after signing up via /api/auth/sign-up/email or /api/auth-debug/sign-up)',
       tags: ['consultant'],
       body: {
         type: 'object',
