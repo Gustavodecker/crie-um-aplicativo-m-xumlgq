@@ -1,4 +1,4 @@
-import { createApplication } from "@specific-dev/framework";
+import { createApplication, resend } from "@specific-dev/framework";
 import * as appSchema from './db/schema/schema.js';
 import * as authSchema from './db/schema/auth-schema.js';
 import { sessionConfig } from './config/session.js';
@@ -156,6 +156,22 @@ app.withAuth({
   // Accept all origins - security is via token validation, not origin checking
   // Wildcard allows web browsers, mobile apps (via middleware), and any API client
   trustedOrigins: ["*"],
+  // Configure password reset email
+  emailAndPassword: {
+    sendResetPassword: async ({ user, url }) => {
+      resend.emails.send({
+        from: "onboarding@resend.dev",
+        to: user.email,
+        subject: "Redefinição de senha",
+        html: `
+          <p>Olá, ${user.name}!</p>
+          <p>Clique no link abaixo para redefinir sua senha:</p>
+          <p><a href="${url}">${url}</a></p>
+          <p>Se você não solicitou a redefinição de senha, ignore este email.</p>
+        `,
+      });
+    },
+  },
 });
 
 app.logger.info(
