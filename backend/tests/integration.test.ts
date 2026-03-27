@@ -324,7 +324,7 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.success).toBe(true);
+    expect(data.message).toBe("Email enviado");
   });
 
   test("Request password reset with nonexistent email returns 200", async () => {
@@ -337,7 +337,7 @@ describe("API Integration Tests", () => {
     });
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(data.success).toBe(true);
+    expect(data.message).toBe("Email enviado");
   });
 
   test("Request password reset without email returns 400", async () => {

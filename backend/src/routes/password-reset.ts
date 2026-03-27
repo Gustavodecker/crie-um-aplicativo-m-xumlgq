@@ -28,7 +28,7 @@ export function registerPasswordResetRoutes(app: App) {
           description: 'Password reset request processed (returns success regardless of whether user exists)',
           type: 'object',
           properties: {
-            success: { type: 'boolean' },
+            message: { type: 'string' },
           },
         },
         400: {
@@ -64,7 +64,7 @@ export function registerPasswordResetRoutes(app: App) {
 
       if (!user) {
         app.logger.warn({ email: normalizedEmail }, 'Password reset requested for non-existent user (returning success for security)');
-        return reply.status(200).send({ success: true });
+        return reply.status(200).send({ message: 'Email enviado' });
       }
 
       app.logger.debug({ userId: user.id, email: normalizedEmail }, 'User found, generating reset token');
@@ -100,6 +100,8 @@ export function registerPasswordResetRoutes(app: App) {
       app.logger.info({ userId: user.id, email: normalizedEmail, verificationId }, 'Verification record created');
 
       // Send reset email
+      const resetLink = `crie-um-aplicativo-m://change-password?token=${token}`;
+
       resend.emails.send({
         from: 'onboarding@resend.dev',
         to: normalizedEmail,
@@ -107,7 +109,7 @@ export function registerPasswordResetRoutes(app: App) {
         html: `
           <p>Olá, ${user.name}!</p>
           <p>Clique no link abaixo para redefinir sua senha:</p>
-          <p><a href="crie-um-aplicativo-m://change-password?token=${token}">Redefinir senha</a></p>
+          <p><a href="${resetLink}">Redefinir senha</a></p>
           <p>Este link expira em 1 hora.</p>
           <p>Se você não solicitou a redefinição de senha, ignore este email.</p>
         `,
@@ -115,7 +117,7 @@ export function registerPasswordResetRoutes(app: App) {
 
       app.logger.info({ userId: user.id, email: normalizedEmail }, 'Password reset email sent');
 
-      return reply.status(200).send({ success: true });
+      return reply.status(200).send({ message: 'Email enviado' });
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       app.logger.error({ err: error, email: normalizedEmail }, 'Password reset request error');
