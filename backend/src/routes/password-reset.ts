@@ -101,18 +101,16 @@ export function registerPasswordResetRoutes(app: App) {
 
       // Send reset email
       const resetLink = `crie-um-aplicativo-m://change-password?token=${token}`;
+      const name = user.name;
+      const html = `<p>Olá, ${name}!</p><p>Clique no link abaixo para redefinir sua senha:</p><p><a href="${resetLink}">${resetLink}</a></p>`;
+      const text = `Acesse o link para redefinir sua senha: ${resetLink}`;
 
       resend.emails.send({
         from: 'onboarding@resend.dev',
         to: normalizedEmail,
         subject: 'Redefinição de senha',
-        html: `
-          <p>Olá, ${user.name}!</p>
-          <p>Clique no link abaixo para redefinir sua senha:</p>
-          <p><a href="${resetLink}">Redefinir senha</a></p>
-          <p>Este link expira em 1 hora.</p>
-          <p>Se você não solicitou a redefinição de senha, ignore este email.</p>
-        `,
+        html,
+        text,
       });
 
       app.logger.info({ userId: user.id, email: normalizedEmail }, 'Password reset email sent');
