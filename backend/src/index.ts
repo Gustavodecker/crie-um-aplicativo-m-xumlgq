@@ -193,11 +193,13 @@ app.fastify.addHook('onError', async (request, reply, error) => {
   if (request.url.startsWith('/api/auth/')) {
     app.logger.error({
       err: error,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack : undefined,
       path: request.url,
       method: request.method,
       statusCode: reply.statusCode,
       email: (request.body as any)?.email,
-    }, 'Auth endpoint error');
+    }, 'Auth endpoint error - Better Auth or custom auth handler exception');
   }
 });
 

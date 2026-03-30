@@ -295,10 +295,11 @@ export function registerDebugRoutes(app: App) {
             userId: { type: 'string' },
             accountId: { type: 'string' },
             hashPrefix: { type: ['string', 'null'] },
+            hashLength: { type: 'number' },
             isValidBcrypt: { type: 'boolean' },
             accountUpdatedAt: { type: ['string', 'null'] },
             userMustChangePassword: { type: 'boolean' },
-            userRequirePasswordChange: { type: 'boolean' },
+            requirePasswordChange: { type: 'boolean' },
           },
         },
         401: {
@@ -372,18 +373,20 @@ export function registerDebugRoutes(app: App) {
         return reply.status(404).send({ error: 'Credential account not found' });
       }
 
-      const hashPrefix = credentialAccount.password ? credentialAccount.password.substring(0, 20) : null;
-      const isValidBcrypt = credentialAccount.password ? credentialAccount.password.startsWith('$2') : false;
+      const hashPrefix = credentialAccount.password ? credentialAccount.password.substring(0, 7) : null;
+      const hashLength = credentialAccount.password ? credentialAccount.password.length : 0;
+      const isValidBcrypt = credentialAccount.password ? (credentialAccount.password.startsWith('$2b$') || credentialAccount.password.startsWith('$2a$')) : false;
 
       const response = {
         email: user.email,
         userId: user.id,
         accountId: credentialAccount.id,
         hashPrefix,
+        hashLength,
         isValidBcrypt,
         accountUpdatedAt: credentialAccount.updatedAt ? new Date(credentialAccount.updatedAt).toISOString() : null,
         userMustChangePassword: user.mustChangePassword ?? false,
-        userRequirePasswordChange: user.requirePasswordChange ?? false,
+        requirePasswordChange: user.requirePasswordChange ?? false,
       };
 
       app.logger.info(

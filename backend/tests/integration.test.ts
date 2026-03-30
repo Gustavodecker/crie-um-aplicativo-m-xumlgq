@@ -237,7 +237,7 @@ describe("API Integration Tests", () => {
     expect(data.accountId).toBeDefined();
     expect(typeof data.isValidBcrypt).toBe("boolean");
     expect(typeof data.userMustChangePassword).toBe("boolean");
-    expect(typeof data.userRequirePasswordChange).toBe("boolean");
+    expect(typeof data.requirePasswordChange).toBe("boolean");
   });
 
   test("Check hash with nonexistent email returns 404", async () => {

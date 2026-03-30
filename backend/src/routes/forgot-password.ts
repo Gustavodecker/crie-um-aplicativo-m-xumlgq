@@ -130,11 +130,12 @@ export function registerForgotPasswordRoutes(app: App) {
 
       app.logger.debug({ userId: user.id, email: normalizedEmail, accountId: credentialAccount.id }, 'Account password updated, setting must_change_password flags');
 
-      // Update user table - set must_change_password, temp_password_expires_at to 24 hours from now, and updated_at
+      // Update user table - set both must_change_password and require_password_change, set temp_password_expires_at to 24 hours from now
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       const updateUserResult = await app.db.update(authSchema.user)
         .set({
           mustChangePassword: true,
+          requirePasswordChange: true,
           tempPasswordExpiresAt: expiresAt,
         })
         .where(eq(authSchema.user.id, user.id));
