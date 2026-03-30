@@ -2986,4 +2986,9 @@ describe("API Integration Tests", () => {
     expect(data.hasPassword).toBeDefined();
     expect(data.requirePasswordChange).toBeDefined();
   });
+
+  test("Debug schema check returns 200", async () => {
+    const res = await api("/api/debug/schema-check");
+    await expectStatus(res, 200);
+  });
 });

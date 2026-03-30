@@ -223,4 +223,56 @@ export function registerDebugRoutes(app: App) {
       return reply.status(500).send({ error: 'Failed to fetch password status' });
     }
   });
+
+  // GET /api/debug/schema-check - Diagnostic schema inspection (READ-ONLY)
+  app.fastify.get('/api/debug/schema-check', async (request: FastifyRequest, reply: FastifyReply) => {
+    app.logger.info({}, 'Debug: Running schema check');
+
+    try {
+      // Query 1: Account table columns
+      const accountColumnsResult = (await app.db.execute(`
+        SELECT column_name, data_type
+        FROM information_schema.columns
+        WHERE table_name = 'account'
+        ORDER BY ordinal_position
+      `)) as Array<{ column_name: string; data_type: string }>;
+
+      // Query 2: User table columns
+      const userColumnsResult = (await app.db.execute(`
+        SELECT column_name, data_type
+        FROM information_schema.columns
+        WHERE table_name = 'user'
+        ORDER BY ordinal_position
+      `)) as Array<{ column_name: string; data_type: string }>;
+
+      // Query 3: Sample accounts with credential providers
+      const sampleAccountsResult = (await app.db.execute(`
+        SELECT id, user_id, provider_id, LEFT(password, 10) as password_prefix
+        FROM account
+        WHERE provider_id LIKE '%cred%' OR provider_id LIKE '%email%'
+        LIMIT 5
+      `)) as Array<{ id: string; user_id: string; provider_id: string; password_prefix: string | null }>;
+
+      const response = {
+        accountColumns: accountColumnsResult,
+        userColumns: userColumnsResult,
+        sampleAccounts: sampleAccountsResult,
+        timestamp: new Date().toISOString(),
+      };
+
+      app.logger.info(
+        {
+          accountColumnCount: accountColumnsResult?.length || 0,
+          userColumnCount: userColumnsResult?.length || 0,
+          sampleAccountCount: sampleAccountsResult?.length || 0
+        },
+        'Debug: Schema check completed'
+      );
+
+      return reply.status(200).send(response);
+    } catch (error) {
+      app.logger.error({ err: error }, 'Debug: Error running schema check');
+      return reply.status(500).send({ error: 'Failed to run schema check', message: error instanceof Error ? error.message : String(error) });
+    }
+  });
 }
