@@ -114,6 +114,20 @@ export function registerForgotPasswordRoutes(app: App) {
 
       console.log('[forgot-password] rows updated:', (updateAccountResult as any)?.rowCount || 1);
 
+      // Verify the hash was stored correctly by querying it back
+      const storedAccount = await app.db.query.account.findFirst({
+        where: eq(authSchema.account.id, credentialAccount.id),
+      });
+
+      if (storedAccount?.password) {
+        app.logger.info({
+          email: normalizedEmail,
+          hash20: storedAccount.password.substring(0, 20),
+          hashLength: storedAccount.password.length,
+          isValidBcryptFormat: storedAccount.password.startsWith('$2')
+        }, 'Stored temp password hash prefix (first 20 chars)');
+      }
+
       app.logger.debug({ userId: user.id, email: normalizedEmail, accountId: credentialAccount.id }, 'Account password updated, setting must_change_password flags');
 
       // Update user table - set must_change_password, temp_password_expires_at to 24 hours from now, and updated_at

@@ -275,4 +275,126 @@ export function registerDebugRoutes(app: App) {
       return reply.status(500).send({ error: 'Failed to run schema check', message: error instanceof Error ? error.message : String(error) });
     }
   });
+
+  // GET /api/auth-debug/check-hash?email=... - Inspect password hash details (protected)
+  app.fastify.get<{ Querystring: { email?: string } }>('/api/auth-debug/check-hash', {
+    schema: {
+      description: 'Check password hash details for debugging (protected)',
+      tags: ['auth-debug'],
+      querystring: {
+        type: 'object',
+        properties: {
+          email: { type: 'string', description: 'User email address' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            email: { type: 'string' },
+            userId: { type: 'string' },
+            accountId: { type: 'string' },
+            hashPrefix: { type: ['string', 'null'] },
+            isValidBcrypt: { type: 'boolean' },
+            accountUpdatedAt: { type: ['string', 'null'] },
+            userMustChangePassword: { type: 'boolean' },
+            userRequirePasswordChange: { type: 'boolean' },
+          },
+        },
+        401: {
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+          },
+        },
+        404: {
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { email } = request.query as { email?: string };
+
+    // Require authentication for this endpoint - validate Bearer token
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      app.logger.warn({ email }, 'Check hash: Unauthorized access attempt - no Bearer token');
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+
+    const sessionToken = authHeader.slice(7);
+
+    // Validate session token exists and is not expired
+    try {
+      const session = await app.db.query.session.findFirst({
+        where: eq(authSchema.session.token, sessionToken),
+      });
+
+      if (!session || new Date() > new Date(session.expiresAt)) {
+        app.logger.warn({ email, tokenPrefix: sessionToken.substring(0, 8) }, 'Check hash: Invalid or expired session token');
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+    } catch (sessionError) {
+      app.logger.error({ err: sessionError }, 'Check hash: Error validating session');
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+
+    if (!email) {
+      return reply.status(400).send({ error: 'email query parameter is required' });
+    }
+
+    try {
+      app.logger.info({ email }, 'Check hash: Inspecting hash for email');
+
+      // Look up user by email
+      const user = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, email),
+      });
+
+      if (!user) {
+        app.logger.warn({ email }, 'Check hash: User not found');
+        return reply.status(404).send({ error: 'User not found' });
+      }
+
+      // Find credential account
+      const credentialAccount = await app.db.query.account.findFirst({
+        where: and(
+          eq(authSchema.account.userId, user.id),
+          eq(authSchema.account.providerId, 'credential')
+        ),
+      });
+
+      if (!credentialAccount) {
+        app.logger.warn({ email, userId: user.id }, 'Check hash: Credential account not found');
+        return reply.status(404).send({ error: 'Credential account not found' });
+      }
+
+      const hashPrefix = credentialAccount.password ? credentialAccount.password.substring(0, 20) : null;
+      const isValidBcrypt = credentialAccount.password ? credentialAccount.password.startsWith('$2') : false;
+
+      const response = {
+        email: user.email,
+        userId: user.id,
+        accountId: credentialAccount.id,
+        hashPrefix,
+        isValidBcrypt,
+        accountUpdatedAt: credentialAccount.updatedAt ? new Date(credentialAccount.updatedAt).toISOString() : null,
+        userMustChangePassword: user.mustChangePassword ?? false,
+        userRequirePasswordChange: user.requirePasswordChange ?? false,
+      };
+
+      app.logger.info(
+        { email, userId: user.id, isValidBcrypt, hashPrefix },
+        'Check hash: Returning hash details'
+      );
+
+      return reply.status(200).send(response);
+    } catch (error) {
+      app.logger.error({ err: error, email }, 'Check hash: Error inspecting hash');
+      return reply.status(500).send({ error: 'Failed to check hash' });
+    }
+  });
 }

@@ -247,12 +247,40 @@ app.fastify.addHook('onReady', () => {
         where: eq(authSchema.account.providerId, 'credential'),
       });
 
-      const invalidAccounts = credentialAccounts.filter(
-        acc => !acc.password || !acc.password.startsWith('$2')
+      // Get all users to check for must_change_password flag
+      const allUsersForStep1 = await app.db.query.user.findMany();
+      const usersWithMustChangePassword = new Set(
+        allUsersForStep1
+          .filter(u => u.mustChangePassword === true || u.requirePasswordChange === true)
+          .map(u => u.id)
       );
 
+      // Get current time for 24-hour check
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const invalidAccounts = credentialAccounts.filter(acc => {
+        // Skip accounts with temp passwords (must_change_password flag)
+        if (usersWithMustChangePassword.has(acc.userId)) {
+          return false;
+        }
+        // Skip accounts updated in the last 24 hours (likely recently changed)
+        if (acc.updatedAt && new Date(acc.updatedAt) > twentyFourHoursAgo) {
+          return false;
+        }
+        // Check for invalid/missing passwords
+        return !acc.password || !acc.password.startsWith('$2');
+      });
+
       let fixedPasswordCount = 0;
+      let skippedMustChangePassword = 0;
       const passwordFixErrors: Array<{ accountId: string; userId: string; error: string }> = [];
+
+      for (const acc of credentialAccounts) {
+        // Count skipped accounts with must_change_password
+        if (usersWithMustChangePassword.has(acc.userId) && (!acc.password || !acc.password.startsWith('$2'))) {
+          skippedMustChangePassword++;
+        }
+      }
 
       for (const acc of invalidAccounts) {
         try {
@@ -286,7 +314,7 @@ app.fastify.addHook('onReady', () => {
       }
 
       app.logger.info(
-        { fixedPasswordCount, totalCredentialAccounts: credentialAccounts.length, failedCount: passwordFixErrors.length },
+        { fixedPasswordCount, totalCredentialAccounts: credentialAccounts.length, skippedMustChangePassword, failedCount: passwordFixErrors.length },
         'Step 1 complete: Credential account password fixes'
       );
 

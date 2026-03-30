@@ -225,6 +225,44 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  test("Check hash with valid email and auth", async () => {
+    const res = await authenticatedApi(
+      `/api/auth-debug/check-hash?email=${encodeURIComponent(userEmail)}`,
+      authToken
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.email).toBe(userEmail);
+    expect(data.userId).toBeDefined();
+    expect(data.accountId).toBeDefined();
+    expect(typeof data.isValidBcrypt).toBe("boolean");
+    expect(typeof data.userMustChangePassword).toBe("boolean");
+    expect(typeof data.userRequirePasswordChange).toBe("boolean");
+  });
+
+  test("Check hash with nonexistent email returns 404", async () => {
+    const res = await authenticatedApi(
+      `/api/auth-debug/check-hash?email=${encodeURIComponent("nonexistent@example.com")}`,
+      authToken
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Check hash without auth returns 401", async () => {
+    const res = await api(
+      `/api/auth-debug/check-hash?email=${encodeURIComponent(userEmail)}`
+    );
+    await expectStatus(res, 401);
+  });
+
+  test("Check hash with invalid token returns 401", async () => {
+    const res = await authenticatedApi(
+      `/api/auth-debug/check-hash?email=${encodeURIComponent(userEmail)}`,
+      "invalid-token-xyz"
+    );
+    await expectStatus(res, 401);
+  });
+
   test("Initialize consultant profile", async () => {
     const res = await authenticatedApi("/api/init/consultant", authToken, {
       method: "POST",
