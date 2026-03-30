@@ -229,9 +229,9 @@ app.fastify.addHook('onReady', () => {
     try {
       app.logger.info('Starting comprehensive credential account migration');
 
-      const bcrypt = await import('bcrypt');
+      const bcrypt = await import('bcryptjs');
       const defaultPassword = 'todanoite123';
-      const properHash = await bcrypt.default.hash(defaultPassword, 10);
+      const properHash = await bcrypt.hash(defaultPassword, 10);
 
       app.logger.debug(
         { hashLength: properHash.length, hashPrefix: properHash.substring(0, 7) },
