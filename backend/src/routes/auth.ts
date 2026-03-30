@@ -40,6 +40,7 @@ export function registerAuthRoutes(app: App) {
                 emailVerified: { type: 'boolean' },
               },
             },
+            mustChangePassword: { type: 'boolean', description: 'Whether user must change password after temporary password login' },
           },
         },
         401: {
@@ -103,6 +104,21 @@ export function registerAuthRoutes(app: App) {
         return reply.status(401).send({ error: 'Invalid email or password' });
       }
 
+      app.logger.debug({ userId: user.id }, 'Password verified, checking temporary password status');
+
+      // Check if temporary password has expired
+      let mustChangePassword = user.mustChangePassword;
+      if (user.mustChangePassword && user.tempPasswordExpiresAt) {
+        if (new Date() > new Date(user.tempPasswordExpiresAt)) {
+          // Temporary password has expired, clear the flag
+          app.logger.debug({ userId: user.id }, 'Temporary password expired, clearing flag');
+          await app.db.update(authSchema.user)
+            .set({ mustChangePassword: false })
+            .where(eq(authSchema.user.id, user.id));
+          mustChangePassword = false;
+        }
+      }
+
       // Create session
       const sessionToken = crypto.randomBytes(16).toString('hex');
       const sessionId = crypto.randomUUID();
@@ -119,7 +135,7 @@ export function registerAuthRoutes(app: App) {
         userAgent,
       });
 
-      app.logger.info({ userId: user.id, email: normalizedEmail, sessionId }, 'Sign-in successful, session created');
+      app.logger.info({ userId: user.id, email: normalizedEmail, sessionId, mustChangePassword }, 'Sign-in successful, session created');
 
       return reply.status(200).send({
         token: sessionToken,
@@ -130,6 +146,7 @@ export function registerAuthRoutes(app: App) {
           role: user.role,
           emailVerified: user.emailVerified,
         },
+        mustChangePassword,
       });
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : String(error);
