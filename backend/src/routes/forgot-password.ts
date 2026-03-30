@@ -76,7 +76,22 @@ export function registerForgotPasswordRoutes(app: App) {
         return reply.status(200).send({ message: 'Se o email estiver cadastrado, você receberá uma nova senha por email' });
       }
 
-      app.logger.debug({ userId: user.id, email: normalizedEmail }, 'User found, generating temporary password');
+      app.logger.debug({ userId: user.id, email: normalizedEmail }, 'User found, verifying credential account exists');
+
+      // Verify credential account exists
+      const credentialAccount = await app.db.query.account.findFirst({
+        where: and(
+          eq(authSchema.account.userId, user.id),
+          eq(authSchema.account.providerId, 'credential')
+        ),
+      });
+
+      if (!credentialAccount) {
+        app.logger.error({ userId: user.id, email: normalizedEmail }, 'Credential account not found for user');
+        return reply.status(200).send({ message: 'Se o email estiver cadastrado, você receberá uma nova senha por email' });
+      }
+
+      app.logger.debug({ userId: user.id, accountId: credentialAccount.id }, 'Credential account found, generating temporary password');
 
       // Generate temporary password (8 chars: uppercase + digits)
       const tempPassword = generateTempPassword();
@@ -85,19 +100,14 @@ export function registerForgotPasswordRoutes(app: App) {
       const bcrypt = await import('bcryptjs');
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-      app.logger.debug({ userId: user.id, email: normalizedEmail }, 'Temporary password hashed, updating account');
+      app.logger.debug({ userId: user.id, email: normalizedEmail }, 'Temporary password hashed, updating account with new hash');
 
       // Update password in account table
-      await app.db.update(authSchema.account)
+      const updateResult = await app.db.update(authSchema.account)
         .set({ password: hashedPassword })
-        .where(
-          and(
-            eq(authSchema.account.userId, user.id),
-            eq(authSchema.account.providerId, 'credential')
-          )
-        );
+        .where(eq(authSchema.account.id, credentialAccount.id));
 
-      app.logger.debug({ userId: user.id, email: normalizedEmail }, 'Password updated, setting must_change_password flag');
+      app.logger.debug({ userId: user.id, email: normalizedEmail, accountId: credentialAccount.id }, 'Account password updated, setting must_change_password flag');
 
       // Calculate expiration time (30 minutes from now)
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
