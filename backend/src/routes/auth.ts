@@ -97,10 +97,24 @@ export function registerAuthRoutes(app: App) {
       app.logger.debug({ userId: user.id, accountId: credentialAccount.id }, 'Credential account found, verifying password');
 
       // Verify password using bcryptjs (same library as forgot-password for consistency)
-      const bcrypt = await import('bcryptjs');
-      app.logger.debug({ userId: user.id, passwordHashPrefix: credentialAccount.password.substring(0, 7) }, 'Comparing password with hash');
-      const passwordValid = await bcrypt.compare(password, credentialAccount.password);
-      app.logger.debug({ userId: user.id, passwordValid }, 'Password comparison complete');
+      let passwordValid = false;
+      try {
+        const bcrypt = await import('bcryptjs');
+        app.logger.debug({ userId: user.id, passwordHashPrefix: credentialAccount.password.substring(0, 20) }, 'Comparing password with hash');
+        passwordValid = await bcrypt.compare(password, credentialAccount.password);
+        app.logger.debug({ userId: user.id, passwordValid }, 'Password comparison complete');
+      } catch (compareError: unknown) {
+        const errorMsg = compareError instanceof Error ? compareError.message : String(compareError);
+        app.logger.error({
+          userId: user.id,
+          email: normalizedEmail,
+          err: compareError,
+          errorMsg,
+          hashLength: credentialAccount.password?.length,
+          hashPrefix: credentialAccount.password?.substring(0, 20)
+        }, 'Password comparison threw exception');
+        return reply.status(500).send({ error: 'Password verification error' });
+      }
 
       if (!passwordValid) {
         app.logger.warn({ userId: user.id, email: normalizedEmail }, 'Sign-in failed - invalid password');
