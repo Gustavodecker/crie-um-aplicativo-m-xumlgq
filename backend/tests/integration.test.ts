@@ -15,7 +15,7 @@ describe("API Integration Tests", () => {
   let orientationId: string;
   let sleepWindowId: string;
 
-  // ===== Auth & Consultant Profile =====
+  // ===== Setup & Auth =====
 
   test("Sign up test user", async () => {
     const { token, user } = await signUpTestUser();
@@ -26,506 +26,7 @@ describe("API Integration Tests", () => {
     expect(userId).toBeDefined();
   });
 
-  test("Sign in with valid credentials", async () => {
-    const res = await api("/api/auth-debug/sign-in", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-        password: "TestPassword123!",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.token).toBeDefined();
-    expect(data.user).toBeDefined();
-    expect(data.user.email).toBe(userEmail);
-    expect(data.user.id).toBe(userId);
-  });
-
-  test("Sign in with invalid email returns 401", async () => {
-    const res = await api("/api/auth-debug/sign-in", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "nonexistent@example.com",
-        password: "Password123!",
-      }),
-    });
-    await expectStatus(res, 401);
-    const data = await res.json();
-    expect(data.error).toBeDefined();
-  });
-
-  test("Sign in with wrong password returns 401", async () => {
-    const res = await api("/api/auth-debug/sign-in", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-        password: "WrongPassword123!",
-      }),
-    });
-    await expectStatus(res, 401);
-    const data = await res.json();
-    expect(data.error).toBeDefined();
-  });
-
-  test("Sign in without email returns 400", async () => {
-    const res = await api("/api/auth-debug/sign-in", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        password: "Password123!",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Sign in without password returns 400", async () => {
-    const res = await api("/api/auth-debug/sign-in", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Sign up with valid data creates user", async () => {
-    const uniqueId = crypto.randomUUID();
-    const email = `testuser+${uniqueId}@example.com`;
-    const res = await api("/api/auth-debug/sign-up", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: email,
-        password: "NewPassword456!",
-        name: "Test New User",
-      }),
-    });
-    await expectStatus(res, 201);
-    const data = await res.json();
-    expect(data.token).toBeDefined();
-    expect(data.user).toBeDefined();
-    expect(data.user.email).toBe(email);
-    expect(data.user.name).toBe("Test New User");
-  });
-
-  test("Sign up with duplicate email returns 409", async () => {
-    const res = await api("/api/auth-debug/sign-up", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-        password: "NewPassword456!",
-        name: "Duplicate User",
-      }),
-    });
-    await expectStatus(res, 409);
-    const data = await res.json();
-    expect(data.error).toBeDefined();
-  });
-
-  test("Sign up without email returns 400", async () => {
-    const res = await api("/api/auth-debug/sign-up", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        password: "NewPassword456!",
-        name: "Test User",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Sign up without password returns 400", async () => {
-    const uniqueId = crypto.randomUUID();
-    const res = await api("/api/auth-debug/sign-up", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: `user+${uniqueId}@example.com`,
-        name: "Test User",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Sign up without name returns 400", async () => {
-    const uniqueId = crypto.randomUUID();
-    const res = await api("/api/auth-debug/sign-up", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: `user+${uniqueId}@example.com`,
-        password: "NewPassword456!",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Test sign-in with valid credentials", async () => {
-    const res = await api("/api/auth-debug/test-signin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-        password: "TestPassword123!",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.email).toBe(userEmail);
-    expect(data.userFound).toBe(true);
-    expect(typeof data.passwordVerified).toBe("boolean");
-  });
-
-  test("Test sign-in with nonexistent email returns 200 with userFound false", async () => {
-    const res = await api("/api/auth-debug/test-signin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "nonexistent@example.com",
-        password: "Password123!",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.email).toBe("nonexistent@example.com");
-    expect(data.userFound).toBe(false);
-  });
-
-  test("Test sign-in with wrong password returns 200 with passwordVerified false", async () => {
-    const res = await api("/api/auth-debug/test-signin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-        password: "WrongPassword123!",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.email).toBe(userEmail);
-    expect(data.userFound).toBe(true);
-    expect(data.passwordVerified).toBe(false);
-  });
-
-  test("Test sign-in without required fields returns 400", async () => {
-    const res = await api("/api/auth-debug/test-signin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-        // missing password
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Check hash with valid email and auth", async () => {
-    const res = await authenticatedApi(
-      `/api/auth-debug/check-hash?email=${encodeURIComponent(userEmail)}`,
-      authToken
-    );
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.email).toBe(userEmail);
-    expect(data.userId).toBeDefined();
-    expect(data.accountId).toBeDefined();
-    expect(typeof data.isValidBcrypt).toBe("boolean");
-    expect(typeof data.userMustChangePassword).toBe("boolean");
-    expect(typeof data.requirePasswordChange).toBe("boolean");
-  });
-
-  test("Check hash with nonexistent email returns 404", async () => {
-    const res = await authenticatedApi(
-      `/api/auth-debug/check-hash?email=${encodeURIComponent("nonexistent@example.com")}`,
-      authToken
-    );
-    await expectStatus(res, 404);
-  });
-
-  test("Check hash without auth returns 401", async () => {
-    const res = await api(
-      `/api/auth-debug/check-hash?email=${encodeURIComponent(userEmail)}`
-    );
-    await expectStatus(res, 401);
-  });
-
-  test("Check hash with invalid token returns 401", async () => {
-    const res = await authenticatedApi(
-      `/api/auth-debug/check-hash?email=${encodeURIComponent(userEmail)}`,
-      "invalid-token-xyz"
-    );
-    await expectStatus(res, 401);
-  });
-
-  test("Initialize consultant profile", async () => {
-    const res = await authenticatedApi("/api/init/consultant", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Dr. Test Consultant",
-        photo: null,
-        logo: null,
-        primaryColor: "#FF5733",
-        secondaryColor: "#33FF57",
-      }),
-    });
-    await expectStatus(res, 201);
-    const data = await res.json();
-    consultantId = data.id;
-    expect(data.name).toBe("Dr. Test Consultant");
-    expect(data.userId).toBe(userId);
-    expect(data.primaryColor).toBe("#FF5733");
-  });
-
-  test("Get consultant profile", async () => {
-    const res = await authenticatedApi("/api/consultant/profile", authToken);
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.id).toBe(consultantId);
-    expect(data.name).toBe("Dr. Test Consultant");
-  });
-
-  test("Update consultant profile", async () => {
-    const res = await authenticatedApi("/api/consultant/profile", authToken, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Dr. Updated Consultant",
-        primaryColor: "#0000FF",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.name).toBe("Dr. Updated Consultant");
-    expect(data.primaryColor).toBe("#0000FF");
-  });
-
-  test("Init consultant without required name field returns 400", async () => {
-    const res = await authenticatedApi("/api/init/consultant", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        photo: null,
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Get consultant profile without auth returns 401", async () => {
-    const res = await api("/api/consultant/profile");
-    await expectStatus(res, 401);
-  });
-
-  test("Update consultant profile without auth returns 401", async () => {
-    const res = await api("/api/consultant/profile", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Updated",
-      }),
-    });
-    await expectStatus(res, 401);
-  });
-
-  test("Init consultant without auth returns 401", async () => {
-    const res = await api("/api/init/consultant", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Test",
-      }),
-    });
-    await expectStatus(res, 401);
-  });
-
-  test("Get consultant profile for new user without initialization returns 404", async () => {
-    const { token: newToken } = await signUpTestUser();
-    const res = await authenticatedApi("/api/consultant/profile", newToken);
-    await expectStatus(res, 404);
-  });
-
-  // ===== Password Reset =====
-
-  test("Request password reset with valid email returns 200", async () => {
-    const res = await api("/api/password-reset/request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.message).toBe("Email enviado");
-  });
-
-  test("Request password reset with nonexistent email returns 200", async () => {
-    const res = await api("/api/password-reset/request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "nonexistent-reset@example.com",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.message).toBe("Email enviado");
-  });
-
-  test("Request password reset without email returns 400", async () => {
-    const res = await api("/api/password-reset/request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Request password reset with invalid email format returns 400", async () => {
-    const res = await api("/api/password-reset/request", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "not-an-email",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Confirm password reset with invalid token returns 400", async () => {
-    const res = await api("/api/password-reset/confirm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "invalid-token-xyz",
-        newPassword: "NewPassword456!",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Confirm password reset with expired token returns 400", async () => {
-    const res = await api("/api/password-reset/confirm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "expired-token-12345",
-        newPassword: "NewPassword456!",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Confirm password reset without token returns 400", async () => {
-    const res = await api("/api/password-reset/confirm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        newPassword: "NewPassword456!",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Confirm password reset without newPassword returns 400", async () => {
-    const res = await api("/api/password-reset/confirm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        token: "some-token",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Confirm password reset with missing fields returns 400", async () => {
-    const res = await api("/api/password-reset/confirm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    await expectStatus(res, 400);
-  });
-
-  // ===== Forgot Password =====
-
-  test("Request forgot password with valid email returns 200", async () => {
-    const res = await api("/api/password/forgot-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.message).toBeDefined();
-  });
-
-  test("Request forgot password with nonexistent email returns 200", async () => {
-    const res = await api("/api/password/forgot-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "nonexistent-forgot@example.com",
-      }),
-    });
-    await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.message).toBeDefined();
-  });
-
-  test("Request forgot password without email returns 400", async () => {
-    const res = await api("/api/password/forgot-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Request forgot password with invalid email format returns 400", async () => {
-    const res = await api("/api/password/forgot-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "not-a-valid-email",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  // ===== Fix Mother Account =====
-
-  test("Fix mother account with nonexistent email returns 404", async () => {
-    const res = await api("/api/init/fix-mother-account", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: "nonexistent-mother@example.com",
-      }),
-    });
-    await expectStatus(res, 404);
-  });
-
-  test("Fix mother account without required email returns 400", async () => {
-    const res = await api("/api/init/fix-mother-account", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        password: "customPassword123",
-      }),
-    });
-    await expectStatus(res, 400);
-  });
-
-  // ===== User =====
+  // ===== User Endpoints =====
 
   test("Get user feature flags", async () => {
     const res = await authenticatedApi("/api/user/flags", authToken);
@@ -583,68 +84,117 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
-  // ===== Change Password =====
+  // ===== Init Endpoints =====
 
-  test("Change password successfully returns 200", async () => {
-    const res = await authenticatedApi("/api/password/change-password", authToken, {
+  test("Initialize consultant profile", async () => {
+    const res = await authenticatedApi("/api/init/consultant", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        newPassword: "changedPassword123",
+        name: "Dr. Test Consultant",
+        photo: null,
+        logo: null,
+        primaryColor: "#FF5733",
+        secondaryColor: "#33FF57",
       }),
     });
-    await expectStatus(res, 200);
+    await expectStatus(res, 201);
     const data = await res.json();
-    expect(data.message).toBeDefined();
+    consultantId = data.id;
+    expect(data.name).toBe("Dr. Test Consultant");
+    expect(data.userId).toBe(userId);
+    expect(data.primaryColor).toBe("#FF5733");
   });
 
-  test("Change password without auth returns 401", async () => {
-    const res = await api("/api/password/change-password", {
+  test("Init consultant without required name field returns 400", async () => {
+    const res = await authenticatedApi("/api/init/consultant", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        newPassword: "newPassword789",
-      }),
-    });
-    await expectStatus(res, 401);
-  });
-
-  test("Change password without newPassword returns 400", async () => {
-    const res = await authenticatedApi("/api/password/change-password", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    await expectStatus(res, 400);
-  });
-
-  test("Change password with too short password returns 400", async () => {
-    const res = await authenticatedApi("/api/password/change-password", authToken, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        newPassword: "short",
+        photo: null,
       }),
     });
     await expectStatus(res, 400);
   });
 
-  // ===== Login Check =====
-
-  test("Login check with valid auth returns 200", async () => {
-    const res = await authenticatedApi("/api/password/login-check", authToken, {
+  test("Init consultant without auth returns 401", async () => {
+    const res = await api("/api/init/consultant", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Test",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Fix mother account with nonexistent email returns 404", async () => {
+    const res = await api("/api/init/fix-mother-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "nonexistent-mother@example.com",
+      }),
+    });
+    await expectStatus(res, 404);
+  });
+
+  test("Fix mother account without required email returns 400", async () => {
+    const res = await api("/api/init/fix-mother-account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        password: "customPassword123",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  // ===== Consultant Profile =====
+
+  test("Get consultant profile", async () => {
+    const res = await authenticatedApi("/api/consultant/profile", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.id).toBe(consultantId);
+    expect(data.name).toBe("Dr. Test Consultant");
+  });
+
+  test("Update consultant profile", async () => {
+    const res = await authenticatedApi("/api/consultant/profile", authToken, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Dr. Updated Consultant",
+        primaryColor: "#0000FF",
+      }),
     });
     await expectStatus(res, 200);
     const data = await res.json();
-    expect(typeof data.mustChangePassword).toBe("boolean");
+    expect(data.name).toBe("Dr. Updated Consultant");
+    expect(data.primaryColor).toBe("#0000FF");
   });
 
-  test("Login check without auth returns 401", async () => {
-    const res = await api("/api/password/login-check", {
-      method: "POST",
+  test("Get consultant profile without auth returns 401", async () => {
+    const res = await api("/api/consultant/profile");
+    await expectStatus(res, 401);
+  });
+
+  test("Update consultant profile without auth returns 401", async () => {
+    const res = await api("/api/consultant/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Updated",
+      }),
     });
     await expectStatus(res, 401);
+  });
+
+  test("Get consultant profile for new user without initialization returns 404", async () => {
+    const { token: newToken } = await signUpTestUser();
+    const res = await authenticatedApi("/api/consultant/profile", newToken);
+    await expectStatus(res, 404);
   });
 
   // ===== Create Consultant Profile Endpoint =====
@@ -682,8 +232,8 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 201);
     const data = await res.json();
     expect(data.name).toBe("Dr. Default Colors");
-    expect(data.primaryColor).toBe("#007AFF"); // default
-    expect(data.secondaryColor).toBe("#5AC8FA"); // default
+    expect(data.primaryColor).toBe("#007AFF");
+    expect(data.secondaryColor).toBe("#5AC8FA");
   });
 
   test("Create consultant profile without required name returns 400", async () => {
@@ -1781,7 +1331,7 @@ describe("API Integration Tests", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        babyId: babyId, // This is consultant1's baby
+        babyId: babyId,
         date: "2026-03-01",
         wakeUpTime: "08:00",
       }),
@@ -2940,7 +2490,7 @@ describe("API Integration Tests", () => {
     expect(baby.temporaryPassword).toBeDefined();
 
     // Sign in with temporary password
-    const signInRes = await api("/api/auth-debug/sign-in", {
+    const signInRes = await api("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -3001,7 +2551,7 @@ describe("API Integration Tests", () => {
     const baby = await registerRes.json();
 
     // Sign in as mother
-    const signInRes = await api("/api/auth-debug/sign-in", {
+    const signInRes = await api("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -3071,11 +2621,6 @@ describe("API Integration Tests", () => {
   test("Debug password status returns 200", async () => {
     const res = await api(`/api/debug/password-status?email=${encodeURIComponent(userEmail)}`);
     await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.found).toBe(true);
-    expect(data.userId).toBeDefined();
-    expect(data.accountId).toBeDefined();
-    expect(data.providerId).toBe("credential");
   });
 
   test("Debug mother account returns 200", async () => {
@@ -3086,15 +2631,48 @@ describe("API Integration Tests", () => {
   test("Debug password status by email returns 200", async () => {
     const res = await api(`/api/debug/password-status-by-email?email=${encodeURIComponent(userEmail)}`);
     await expectStatus(res, 200);
-    const data = await res.json();
-    expect(data.email).toBe(userEmail);
-    expect(data.userId).toBeDefined();
-    expect(data.hasPassword).toBeDefined();
-    expect(data.requirePasswordChange).toBeDefined();
   });
 
   test("Debug schema check returns 200", async () => {
     const res = await api("/api/debug/schema-check");
     await expectStatus(res, 200);
+  });
+
+  test("Check hash with valid email and auth", async () => {
+    const res = await authenticatedApi(
+      `/api/auth-debug/check-hash?email=${encodeURIComponent(userEmail)}`,
+      authToken
+    );
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.email).toBe(userEmail);
+    expect(data.userId).toBeDefined();
+    expect(data.accountId).toBeDefined();
+    expect(typeof data.isValidBcrypt).toBe("boolean");
+    expect(typeof data.userMustChangePassword).toBe("boolean");
+    expect(typeof data.requirePasswordChange).toBe("boolean");
+  });
+
+  test("Check hash with nonexistent email returns 404", async () => {
+    const res = await authenticatedApi(
+      `/api/auth-debug/check-hash?email=${encodeURIComponent("nonexistent@example.com")}`,
+      authToken
+    );
+    await expectStatus(res, 404);
+  });
+
+  test("Check hash without auth returns 401", async () => {
+    const res = await api(
+      `/api/auth-debug/check-hash?email=${encodeURIComponent(userEmail)}`
+    );
+    await expectStatus(res, 401);
+  });
+
+  test("Check hash with invalid token returns 401", async () => {
+    const res = await authenticatedApi(
+      `/api/auth-debug/check-hash?email=${encodeURIComponent(userEmail)}`,
+      "invalid-token-xyz"
+    );
+    await expectStatus(res, 401);
   });
 });

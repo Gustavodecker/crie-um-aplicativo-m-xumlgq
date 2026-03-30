@@ -5,9 +5,7 @@ import { sessionConfig } from './config/session.js';
 import { eq } from 'drizzle-orm';
 
 // Import route registration functions
-import { registerAuthRoutes } from './routes/auth.js';
-import { registerPasswordResetRoutes } from './routes/password-reset.js';
-import { registerForgotPasswordRoutes } from './routes/forgot-password.js';
+import { registerCustomAuthRoutes } from './routes/auth-custom.js';
 import { registerInitRoutes } from './routes/init.js';
 import { registerUserRoutes } from './routes/user.js';
 import { registerConsultantRoutes } from './routes/consultant.js';
@@ -175,8 +173,8 @@ app.withAuth({
 });
 
 // Register custom auth routes AFTER app.withAuth() to extend Better Auth functionality
-// Custom routes can coexist with Better Auth but should not duplicate /api/auth/* paths
-registerAuthRoutes(app);
+// These routes provide custom login, forgot-password, and change-password endpoints
+registerCustomAuthRoutes(app);
 
 app.logger.info(
   { trustedOrigins: ["*"], mobileSupport: 'enabled', securityModel: 'token-based' },
@@ -203,9 +201,7 @@ app.fastify.addHook('onError', async (request, reply, error) => {
   }
 });
 
-// Register all other routes (auth routes already registered above)
-registerPasswordResetRoutes(app);
-registerForgotPasswordRoutes(app);
+// Register all other routes (custom auth routes already registered above)
 registerInitRoutes(app);
 registerUserRoutes(app);
 registerConsultantRoutes(app);
