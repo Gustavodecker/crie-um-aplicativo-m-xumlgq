@@ -102,21 +102,23 @@ export function registerForgotPasswordRoutes(app: App) {
 
       app.logger.debug({ userId: user.id, email: normalizedEmail }, 'Temporary password hashed, updating account with new hash');
 
-      // Update password in account table
-      const updateResult = await app.db.update(authSchema.account)
+      // Update password in account table using both user_id and provider_id for safety
+      await app.db.update(authSchema.account)
         .set({ password: hashedPassword })
-        .where(eq(authSchema.account.id, credentialAccount.id));
+        .where(
+          and(
+            eq(authSchema.account.userId, user.id),
+            eq(authSchema.account.providerId, 'credential')
+          )
+        );
 
       app.logger.debug({ userId: user.id, email: normalizedEmail, accountId: credentialAccount.id }, 'Account password updated, setting must_change_password flag');
 
-      // Calculate expiration time (30 minutes from now)
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-
-      // Update user table
+      // Update user table - set must_change_password flag and clear expiry
       await app.db.update(authSchema.user)
         .set({
           mustChangePassword: true,
-          tempPasswordExpiresAt: expiresAt,
+          tempPasswordExpiresAt: null,
         })
         .where(eq(authSchema.user.id, user.id));
 
@@ -367,18 +369,6 @@ export function registerForgotPasswordRoutes(app: App) {
       }
 
       app.logger.debug({ userId, mustChangePassword: user.mustChangePassword }, 'Login check - checking password change status');
-
-      // Check if must change password and if it's expired
-      if (user.mustChangePassword && user.tempPasswordExpiresAt) {
-        if (new Date() > new Date(user.tempPasswordExpiresAt)) {
-          // Temporary password has expired, clear the flag
-          app.logger.warn({ userId, expiresAt: user.tempPasswordExpiresAt }, 'Temporary password expired, clearing flag');
-          await app.db.update(authSchema.user)
-            .set({ mustChangePassword: false })
-            .where(eq(authSchema.user.id, userId));
-          return reply.status(200).send({ mustChangePassword: false });
-        }
-      }
 
       app.logger.info({ userId, mustChangePassword: user.mustChangePassword }, 'Login check - password change status');
       return reply.status(200).send({ mustChangePassword: user.mustChangePassword });
