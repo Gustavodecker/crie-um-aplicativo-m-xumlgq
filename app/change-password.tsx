@@ -106,8 +106,8 @@ export default function ChangePasswordScreen() {
         {
           text: "OK",
           onPress: () => {
-            console.log("[ChangePassword] User confirmed success alert — navigating to /(tabs)");
-            router.replace("/(tabs)");
+            console.log("[ChangePassword] User confirmed success alert — navigating to /auth");
+            router.replace("/auth");
           },
         },
       ]);
