@@ -2841,6 +2841,27 @@ describe("API Integration Tests", () => {
     expect(data2.motherEmail).toBe(email);
   });
 
+  test("Register baby and mother without consultant profile returns 403", async () => {
+    const { token: noProfileToken } = await signUpTestUser();
+    const uniqueId = crypto.randomUUID();
+    const res = await authenticatedApi(
+      "/api/consultant/register-baby-and-mother",
+      noProfileToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Baby",
+          birthDate: "2024-05-15",
+          motherName: "Mother",
+          motherPhone: "+1234567890",
+          motherEmail: `mother+${uniqueId}@example.com`,
+        }),
+      }
+    );
+    await expectStatus(res, 403);
+  });
+
   // ===== Mother Baby Access =====
 
   test("Get mother baby without auth returns 401", async () => {
@@ -2916,6 +2937,53 @@ describe("API Integration Tests", () => {
     const { token: newMotherToken } = await signUpTestUser();
     const res = await authenticatedApi("/api/mother/consultant", newMotherToken);
     await expectStatus(res, 404);
+  });
+
+  test("Get mother consultant after baby registration returns 200", async () => {
+    const uniqueId = crypto.randomUUID();
+    const motherEmail = `mother+${uniqueId}@example.com`;
+
+    // Register baby and mother
+    const registerRes = await authenticatedApi(
+      "/api/consultant/register-baby-and-mother",
+      authToken,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Baby for Consultant Access",
+          birthDate: "2024-11-15",
+          motherName: "Test Mother",
+          motherPhone: "+1234567890",
+          motherEmail: motherEmail,
+        }),
+      }
+    );
+    await expectStatus(registerRes, 201);
+    const baby = await registerRes.json();
+
+    // Sign in as mother
+    const signInRes = await api("/api/auth-debug/sign-in", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: motherEmail,
+        password: baby.temporaryPassword,
+      }),
+    });
+    await expectStatus(signInRes, 200);
+    const signInData = await signInRes.json();
+    const motherToken = signInData.token;
+
+    // Get consultant
+    const res = await authenticatedApi(
+      "/api/mother/consultant",
+      motherToken
+    );
+    await expectStatus(res, 200);
+    const consultantData = await res.json();
+    expect(consultantData.id).toBe(consultantId);
+    expect(consultantData.name).toBe("Dr. Updated Consultant");
   });
 
   // ===== Consultant Maintenance & Diagnostics =====
