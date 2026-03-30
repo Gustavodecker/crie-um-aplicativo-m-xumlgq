@@ -43,9 +43,9 @@ export default function ForgotPasswordScreen() {
     setError("");
 
     try {
-      console.log("[API] POST /api/auth/forgot-password — sending request for email:", email);
+      console.log("[API] POST /api/password/forgot-password — sending request for email:", email);
 
-      const response = await fetch(`${BACKEND_URL}/api/auth/forgot-password`, {
+      const response = await fetch(`${BACKEND_URL}/api/password/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),

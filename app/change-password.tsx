@@ -52,8 +52,8 @@ export default function ChangePasswordScreen() {
     setLoading(true);
 
     try {
-      console.log("[API] POST /api/auth/change-password — sending request...");
-      await apiPost("/api/auth/change-password", { newPassword });
+      console.log("[API] POST /api/password/change-password — sending request...");
+      await apiPost("/api/password/change-password", { newPassword });
       console.log("[ChangePassword] Password changed successfully");
 
       await clearRequirePasswordChange();

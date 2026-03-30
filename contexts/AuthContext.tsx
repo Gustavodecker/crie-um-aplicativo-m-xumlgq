@@ -51,8 +51,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  */
 async function fetchRequirePasswordChangeFlag(token: string): Promise<boolean> {
   try {
-    console.log("[Auth] 🌐 POST /api/auth/login-check — checking mustChangePassword...");
-    const response = await fetch(`${BACKEND_URL}/api/auth/login-check`, {
+    console.log("[Auth] 🌐 POST /api/password/login-check — checking mustChangePassword...");
+    const response = await fetch(`${BACKEND_URL}/api/password/login-check`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`,
