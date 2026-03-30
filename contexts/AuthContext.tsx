@@ -46,29 +46,30 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * Fetch the requirePasswordChange flag from GET /api/user/flags.
+ * Check mustChangePassword via POST /api/auth/login-check (Bearer-protected).
  * Falls back to the persisted AsyncStorage value if the request fails.
  */
 async function fetchRequirePasswordChangeFlag(token: string): Promise<boolean> {
   try {
-    console.log("[Auth] 🌐 Fetching /api/user/flags...");
-    const flagsResponse = await fetch(`${BACKEND_URL}/api/user/flags`, {
-      method: "GET",
+    console.log("[Auth] 🌐 POST /api/auth/login-check — checking mustChangePassword...");
+    const response = await fetch(`${BACKEND_URL}/api/auth/login-check`, {
+      method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
         "Origin": BACKEND_URL,
       },
     });
 
-    if (!flagsResponse.ok) {
-      console.warn("[Auth] ⚠️ /api/user/flags returned", flagsResponse.status, "— falling back to AsyncStorage");
+    if (!response.ok) {
+      console.warn("[Auth] ⚠️ /api/auth/login-check returned", response.status, "— falling back to AsyncStorage");
       const stored = await AsyncStorage.getItem(REQUIRE_PASSWORD_CHANGE_KEY);
       return stored === "true";
     }
 
-    const flagsData = await flagsResponse.json();
-    const requirePasswordChange = !!flagsData?.requirePasswordChange;
-    console.log("[Auth] ✅ /api/user/flags requirePasswordChange:", requirePasswordChange);
+    const data = await response.json();
+    const requirePasswordChange = !!data?.mustChangePassword;
+    console.log("[Auth] ✅ /api/auth/login-check mustChangePassword:", requirePasswordChange);
 
     // Persist so it survives app restarts / offline launches
     if (requirePasswordChange) {
@@ -79,7 +80,7 @@ async function fetchRequirePasswordChangeFlag(token: string): Promise<boolean> {
 
     return requirePasswordChange;
   } catch (err: any) {
-    console.warn("[Auth] ⚠️ Error fetching /api/user/flags:", err?.message, "— falling back to AsyncStorage");
+    console.warn("[Auth] ⚠️ Error calling /api/auth/login-check:", err?.message, "— falling back to AsyncStorage");
     const stored = await AsyncStorage.getItem(REQUIRE_PASSWORD_CHANGE_KEY);
     return stored === "true";
   }

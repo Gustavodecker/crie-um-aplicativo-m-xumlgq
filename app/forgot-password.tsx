@@ -32,7 +32,7 @@ export default function ForgotPasswordScreen() {
   };
 
   const handleSubmit = async () => {
-    console.log("[ForgotPassword] User pressed 'Enviar link de recuperação' button, email:", email);
+    console.log("[ForgotPassword] User pressed 'Enviar nova senha' button, email:", email);
 
     if (!email.trim()) {
       setError("Por favor, informe seu e-mail");
@@ -43,9 +43,9 @@ export default function ForgotPasswordScreen() {
     setError("");
 
     try {
-      console.log("[API] POST /api/password-reset/request — sending request for email:", email);
+      console.log("[API] POST /api/auth/forgot-password — sending request for email:", email);
 
-      const response = await fetch(`${BACKEND_URL}/api/password-reset/request`, {
+      const response = await fetch(`${BACKEND_URL}/api/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),
@@ -53,11 +53,11 @@ export default function ForgotPasswordScreen() {
 
       console.log("[ForgotPassword] Response status:", response.status);
 
-      // Always show success message regardless of whether email exists (security best practice)
+      // Always show success regardless of whether email exists (security best practice)
       setSuccess(true);
     } catch (err: any) {
-      console.error("[ForgotPassword] Error sending reset email:", err);
-      setError("Erro ao enviar e-mail. Verifique sua conexão e tente novamente.");
+      console.error("[ForgotPassword] Network error:", err);
+      setError("Erro de conexão. Verifique sua internet e tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -75,10 +75,12 @@ export default function ForgotPasswordScreen() {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
-            <TouchableOpacity style={styles.backButton} onPress={handleBack}>
-              <ChevronLeft size={20} color={colors.primary} />
-              <Text style={styles.backButtonText}>Voltar</Text>
-            </TouchableOpacity>
+            {!success ? (
+              <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+                <ChevronLeft size={20} color={colors.primary} />
+                <Text style={styles.backButtonText}>Voltar</Text>
+              </TouchableOpacity>
+            ) : null}
 
             <View style={styles.header}>
               <View style={styles.iconContainer}>
@@ -91,7 +93,7 @@ export default function ForgotPasswordScreen() {
               </View>
               <Text style={styles.title}>Esqueci minha senha</Text>
               <Text style={styles.subtitle}>
-                Informe seu e-mail e enviaremos um link para redefinir sua senha.
+                Informe seu e-mail e enviaremos uma senha temporária para você acessar sua conta.
               </Text>
             </View>
 
@@ -112,11 +114,11 @@ export default function ForgotPasswordScreen() {
                 <IconSymbol
                   ios_icon_name="checkmark.circle.fill"
                   android_material_icon_name="check_circle"
-                  size={20}
+                  size={24}
                   color={colors.success}
                 />
                 <Text style={styles.successText}>
-                  Se este e-mail estiver cadastrado, você receberá um link para redefinir sua senha.
+                  Se o email estiver cadastrado, você receberá uma nova senha por email.
                 </Text>
               </View>
             ) : (
@@ -149,7 +151,7 @@ export default function ForgotPasswordScreen() {
                   {loading ? (
                     <ActivityIndicator color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.buttonText}>Enviar link de recuperação</Text>
+                    <Text style={styles.buttonText}>Enviar nova senha</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -277,7 +279,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     backgroundColor: colors.success + "20",
-    padding: spacing.md,
+    padding: spacing.lg,
     borderRadius: borderRadius.md,
     gap: spacing.sm,
     marginBottom: spacing.lg,
@@ -289,13 +291,16 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   returnButton: {
-    alignItems: "center",
+    backgroundColor: colors.primary,
     paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: "center",
     marginTop: spacing.md,
+    ...shadows.md,
   },
   returnButtonText: {
-    color: colors.primary,
-    fontSize: 15,
-    fontWeight: "500",
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

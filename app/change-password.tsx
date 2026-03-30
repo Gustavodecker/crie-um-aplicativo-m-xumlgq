@@ -1,6 +1,6 @@
 
-import React, { useState } from "react";
-import { Stack, useRouter, useLocalSearchParams } from "expo-router";
+import React, { useState, useEffect } from "react";
+import { Stack, useRouter } from "expo-router";
 import {
   View,
   Text,
@@ -11,13 +11,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
-import { apiPost, BACKEND_URL } from "@/utils/api";
+import { apiPost } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { ChevronLeft } from "lucide-react-native";
 
 export default function ChangePasswordScreen() {
   const [newPassword, setNewPassword] = useState("");
@@ -27,24 +27,11 @@ export default function ChangePasswordScreen() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const { clearRequirePasswordChange, signOut } = useAuth();
+  const { clearRequirePasswordChange } = useAuth();
   const router = useRouter();
-  const params = useLocalSearchParams<{ token?: string }>();
-  const resetToken = params.token;
-
-  // If a reset token is present, this screen was opened via the forgot-password deep link
-  const isResetFlow = !!resetToken;
-
-  const handleBackToLogin = async () => {
-    console.log("[ChangePassword] User pressed 'Voltar para o login' button");
-    if (!isResetFlow) {
-      await signOut();
-    }
-    router.replace("/auth");
-  };
 
   const handleChangePassword = async () => {
-    console.log("[ChangePassword] User pressed 'Alterar Senha' button, isResetFlow:", isResetFlow);
+    console.log("[ChangePassword] User pressed 'Salvar nova senha' button");
     setError("");
 
     if (!newPassword || !confirmPassword) {
@@ -65,38 +52,22 @@ export default function ChangePasswordScreen() {
     setLoading(true);
 
     try {
-      if (isResetFlow) {
-        // Password reset via forgot-password link — use custom reset endpoint
-        console.log("[API] POST /api/password-reset/confirm — sending request with token...");
-        const response = await fetch(`${BACKEND_URL}/api/password-reset/confirm`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: resetToken, newPassword }),
-        });
+      console.log("[API] POST /api/auth/change-password — sending request...");
+      await apiPost("/api/auth/change-password", { newPassword });
+      console.log("[ChangePassword] Password changed successfully");
 
-        console.log("[ChangePassword] Reset password response status:", response.status);
+      await clearRequirePasswordChange();
+      console.log("[ChangePassword] requirePasswordChange cleared — navigating to /(tabs)");
 
-        if (!response.ok) {
-          const text = await response.text();
-          console.error("[ChangePassword] Reset password error:", response.status, text);
-          let errorMsg = "Erro ao redefinir senha";
-          try {
-            const errJson = JSON.parse(text);
-            errorMsg = errJson.message || errJson.error || errorMsg;
-          } catch {}
-          throw new Error(errorMsg);
-        }
-
-        console.log("[ChangePassword] Password reset successfully via token");
-        router.replace("/auth");
-      } else {
-        // Forced password change for mothers (first login)
-        console.log("[API] POST /api/user/set-password — sending request...");
-        await apiPost("/api/user/set-password", { newPassword });
-        console.log("[ChangePassword] Password changed successfully");
-        await clearRequirePasswordChange();
-        console.log("[ChangePassword] requirePasswordChange cleared — NavigationGuard will redirect to /(tabs)");
-      }
+      Alert.alert("Senha alterada", "Sua nova senha foi salva com sucesso!", [
+        {
+          text: "OK",
+          onPress: () => {
+            console.log("[ChangePassword] User confirmed success alert — navigating to /(tabs)");
+            router.replace("/(tabs)");
+          },
+        },
+      ]);
     } catch (err: any) {
       console.error("[ChangePassword] Password change error:", err);
       const errorMessage = err?.message || "Erro ao alterar senha";
@@ -106,11 +77,15 @@ export default function ChangePasswordScreen() {
     }
   };
 
+  const passwordsMatch = confirmPassword.length > 0 && newPassword === confirmPassword;
+  const passwordTooShort = newPassword.length > 0 && newPassword.length < 6;
+
   return (
     <>
       <Stack.Screen
         options={{
           headerShown: false,
+          gestureEnabled: false,
         }}
       />
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -122,11 +97,6 @@ export default function ChangePasswordScreen() {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
-            <TouchableOpacity style={styles.backButton} onPress={handleBackToLogin}>
-              <ChevronLeft size={20} color={colors.primary} />
-              <Text style={styles.backButtonText}>Voltar para o login</Text>
-            </TouchableOpacity>
-
             <View style={styles.header}>
               <View style={styles.iconContainer}>
                 <IconSymbol
@@ -136,9 +106,9 @@ export default function ChangePasswordScreen() {
                   color={colors.primary}
                 />
               </View>
-              <Text style={styles.title}>Altere sua senha</Text>
+              <Text style={styles.title}>Criar nova senha</Text>
               <Text style={styles.subtitle}>
-                Crie uma senha pessoal para acessar sua conta.
+                Por segurança, você precisa criar uma nova senha antes de continuar.
               </Text>
             </View>
 
@@ -157,7 +127,7 @@ export default function ChangePasswordScreen() {
             <View style={styles.form}>
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Nova senha</Text>
-                <View style={styles.inputContainer}>
+                <View style={[styles.inputContainer, passwordTooShort && styles.inputError]}>
                   <IconSymbol
                     ios_icon_name="lock.fill"
                     android_material_icon_name="lock"
@@ -175,7 +145,10 @@ export default function ChangePasswordScreen() {
                     autoCapitalize="none"
                   />
                   <TouchableOpacity
-                    onPress={() => setShowNewPassword(!showNewPassword)}
+                    onPress={() => {
+                      console.log("[ChangePassword] User toggled new password visibility");
+                      setShowNewPassword(!showNewPassword);
+                    }}
                     style={styles.eyeButton}
                   >
                     <IconSymbol
@@ -186,11 +159,14 @@ export default function ChangePasswordScreen() {
                     />
                   </TouchableOpacity>
                 </View>
+                {passwordTooShort ? (
+                  <Text style={styles.fieldHint}>Mínimo de 6 caracteres</Text>
+                ) : null}
               </View>
 
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Confirmar nova senha</Text>
-                <View style={styles.inputContainer}>
+                <View style={[styles.inputContainer, confirmPassword.length > 0 && !passwordsMatch && styles.inputError]}>
                   <IconSymbol
                     ios_icon_name="lock.fill"
                     android_material_icon_name="lock"
@@ -208,7 +184,10 @@ export default function ChangePasswordScreen() {
                     autoCapitalize="none"
                   />
                   <TouchableOpacity
-                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    onPress={() => {
+                      console.log("[ChangePassword] User toggled confirm password visibility");
+                      setShowConfirmPassword(!showConfirmPassword);
+                    }}
                     style={styles.eyeButton}
                   >
                     <IconSymbol
@@ -219,6 +198,12 @@ export default function ChangePasswordScreen() {
                     />
                   </TouchableOpacity>
                 </View>
+                {confirmPassword.length > 0 && !passwordsMatch ? (
+                  <Text style={styles.fieldHint}>As senhas não coincidem</Text>
+                ) : null}
+                {passwordsMatch ? (
+                  <Text style={styles.fieldHintSuccess}>Senhas coincidem</Text>
+                ) : null}
               </View>
 
               <TouchableOpacity
@@ -229,7 +214,7 @@ export default function ChangePasswordScreen() {
                 {loading ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.buttonText}>Alterar Senha</Text>
+                  <Text style={styles.buttonText}>Salvar nova senha</Text>
                 )}
               </TouchableOpacity>
 
@@ -241,7 +226,7 @@ export default function ChangePasswordScreen() {
                   color={colors.primary}
                 />
                 <Text style={styles.infoText}>
-                  Sua nova senha deve ter pelo menos 6 caracteres. Escolha uma senha segura que você consiga lembrar.
+                  Escolha uma senha segura com pelo menos 6 caracteres. Você usará ela em todos os próximos acessos.
                 </Text>
               </View>
             </View>
@@ -315,6 +300,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     ...shadows.sm,
   },
+  inputError: {
+    borderWidth: 1,
+    borderColor: colors.error,
+  },
   input: {
     flex: 1,
     paddingVertical: spacing.md,
@@ -323,6 +312,16 @@ const styles = StyleSheet.create({
   },
   eyeButton: {
     padding: spacing.xs,
+  },
+  fieldHint: {
+    fontSize: 12,
+    color: colors.error,
+    marginLeft: spacing.xs,
+  },
+  fieldHintSuccess: {
+    fontSize: 12,
+    color: colors.success,
+    marginLeft: spacing.xs,
   },
   button: {
     backgroundColor: colors.primary,
@@ -368,18 +367,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.text,
     lineHeight: 18,
-  },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: spacing.xs,
-    marginBottom: spacing.lg,
-    paddingVertical: spacing.xs,
-  },
-  backButtonText: {
-    fontSize: 15,
-    color: colors.primary,
-    fontWeight: "500",
   },
 });

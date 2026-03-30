@@ -119,7 +119,14 @@ export default function RootLayout() {
             <NavigationGuard>
               <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="auth" options={{ headerShown: false }} />
-                <Stack.Screen name="change-password" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="change-password"
+                  options={{
+                    headerShown: false,
+                    gestureEnabled: false,
+                    headerLeft: () => null,
+                  }}
+                />
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="+not-found" />
               </Stack>
