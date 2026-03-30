@@ -1,6 +1,6 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
 import { resend } from '@specific-dev/framework';
 import crypto from 'crypto';
@@ -216,8 +216,10 @@ export function registerPasswordResetRoutes(app: App) {
       const updatedAccounts = await app.db.update(authSchema.account)
         .set({ password: hashedPassword })
         .where(
-          eq(authSchema.account.userId, user.id) &&
-          eq(authSchema.account.providerId, 'credential')
+          and(
+            eq(authSchema.account.userId, user.id),
+            eq(authSchema.account.providerId, 'credential')
+          )
         );
 
       app.logger.info({ userId: user.id, email }, 'Password updated successfully');

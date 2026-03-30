@@ -29,6 +29,8 @@ export function registerAuthRoutes(app: App) {
           description: 'Sign in successful',
           type: 'object',
           properties: {
+            success: { type: 'boolean' },
+            mustChangePassword: { type: 'boolean', description: 'Whether user must change password after temporary password login' },
             token: { type: 'string' },
             user: {
               type: 'object',
@@ -40,7 +42,6 @@ export function registerAuthRoutes(app: App) {
                 emailVerified: { type: 'boolean' },
               },
             },
-            mustChangePassword: { type: 'boolean', description: 'Whether user must change password after temporary password login' },
           },
         },
         401: {
@@ -76,7 +77,7 @@ export function registerAuthRoutes(app: App) {
 
       if (!user) {
         app.logger.warn({ email: normalizedEmail }, 'Sign-in failed - user not found');
-        return reply.status(401).send({ error: 'Invalid email or password' });
+        return reply.status(401).send({ error: 'Senha inválida' });
       }
 
       app.logger.debug({ userId: user.id }, 'User found, checking credential account');
@@ -90,28 +91,30 @@ export function registerAuthRoutes(app: App) {
 
       if (!credentialAccount || !credentialAccount.password) {
         app.logger.warn({ userId: user.id, email: normalizedEmail }, 'Sign-in failed - no credential account or password');
-        return reply.status(401).send({ error: 'Invalid email or password' });
+        return reply.status(401).send({ error: 'Senha inválida' });
       }
 
       app.logger.debug({ userId: user.id, accountId: credentialAccount.id }, 'Credential account found, verifying password');
 
       // Verify password using bcryptjs (same library as forgot-password for consistency)
       const bcrypt = await import('bcryptjs');
+      app.logger.debug({ userId: user.id, passwordHashPrefix: credentialAccount.password.substring(0, 7) }, 'Comparing password with hash');
       const passwordValid = await bcrypt.compare(password, credentialAccount.password);
+      app.logger.debug({ userId: user.id, passwordValid }, 'Password comparison complete');
 
       if (!passwordValid) {
         app.logger.warn({ userId: user.id, email: normalizedEmail }, 'Sign-in failed - invalid password');
-        return reply.status(401).send({ error: 'Invalid email or password' });
+        return reply.status(401).send({ error: 'Senha inválida' });
       }
 
       app.logger.debug({ userId: user.id }, 'Password verified');
 
-      // Read mustChangePassword flag defensively, defaulting to false on any error
+      // Read both password change flags defensively, defaulting to false on any error
       let mustChangePassword = false;
       try {
-        mustChangePassword = user.mustChangePassword ?? false;
+        mustChangePassword = (user.mustChangePassword ?? false) || (user.requirePasswordChange ?? false);
       } catch (flagError: unknown) {
-        app.logger.warn({ userId: user.id, err: flagError }, 'Error reading mustChangePassword flag, defaulting to false');
+        app.logger.warn({ userId: user.id, err: flagError }, 'Error reading password change flags, defaulting to false');
         mustChangePassword = false;
       }
 
@@ -135,6 +138,8 @@ export function registerAuthRoutes(app: App) {
       app.logger.info({ userId: user.id, email: normalizedEmail, sessionId, mustChangePassword }, 'Sign-in successful, session created');
 
       return reply.status(200).send({
+        success: true,
+        mustChangePassword,
         token: sessionToken,
         user: {
           id: user.id,
@@ -143,12 +148,11 @@ export function registerAuthRoutes(app: App) {
           role: user.role,
           emailVerified: user.emailVerified,
         },
-        mustChangePassword,
       });
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       app.logger.error({ err: error, email: normalizedEmail }, 'Sign-in error');
-      return reply.status(500).send({ error: 'Internal server error' });
+      return reply.status(500).send({ error: 'Erro interno' });
     }
   });
 
