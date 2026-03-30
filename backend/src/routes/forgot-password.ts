@@ -95,12 +95,16 @@ export function registerForgotPasswordRoutes(app: App) {
 
       // Generate temporary password (8 chars: uppercase + digits)
       const tempPassword = generateTempPassword();
+      console.log('[forgot-password] Finding user for email: ' + normalizedEmail);
+      console.log('[forgot-password] User found: ' + user.id);
+      console.log('[forgot-password] Account found: ' + credentialAccount.id);
 
-      // Hash password with bcryptjs
+      // Hash password using bcryptjs (same library Better Auth uses internally)
       const bcrypt = await import('bcryptjs');
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
+      console.log('[forgot-password] Hash generated: ' + hashedPassword.substring(0, 10));
 
-      app.logger.debug({ userId: user.id, email: normalizedEmail }, 'Temporary password hashed, updating account with new hash');
+      app.logger.debug({ userId: user.id, email: normalizedEmail, hashPrefix: hashedPassword.substring(0, 10) }, 'Temporary password hashed, updating account with new hash');
 
       // Update password in account table using both user_id and provider_id for safety
       await app.db.update(authSchema.account)
@@ -111,6 +115,7 @@ export function registerForgotPasswordRoutes(app: App) {
             eq(authSchema.account.providerId, 'credential')
           )
         );
+      console.log('[forgot-password] Account updated successfully');
 
       app.logger.debug({ userId: user.id, email: normalizedEmail, accountId: credentialAccount.id }, 'Account password updated, setting must_change_password flags');
 
