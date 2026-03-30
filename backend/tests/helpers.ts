@@ -64,7 +64,7 @@ export interface TestUser {
  */
 export async function signUpTestUser(): Promise<TestUser> {
   const id = crypto.randomUUID();
-  const res = await api("/api/auth-debug/sign-up", {
+  const res = await api("/api/auth/sign-up", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
