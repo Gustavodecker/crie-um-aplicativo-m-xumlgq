@@ -106,8 +106,14 @@ export function registerAuthRoutes(app: App) {
 
       app.logger.debug({ userId: user.id }, 'Password verified');
 
-      // Include mustChangePassword flag as-is from user record
-      const mustChangePassword = user.mustChangePassword;
+      // Read mustChangePassword flag defensively, defaulting to false on any error
+      let mustChangePassword = false;
+      try {
+        mustChangePassword = user.mustChangePassword ?? false;
+      } catch (flagError: unknown) {
+        app.logger.warn({ userId: user.id, err: flagError }, 'Error reading mustChangePassword flag, defaulting to false');
+        mustChangePassword = false;
+      }
 
       // Create session
       const sessionToken = crypto.randomBytes(16).toString('hex');
@@ -125,6 +131,7 @@ export function registerAuthRoutes(app: App) {
         userAgent,
       });
 
+      console.log(`Sign-in success for userId: ${user.id}, mustChangePassword: ${mustChangePassword}`);
       app.logger.info({ userId: user.id, email: normalizedEmail, sessionId, mustChangePassword }, 'Sign-in successful, session created');
 
       return reply.status(200).send({
@@ -217,9 +224,9 @@ export function registerAuthRoutes(app: App) {
         return reply.status(409).send({ error: 'Email already exists' });
       }
 
-      // Hash password
-      const bcrypt = await import('bcrypt');
-      const hashedPassword = await bcrypt.default.hash(password, 10);
+      // Hash password with bcryptjs
+      const bcrypt = await import('bcryptjs');
+      const hashedPassword = await bcrypt.hash(password, 10);
 
       app.logger.debug({ email: normalizedEmail }, 'Password hashed, creating user and account');
 
@@ -376,8 +383,8 @@ export function registerAuthRoutes(app: App) {
           app.logger.warn({ userId: user.id }, 'No password hash found');
         } else {
           try {
-            const bcrypt = await import('bcrypt');
-            const passwordMatches = await bcrypt.default.compare(password, credentialAccount.password);
+            const bcrypt = await import('bcryptjs');
+            const passwordMatches = await bcrypt.compare(password, credentialAccount.password);
 
             app.logger.debug({ userId: user.id, passwordMatches }, 'Password verification completed');
 

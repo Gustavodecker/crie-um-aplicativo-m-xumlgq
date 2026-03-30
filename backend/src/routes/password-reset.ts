@@ -206,9 +206,9 @@ export function registerPasswordResetRoutes(app: App) {
 
       app.logger.debug({ userId: user.id, email }, 'User found, hashing new password');
 
-      // Hash new password with bcrypt
-      const bcrypt = await import('bcrypt');
-      const hashedPassword = await bcrypt.default.hash(newPassword, 10);
+      // Hash new password with bcryptjs (same library as forgot-password for consistency)
+      const bcrypt = await import('bcryptjs');
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
 
       app.logger.debug({ userId: user.id, email }, 'Password hashed, updating account');
 
@@ -221,6 +221,17 @@ export function registerPasswordResetRoutes(app: App) {
         );
 
       app.logger.info({ userId: user.id, email }, 'Password updated successfully');
+
+      // Clear password change flags after successful reset
+      await app.db.update(authSchema.user)
+        .set({
+          mustChangePassword: false,
+          requirePasswordChange: false,
+          tempPasswordExpiresAt: null,
+        })
+        .where(eq(authSchema.user.id, user.id));
+
+      app.logger.debug({ userId: user.id, email }, 'Password change flags cleared');
 
       // Delete verification record
       await app.db.delete(authSchema.verification)

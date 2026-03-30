@@ -112,12 +112,13 @@ export function registerForgotPasswordRoutes(app: App) {
           )
         );
 
-      app.logger.debug({ userId: user.id, email: normalizedEmail, accountId: credentialAccount.id }, 'Account password updated, setting must_change_password flag');
+      app.logger.debug({ userId: user.id, email: normalizedEmail, accountId: credentialAccount.id }, 'Account password updated, setting must_change_password flags');
 
-      // Update user table - set must_change_password flag and clear expiry
+      // Update user table - set both must_change_password and require_password_change flags
       await app.db.update(authSchema.user)
         .set({
           mustChangePassword: true,
+          requirePasswordChange: true,
           tempPasswordExpiresAt: null,
         })
         .where(eq(authSchema.user.id, user.id));
@@ -278,12 +279,13 @@ export function registerForgotPasswordRoutes(app: App) {
           )
         );
 
-      app.logger.debug({ userId }, 'Account updated, clearing must_change_password flag');
+      app.logger.debug({ userId }, 'Account updated, clearing must_change_password flags');
 
-      // Update user table
+      // Update user table - clear both must_change_password and require_password_change flags
       await app.db.update(authSchema.user)
         .set({
           mustChangePassword: false,
+          requirePasswordChange: false,
           tempPasswordExpiresAt: null,
         })
         .where(eq(authSchema.user.id, userId));
@@ -366,10 +368,19 @@ export function registerForgotPasswordRoutes(app: App) {
         return reply.status(401).send({ error: 'Unauthorized' });
       }
 
-      app.logger.debug({ userId, mustChangePassword: user.mustChangePassword }, 'Login check - checking password change status');
+      // Read mustChangePassword flag defensively, defaulting to false on any error
+      let mustChangePassword = false;
+      try {
+        mustChangePassword = user.mustChangePassword ?? false;
+      } catch (flagError: unknown) {
+        app.logger.warn({ userId, err: flagError }, 'Error reading mustChangePassword flag, defaulting to false');
+        mustChangePassword = false;
+      }
 
-      app.logger.info({ userId, mustChangePassword: user.mustChangePassword }, 'Login check - password change status');
-      return reply.status(200).send({ mustChangePassword: user.mustChangePassword });
+      app.logger.debug({ userId, mustChangePassword }, 'Login check - checking password change status');
+
+      app.logger.info({ userId, mustChangePassword }, 'Login check - password change status');
+      return reply.status(200).send({ mustChangePassword });
     } catch (error: unknown) {
       app.logger.error({ err: error }, 'Login check error');
       return reply.status(500).send({ error: 'Internal server error' });
