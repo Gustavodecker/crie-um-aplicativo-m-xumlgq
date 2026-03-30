@@ -22,7 +22,7 @@ export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
   const router = useRouter();
 
@@ -68,10 +68,8 @@ export default function ForgotPasswordScreen() {
         return;
       }
 
-      const data = await response.json();
-      const receivedTempPassword = data?.tempPassword ?? null;
-      console.log("[ForgotPassword] Success — tempPassword received:", !!receivedTempPassword);
-      setTempPassword(receivedTempPassword);
+      console.log("[ForgotPassword] Success — email sent to user");
+      setSuccess(true);
     } catch (err: any) {
       console.error("[ForgotPassword] Network error:", err);
       setError("Erro de conexão. Verifique sua internet e tente novamente.");
@@ -80,16 +78,8 @@ export default function ForgotPasswordScreen() {
     }
   };
 
-  const handleGoToChangePassword = () => {
-    console.log("[ForgotPassword] User pressed 'Alterar senha agora' — navigating to /change-password");
-    router.replace({
-      pathname: "/change-password",
-      params: { email: email.trim(), fromForgotPassword: "true" },
-    });
-  };
-
   const handleGoToLogin = () => {
-    console.log("[ForgotPassword] User pressed 'Voltar para o login' after success");
+    console.log("[ForgotPassword] User pressed 'Voltar para o login'");
     router.replace("/auth");
   };
 
@@ -105,7 +95,7 @@ export default function ForgotPasswordScreen() {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
-            {!tempPassword ? (
+            {!success ? (
               <TouchableOpacity style={styles.backButton} onPress={handleBack}>
                 <ChevronLeft size={20} color={colors.primary} />
                 <Text style={styles.backButtonText}>Voltar</Text>
@@ -139,7 +129,7 @@ export default function ForgotPasswordScreen() {
               </View>
             ) : null}
 
-            {tempPassword ? (
+            {success ? (
               <View style={styles.successSection}>
                 <View style={styles.successContainer}>
                   <IconSymbol
@@ -149,24 +139,12 @@ export default function ForgotPasswordScreen() {
                     color={colors.success}
                   />
                   <Text style={styles.successText}>
-                    Senha provisória gerada com sucesso!
+                    Enviamos uma senha temporária para o seu e-mail. Verifique sua caixa de entrada.
                   </Text>
                 </View>
 
-                <View style={styles.tempPasswordBox}>
-                  <Text style={styles.tempPasswordLabel}>Sua senha provisória é:</Text>
-                  <Text style={styles.tempPasswordValue}>{tempPassword}</Text>
-                  <Text style={styles.tempPasswordHint}>
-                    Use esta senha para fazer login. Você será solicitada a criar uma nova senha em seguida.
-                  </Text>
-                </View>
-
-                <TouchableOpacity style={styles.button} onPress={handleGoToChangePassword}>
-                  <Text style={styles.buttonText}>Alterar senha agora</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.linkButton} onPress={handleGoToLogin}>
-                  <Text style={styles.linkText}>Voltar para o login</Text>
+                <TouchableOpacity style={styles.button} onPress={handleGoToLogin}>
+                  <Text style={styles.buttonText}>Voltar para o login</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -297,15 +275,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  linkButton: {
-    alignItems: "center",
-    paddingVertical: spacing.sm,
-  },
-  linkText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: "500",
-  },
   errorContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -325,7 +294,7 @@ const styles = StyleSheet.create({
   },
   successContainer: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     backgroundColor: colors.success + "20",
     padding: spacing.md,
     borderRadius: borderRadius.md,
@@ -335,34 +304,6 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.text,
     fontSize: 15,
-    fontWeight: "600",
-  },
-  tempPasswordBox: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    alignItems: "center",
-    gap: spacing.sm,
-    borderWidth: 2,
-    borderColor: colors.primary + "40",
-    ...shadows.sm,
-  },
-  tempPasswordLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    fontWeight: "500",
-  },
-  tempPasswordValue: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: colors.primary,
-    letterSpacing: 4,
-  },
-  tempPasswordHint: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: "center",
-    lineHeight: 18,
-    marginTop: spacing.xs,
+    lineHeight: 22,
   },
 });
