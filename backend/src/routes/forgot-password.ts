@@ -136,7 +136,6 @@ export function registerForgotPasswordRoutes(app: App) {
         "</div>" +
         "<p>Use essa senha para fazer login no app.</p>" +
         "<p><strong>No primeiro acesso, você será obrigado a criar uma nova senha.</strong></p>" +
-        "<p style='color: #e53e3e;'>⚠️ Esta senha expira em 30 minutos.</p>" +
         "<p style='color: #666; font-size: 12px;'>Se você não solicitou a recuperação de senha, ignore este email.</p>" +
         "</div>";
 
@@ -145,7 +144,6 @@ export function registerForgotPasswordRoutes(app: App) {
         "Olá, " + userName + "!\n\n" +
         "Sua senha provisória para o Consulta Bebê é: " + tempPassword + "\n\n" +
         "Use essa senha para fazer login. No primeiro acesso, você será obrigado a criar uma nova senha.\n\n" +
-        "Esta senha expira em 30 minutos.\n\n" +
         "Se você não solicitou isso, ignore este email.";
 
       resend.emails.send({
