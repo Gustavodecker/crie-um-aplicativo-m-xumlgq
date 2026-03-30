@@ -591,6 +591,24 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  // ===== Login Check =====
+
+  test("Login check with valid auth returns 200", async () => {
+    const res = await authenticatedApi("/api/password/login-check", authToken, {
+      method: "POST",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(typeof data.mustChangePassword).toBe("boolean");
+  });
+
+  test("Login check without auth returns 401", async () => {
+    const res = await api("/api/password/login-check", {
+      method: "POST",
+    });
+    await expectStatus(res, 401);
+  });
+
   // ===== Create Consultant Profile Endpoint =====
 
   test("Create consultant profile with create-profile endpoint", async () => {

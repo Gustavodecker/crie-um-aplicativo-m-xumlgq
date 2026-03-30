@@ -95,29 +95,19 @@ export function registerAuthRoutes(app: App) {
 
       app.logger.debug({ userId: user.id, accountId: credentialAccount.id }, 'Credential account found, verifying password');
 
-      // Verify password
-      const bcrypt = await import('bcrypt');
-      const passwordValid = await bcrypt.default.compare(password, credentialAccount.password);
+      // Verify password using bcryptjs (same library as forgot-password for consistency)
+      const bcrypt = await import('bcryptjs');
+      const passwordValid = await bcrypt.compare(password, credentialAccount.password);
 
       if (!passwordValid) {
         app.logger.warn({ userId: user.id, email: normalizedEmail }, 'Sign-in failed - invalid password');
         return reply.status(401).send({ error: 'Invalid email or password' });
       }
 
-      app.logger.debug({ userId: user.id }, 'Password verified, checking temporary password status');
+      app.logger.debug({ userId: user.id }, 'Password verified');
 
-      // Check if temporary password has expired
-      let mustChangePassword = user.mustChangePassword;
-      if (user.mustChangePassword && user.tempPasswordExpiresAt) {
-        if (new Date() > new Date(user.tempPasswordExpiresAt)) {
-          // Temporary password has expired, clear the flag
-          app.logger.debug({ userId: user.id }, 'Temporary password expired, clearing flag');
-          await app.db.update(authSchema.user)
-            .set({ mustChangePassword: false })
-            .where(eq(authSchema.user.id, user.id));
-          mustChangePassword = false;
-        }
-      }
+      // Include mustChangePassword flag as-is from user record
+      const mustChangePassword = user.mustChangePassword;
 
       // Create session
       const sessionToken = crypto.randomBytes(16).toString('hex');
