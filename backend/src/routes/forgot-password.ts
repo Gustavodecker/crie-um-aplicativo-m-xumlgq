@@ -5,26 +5,17 @@ import * as authSchema from '../db/schema/auth-schema.js';
 import { resend } from '@specific-dev/framework';
 import crypto from 'crypto';
 
-function generateTempPassword(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let password = '';
-  for (let i = 0; i < 8; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return password;
-}
-
 export function registerForgotPasswordRoutes(app: App) {
-  app.logger.info('Registering forgot password routes');
+  app.logger.info('Registering password management routes');
 
   // ==========================================
-  // POST /api/forgot-password
-  // Public endpoint - request temporary password
+  // POST /api/password/forgot-password
+  // Public endpoint - request password reset token
   // ==========================================
-  app.fastify.post('/api/forgot-password', {
+  app.fastify.post('/api/password/forgot-password', {
     schema: {
-      description: 'Request a temporary password (sends email to user)',
-      tags: ['forgot-password'],
+      description: 'Request a password reset token (sends email to user)',
+      tags: ['password'],
       body: {
         type: 'object',
         required: ['email'],
@@ -34,7 +25,7 @@ export function registerForgotPasswordRoutes(app: App) {
       },
       response: {
         200: {
-          description: 'Temporary password request processed (returns success regardless of whether user exists)',
+          description: 'Password reset request processed (returns success regardless of whether user exists)',
           type: 'object',
           properties: {
             message: { type: 'string' },
@@ -50,10 +41,16 @@ export function registerForgotPasswordRoutes(app: App) {
       },
     },
   }, async (
-    request: FastifyRequest<{ Body: { email: string } }>,
+    request: FastifyRequest<{ Body: { email?: string } }>,
     reply: FastifyReply
   ): Promise<void> => {
     const { email } = request.body;
+
+    if (!email) {
+      app.logger.warn('Forgot password requested without email');
+      return reply.status(400).send({ error: 'email is required' });
+    }
+
     const normalizedEmail = email.toLowerCase();
 
     app.logger.info({ email: normalizedEmail }, 'Forgot password requested');
@@ -66,86 +63,77 @@ export function registerForgotPasswordRoutes(app: App) {
 
       if (!user) {
         app.logger.warn({ email: normalizedEmail }, 'Forgot password requested for non-existent user (returning success for security)');
-        return reply.status(200).send({ message: 'Se o email estiver cadastrado, você receberá uma nova senha por email' });
+        return reply.status(200).send({ message: 'If this email is registered, a reset link has been sent.' });
       }
 
-      app.logger.debug({ userId: user.id, email: normalizedEmail }, 'User found, generating temporary password');
+      app.logger.debug({ userId: user.id, email: normalizedEmail }, 'User found, generating reset token');
 
-      // Generate temporary password
-      const tempPassword = generateTempPassword();
+      // Generate secure random token (32 bytes, hex encoded)
+      const token = crypto.randomBytes(32).toString('hex');
+      const verificationId = crypto.randomUUID();
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
 
-      // Hash password with bcryptjs
-      const bcrypt = await import('bcryptjs');
-      const hashedPassword = await bcrypt.hash(tempPassword, 10);
+      // Delete any existing password-reset verification records for this email
+      const existingVerifications = await app.db.query.verification.findMany({
+        where: eq(authSchema.verification.identifier, `password-reset:${normalizedEmail}`),
+      });
 
-      app.logger.debug({ userId: user.id, email: normalizedEmail }, 'Temporary password hashed, updating account');
+      if (existingVerifications.length > 0) {
+        app.logger.debug({ email: normalizedEmail, count: existingVerifications.length }, 'Deleting existing password-reset verification records');
+        for (const verification of existingVerifications) {
+          await app.db.delete(authSchema.verification)
+            .where(eq(authSchema.verification.id, verification.id));
+        }
+      }
 
-      // Update password in account table
-      await app.db.update(authSchema.account)
-        .set({ password: hashedPassword })
-        .where(
-          and(
-            eq(authSchema.account.userId, user.id),
-            eq(authSchema.account.providerId, 'credential')
-          )
-        );
+      // Insert new verification record
+      await app.db.insert(authSchema.verification).values({
+        id: verificationId,
+        identifier: `password-reset:${normalizedEmail}`,
+        value: token,
+        expiresAt,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
 
-      app.logger.debug({ userId: user.id, email: normalizedEmail }, 'Password updated, setting must_change_password flag');
+      app.logger.info({ userId: user.id, email: normalizedEmail, verificationId }, 'Password reset verification record created');
 
-      // Calculate expiration time (30 minutes from now)
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-
-      // Update user table
-      await app.db.update(authSchema.user)
-        .set({
-          mustChangePassword: true,
-          tempPasswordExpiresAt: expiresAt,
-        })
-        .where(eq(authSchema.user.id, user.id));
-
-      app.logger.info({ userId: user.id, email: normalizedEmail }, 'User flags updated, sending email');
-
-      // Send email
-      const html = `
-        <p>Olá, ${user.name}!</p>
-        <p><strong>Consulta Bebê</strong></p>
-        <p>Sua nova senha provisória é:</p>
-        <p style="font-size: 18px; font-weight: bold; color: #6B4CE6;">${tempPassword}</p>
-        <p>Use esta senha para fazer login. Você será obrigado a criar uma nova senha no primeiro acesso.</p>
-        <p style="color: #999; font-size: 12px;">⚠️ Segurança: Esta senha expira em 30 minutos.</p>
-      `;
-      const text = `Olá, ${user.name}!\n\nSua nova senha provisória é: ${tempPassword}\n\nUse esta senha para fazer login. Você será obrigado a criar uma nova senha no primeiro acesso.\n\nSegurança: Esta senha expira em 30 minutos.`;
+      // Send reset email
+      const resetLink = `crie-um-aplicativo-m://reset-password?token=${token}`;
+      const name = user.name;
+      const html = `<p>Olá, ${name}!</p><p>Clique no link abaixo para redefinir sua senha:</p><p><a href="${resetLink}">${resetLink}</a></p>`;
+      const text = `Acesse o link para redefinir sua senha: ${resetLink}`;
 
       resend.emails.send({
         from: 'onboarding@resend.dev',
         to: normalizedEmail,
-        subject: 'Sua nova senha provisória',
+        subject: 'Redefinição de senha',
         html,
         text,
       });
 
-      app.logger.info({ userId: user.id, email: normalizedEmail }, 'Temporary password email sent');
+      app.logger.info({ userId: user.id, email: normalizedEmail }, 'Password reset email sent');
 
-      return reply.status(200).send({ message: 'Se o email estiver cadastrado, você receberá uma nova senha por email' });
+      return reply.status(200).send({ message: 'If this email is registered, a reset link has been sent.' });
     } catch (error: unknown) {
       app.logger.error({ err: error, email: normalizedEmail }, 'Forgot password request error');
-      return reply.status(200).send({ message: 'Se o email estiver cadastrado, você receberá uma nova senha por email' });
+      return reply.status(200).send({ message: 'If this email is registered, a reset link has been sent.' });
     }
   });
 
   // ==========================================
-  // POST /api/change-password
-  // Protected endpoint - change password after receiving temporary password
+  // POST /api/password/change-password
+  // Supports two flows: token-based reset (unauthenticated) and authenticated password change
   // ==========================================
-  app.fastify.post('/api/change-password', {
+  app.fastify.post('/api/password/change-password', {
     schema: {
-      description: 'Change password (requires authentication)',
-      tags: ['forgot-password'],
+      description: 'Change password via token (unauthenticated) or when authenticated',
+      tags: ['password'],
       body: {
         type: 'object',
-        required: ['newPassword'],
         properties: {
-          newPassword: { type: 'string', description: 'New password (minimum 6 characters)' },
+          token: { type: 'string', description: 'Password reset token (for token-based flow)' },
+          newPassword: { type: 'string', description: 'New password' },
         },
       },
       response: {
@@ -157,11 +145,10 @@ export function registerForgotPasswordRoutes(app: App) {
           },
         },
         400: {
-          description: 'Validation error',
+          description: 'Validation error or invalid token',
           type: 'object',
           properties: {
             error: { type: 'string' },
-            message: { type: 'string' },
           },
         },
         401: {
@@ -169,43 +156,127 @@ export function registerForgotPasswordRoutes(app: App) {
           type: 'object',
           properties: {
             error: { type: 'string' },
-            message: { type: 'string' },
           },
         },
       },
     },
   }, async (
-    request: FastifyRequest<{ Body: { newPassword: string } }>,
+    request: FastifyRequest<{ Body: { token?: string; newPassword?: string } }>,
     reply: FastifyReply
   ): Promise<void> => {
-    const { newPassword } = request.body;
+    const { token, newPassword } = request.body;
 
     app.logger.info('Change password requested');
 
     try {
+      const bcrypt = await import('bcryptjs');
+
+      // Check if newPassword is provided and valid
+      if (!newPassword) {
+        app.logger.warn('Missing newPassword');
+        return reply.status(400).send({ error: 'newPassword is required' });
+      }
+
+      if (newPassword.length < 6) {
+        app.logger.warn('newPassword too short');
+        return reply.status(400).send({ error: 'Password must be at least 6 characters' });
+      }
+
+      // Flow A: Token-based reset (unauthenticated)
+      if (token) {
+        app.logger.debug({ tokenPrefix: token.substring(0, 8) }, 'Processing token-based password reset');
+
+        // Look up verification record by token
+        const verification = await app.db.query.verification.findFirst({
+          where: eq(authSchema.verification.value, token),
+        });
+
+        if (!verification) {
+          app.logger.warn({ tokenPrefix: token.substring(0, 8) }, 'Token not found');
+          return reply.status(400).send({ error: 'Invalid or expired token' });
+        }
+
+        // Check if token has expired
+        if (new Date() > new Date(verification.expiresAt)) {
+          app.logger.warn({ verificationId: verification.id }, 'Token expired');
+          await app.db.delete(authSchema.verification)
+            .where(eq(authSchema.verification.id, verification.id));
+          return reply.status(400).send({ error: 'Invalid or expired token' });
+        }
+
+        // Verify identifier format (should be "password-reset:email")
+        if (!verification.identifier.startsWith('password-reset:')) {
+          app.logger.warn({ verificationId: verification.id }, 'Invalid verification identifier format');
+          return reply.status(400).send({ error: 'Invalid or expired token' });
+        }
+
+        const email = verification.identifier.substring('password-reset:'.length);
+        app.logger.debug({ email }, 'Extracted email from verification identifier');
+
+        // Look up user by email
+        const user = await app.db.query.user.findFirst({
+          where: eq(authSchema.user.email, email),
+        });
+
+        if (!user) {
+          app.logger.error({ email, verificationId: verification.id }, 'User not found for reset token');
+          return reply.status(400).send({ error: 'User not found' });
+        }
+
+        app.logger.debug({ userId: user.id, email }, 'User found, hashing new password');
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        app.logger.debug({ userId: user.id, email }, 'Password hashed, updating account');
+
+        // Update password in account table
+        await app.db.update(authSchema.account)
+          .set({ password: hashedPassword })
+          .where(
+            and(
+              eq(authSchema.account.userId, user.id),
+              eq(authSchema.account.providerId, 'credential')
+            )
+          );
+
+        app.logger.info({ userId: user.id, email }, 'Password updated via token');
+
+        // Delete verification record
+        await app.db.delete(authSchema.verification)
+          .where(eq(authSchema.verification.id, verification.id));
+
+        app.logger.info({ userId: user.id, email, verificationId: verification.id }, 'Verification record deleted');
+
+        return reply.status(200).send({ message: 'Password changed successfully' });
+      }
+
+      // Flow B: Authenticated password change (no token provided)
+      app.logger.debug('Processing authenticated password change');
+
       // Get authenticated user
       const authHeader = request.headers.authorization;
 
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         app.logger.warn('Change password - no authorization header');
-        return reply.status(401).send({ error: 'unauthorized', message: 'Token inválido ou expirado' });
+        return reply.status(401).send({ error: 'Unauthorized' });
       }
 
-      const token = authHeader.slice(7);
+      const sessionToken = authHeader.slice(7);
 
       const session = await app.db.query.session.findFirst({
-        where: eq(authSchema.session.token, token),
+        where: eq(authSchema.session.token, sessionToken),
       });
 
       if (!session) {
-        app.logger.warn({ tokenPrefix: token.substring(0, 8) }, 'Session not found for token');
-        return reply.status(401).send({ error: 'unauthorized', message: 'Token inválido ou expirado' });
+        app.logger.warn({ tokenPrefix: sessionToken.substring(0, 8) }, 'Session not found for token');
+        return reply.status(401).send({ error: 'Unauthorized' });
       }
 
       // Verify session is not expired
       if (new Date() > new Date(session.expiresAt)) {
         app.logger.warn({ sessionId: session.id }, 'Session expired');
-        return reply.status(401).send({ error: 'unauthorized', message: 'Token inválido ou expirado' });
+        return reply.status(401).send({ error: 'Unauthorized' });
       }
 
       const userId = session.userId;
@@ -217,24 +288,17 @@ export function registerForgotPasswordRoutes(app: App) {
 
       if (!user) {
         app.logger.error({ userId }, 'User not found for session');
-        return reply.status(401).send({ error: 'unauthorized', message: 'Token inválido ou expirado' });
+        return reply.status(401).send({ error: 'Unauthorized' });
       }
 
-      // Validate password length
-      if (!newPassword || newPassword.length < 6) {
-        app.logger.warn({ userId }, 'Invalid password length');
-        return reply.status(400).send({ error: 'validation_error', message: 'A senha deve ter pelo menos 6 caracteres' });
-      }
-
-      app.logger.debug({ userId }, 'Password validation passed, hashing new password');
+      app.logger.debug({ userId, email: user.email }, 'User found, hashing new password');
 
       // Hash new password
-      const bcrypt = await import('bcryptjs');
       const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-      app.logger.debug({ userId }, 'Password hashed, updating account');
+      app.logger.debug({ userId }, 'New password hashed, updating account');
 
-      // Update account table
+      // Update account with new password
       await app.db.update(authSchema.account)
         .set({ password: hashedPassword })
         .where(
@@ -244,117 +308,14 @@ export function registerForgotPasswordRoutes(app: App) {
           )
         );
 
-      app.logger.debug({ userId }, 'Account updated, clearing must_change_password flag');
+      app.logger.info({ userId, email: user.email }, 'Password changed successfully via authenticated flow');
 
-      // Update user table
-      await app.db.update(authSchema.user)
-        .set({
-          mustChangePassword: false,
-          tempPasswordExpiresAt: null,
-        })
-        .where(eq(authSchema.user.id, userId));
-
-      app.logger.info({ userId, email: user.email }, 'Password changed successfully');
-
-      return reply.status(200).send({ message: 'Senha alterada com sucesso' });
+      return reply.status(200).send({ message: 'Password changed successfully' });
     } catch (error: unknown) {
       app.logger.error({ err: error }, 'Change password error');
       return reply.status(500).send({ error: 'Internal server error' });
     }
   });
 
-  // ==========================================
-  // POST /api/login-check
-  // Protected endpoint - check if password change is required
-  // ==========================================
-  app.fastify.post('/api/login-check', {
-    schema: {
-      description: 'Check if password change is required after login (requires authentication)',
-      tags: ['forgot-password'],
-      response: {
-        200: {
-          description: 'Login check successful',
-          type: 'object',
-          properties: {
-            mustChangePassword: { type: 'boolean' },
-            userId: { type: 'string' },
-          },
-        },
-        401: {
-          description: 'Unauthorized or temporary password expired',
-          type: 'object',
-          properties: {
-            error: { type: 'string' },
-            message: { type: 'string' },
-          },
-        },
-      },
-    },
-  }, async (
-    request: FastifyRequest,
-    reply: FastifyReply
-  ): Promise<void> => {
-    app.logger.info('Login check requested');
-
-    try {
-      // Get authenticated user
-      const authHeader = request.headers.authorization;
-
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        app.logger.warn('Login check - no authorization header');
-        return reply.status(401).send({ error: 'unauthorized', message: 'Token inválido ou expirado' });
-      }
-
-      const token = authHeader.slice(7);
-
-      const session = await app.db.query.session.findFirst({
-        where: eq(authSchema.session.token, token),
-      });
-
-      if (!session) {
-        app.logger.warn({ tokenPrefix: token.substring(0, 8) }, 'Session not found for token');
-        return reply.status(401).send({ error: 'unauthorized', message: 'Token inválido ou expirado' });
-      }
-
-      // Verify session is not expired
-      if (new Date() > new Date(session.expiresAt)) {
-        app.logger.warn({ sessionId: session.id }, 'Session expired');
-        return reply.status(401).send({ error: 'unauthorized', message: 'Token inválido ou expirado' });
-      }
-
-      const userId = session.userId;
-
-      // Look up user
-      const user = await app.db.query.user.findFirst({
-        where: eq(authSchema.user.id, userId),
-      });
-
-      if (!user) {
-        app.logger.error({ userId }, 'User not found for session');
-        return reply.status(401).send({ error: 'unauthorized', message: 'Token inválido ou expirado' });
-      }
-
-      app.logger.debug({ userId, mustChangePassword: user.mustChangePassword }, 'Login check - checking password change status');
-
-      // Check if must change password
-      if (user.mustChangePassword) {
-        // Check if temporary password has expired
-        if (user.tempPasswordExpiresAt && new Date() > new Date(user.tempPasswordExpiresAt)) {
-          app.logger.warn({ userId, expiresAt: user.tempPasswordExpiresAt }, 'Temporary password expired');
-          return reply.status(401).send({ error: 'temp_password_expired', message: 'Sua senha provisória expirou. Solicite uma nova.' });
-        }
-
-        app.logger.info({ userId }, 'Login check - password change required');
-        return reply.status(200).send({ mustChangePassword: true, userId });
-      }
-
-      app.logger.info({ userId }, 'Login check - no password change required');
-      return reply.status(200).send({ mustChangePassword: false, userId });
-    } catch (error: unknown) {
-      app.logger.error({ err: error }, 'Login check error');
-      return reply.status(500).send({ error: 'Internal server error' });
-    }
-  });
-
-  app.logger.info('Forgot password routes configured');
+  app.logger.info('Password management routes configured');
 }
