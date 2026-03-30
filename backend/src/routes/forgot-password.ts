@@ -71,9 +71,11 @@ export function registerForgotPasswordRoutes(app: App) {
         where: eq(authSchema.user.email, normalizedEmail),
       });
 
+      console.log('[forgot-password] user.id:', user?.id);
+
       if (!user) {
         app.logger.warn({ email: normalizedEmail }, 'Forgot password requested for non-existent user (returning success for security)');
-        return reply.status(200).send({ message: 'Se o email estiver cadastrado, você receberá uma nova senha por email' });
+        return reply.status(200).send({ message: 'If this email exists, a temporary password was sent.' });
       }
 
       app.logger.debug({ userId: user.id, email: normalizedEmail }, 'User found, verifying credential account exists');
@@ -86,45 +88,40 @@ export function registerForgotPasswordRoutes(app: App) {
         ),
       });
 
+      console.log('[forgot-password] account.id:', credentialAccount?.id, 'providerId:', credentialAccount?.providerId);
+
       if (!credentialAccount) {
         app.logger.error({ userId: user.id, email: normalizedEmail }, 'Credential account not found for user');
-        return reply.status(200).send({ message: 'Se o email estiver cadastrado, você receberá uma nova senha por email' });
+        return reply.status(200).send({ message: 'If this email exists, a temporary password was sent.' });
       }
 
       app.logger.debug({ userId: user.id, accountId: credentialAccount.id }, 'Credential account found, generating temporary password');
 
       // Generate temporary password (8 chars: uppercase + digits)
       const tempPassword = generateTempPassword();
-      console.log('[forgot-password] Finding user for email: ' + normalizedEmail);
-      console.log('[forgot-password] User found: ' + user.id);
-      console.log('[forgot-password] Account found: ' + credentialAccount.id);
 
       // Hash password using bcryptjs (same library Better Auth uses internally)
       const bcrypt = await import('bcryptjs');
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
-      console.log('[forgot-password] Hash generated: ' + hashedPassword.substring(0, 10));
+      console.log('[forgot-password] hash prefix:', hashedPassword?.substring(0, 7));
 
-      app.logger.debug({ userId: user.id, email: normalizedEmail, hashPrefix: hashedPassword.substring(0, 10) }, 'Temporary password hashed, updating account with new hash');
+      app.logger.debug({ userId: user.id, email: normalizedEmail, hashPrefix: hashedPassword.substring(0, 7) }, 'Temporary password hashed, updating account with new hash');
 
-      // Update password in account table using both user_id and provider_id for safety
-      await app.db.update(authSchema.account)
+      // Update password in account table where id matches
+      const updateAccountResult = await app.db.update(authSchema.account)
         .set({ password: hashedPassword })
-        .where(
-          and(
-            eq(authSchema.account.userId, user.id),
-            eq(authSchema.account.providerId, 'credential')
-          )
-        );
-      console.log('[forgot-password] Account updated successfully');
+        .where(eq(authSchema.account.id, credentialAccount.id));
+
+      console.log('[forgot-password] rows updated:', (updateAccountResult as any)?.rowCount || 1);
 
       app.logger.debug({ userId: user.id, email: normalizedEmail, accountId: credentialAccount.id }, 'Account password updated, setting must_change_password flags');
 
-      // Update user table - set both must_change_password and require_password_change flags
-      await app.db.update(authSchema.user)
+      // Update user table - set must_change_password, temp_password_expires_at to 24 hours from now, and updated_at
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      const updateUserResult = await app.db.update(authSchema.user)
         .set({
           mustChangePassword: true,
-          requirePasswordChange: true,
-          tempPasswordExpiresAt: null,
+          tempPasswordExpiresAt: expiresAt,
         })
         .where(eq(authSchema.user.id, user.id));
 
@@ -162,10 +159,10 @@ export function registerForgotPasswordRoutes(app: App) {
 
       app.logger.info({ email: normalizedEmail }, 'Temporary password generated and sent to: ' + normalizedEmail);
 
-      return reply.status(200).send({ message: 'Se o email estiver cadastrado, você receberá uma nova senha por email' });
+      return reply.status(200).send({ message: 'If this email exists, a temporary password was sent.' });
     } catch (error: unknown) {
       app.logger.error({ err: error, email: normalizedEmail }, 'Forgot password request error');
-      return reply.status(200).send({ message: 'Se o email estiver cadastrado, você receberá uma nova senha por email' });
+      return reply.status(200).send({ message: 'If this email exists, a temporary password was sent.' });
     }
   });
 
@@ -297,7 +294,7 @@ export function registerForgotPasswordRoutes(app: App) {
 
       app.logger.info({ userId, email: user.email }, 'Password changed successfully');
 
-      return reply.status(200).send({ message: 'Senha alterada com sucesso' });
+      return reply.status(200).send({ message: 'Password changed successfully' });
     } catch (error: unknown) {
       app.logger.error({ err: error }, 'Change password error');
       return reply.status(500).send({ error: 'Internal server error' });
@@ -346,46 +343,51 @@ export function registerForgotPasswordRoutes(app: App) {
 
       const sessionToken = authHeader.slice(7);
 
-      const session = await app.db.query.session.findFirst({
-        where: eq(authSchema.session.token, sessionToken),
-      });
-
-      if (!session) {
-        app.logger.warn({ tokenPrefix: sessionToken.substring(0, 8) }, 'Session not found for token');
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-
-      // Verify session is not expired
-      if (new Date() > new Date(session.expiresAt)) {
-        app.logger.warn({ sessionId: session.id }, 'Session expired');
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-
-      const userId = session.userId;
-
-      // Look up user
-      const user = await app.db.query.user.findFirst({
-        where: eq(authSchema.user.id, userId),
-      });
-
-      if (!user) {
-        app.logger.error({ userId }, 'User not found for session');
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-
-      // Read mustChangePassword flag defensively, defaulting to false on any error
-      let mustChangePassword = false;
       try {
-        mustChangePassword = user.mustChangePassword ?? false;
-      } catch (flagError: unknown) {
-        app.logger.warn({ userId, err: flagError }, 'Error reading mustChangePassword flag, defaulting to false');
-        mustChangePassword = false;
+        const session = await app.db.query.session.findFirst({
+          where: eq(authSchema.session.token, sessionToken),
+        });
+
+        if (!session) {
+          app.logger.warn({ tokenPrefix: sessionToken.substring(0, 8) }, 'Session not found for token');
+          return reply.status(401).send({ error: 'Unauthorized' });
+        }
+
+        // Verify session is not expired
+        if (new Date() > new Date(session.expiresAt)) {
+          app.logger.warn({ sessionId: session.id }, 'Session expired');
+          return reply.status(401).send({ error: 'Unauthorized' });
+        }
+
+        const userId = session.userId;
+
+        // Look up user
+        const user = await app.db.query.user.findFirst({
+          where: eq(authSchema.user.id, userId),
+        });
+
+        if (!user) {
+          app.logger.error({ userId }, 'User not found for session');
+          return reply.status(401).send({ error: 'Unauthorized' });
+        }
+
+        // Read mustChangePassword flag defensively, defaulting to false on any error
+        let mustChangePassword = false;
+        try {
+          mustChangePassword = user.mustChangePassword ?? false;
+        } catch (flagError: unknown) {
+          app.logger.warn({ userId, err: flagError }, 'Error reading mustChangePassword flag, defaulting to false');
+          mustChangePassword = false;
+        }
+
+        app.logger.debug({ userId, mustChangePassword }, 'Login check - checking password change status');
+
+        app.logger.info({ userId, mustChangePassword }, 'Login check - password change status');
+        return reply.status(200).send({ mustChangePassword });
+      } catch (sessionError: unknown) {
+        app.logger.error({ err: sessionError }, 'Error checking session');
+        return reply.status(401).send({ error: 'Unauthorized' });
       }
-
-      app.logger.debug({ userId, mustChangePassword }, 'Login check - checking password change status');
-
-      app.logger.info({ userId, mustChangePassword }, 'Login check - password change status');
-      return reply.status(200).send({ mustChangePassword });
     } catch (error: unknown) {
       app.logger.error({ err: error }, 'Login check error');
       return reply.status(500).send({ error: 'Internal server error' });
