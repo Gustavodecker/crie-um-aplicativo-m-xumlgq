@@ -46,43 +46,13 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * Check mustChangePassword via POST /api/auth/login-check (Bearer-protected).
- * Falls back to the persisted AsyncStorage value if the request fails.
+ * Persist the requirePasswordChange flag to AsyncStorage so it survives restarts.
  */
-async function fetchRequirePasswordChangeFlag(token: string): Promise<boolean> {
-  try {
-    console.log("[Auth] 🌐 POST /api/password/login-check — checking mustChangePassword...");
-    const response = await fetch(`${BACKEND_URL}/api/password/login-check`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-        "Origin": BACKEND_URL,
-      },
-    });
-
-    if (!response.ok) {
-      console.warn("[Auth] ⚠️ /api/auth/login-check returned", response.status, "— falling back to AsyncStorage");
-      const stored = await AsyncStorage.getItem(REQUIRE_PASSWORD_CHANGE_KEY);
-      return stored === "true";
-    }
-
-    const data = await response.json();
-    const requirePasswordChange = !!data?.mustChangePassword;
-    console.log("[Auth] ✅ /api/auth/login-check mustChangePassword:", requirePasswordChange);
-
-    // Persist so it survives app restarts / offline launches
-    if (requirePasswordChange) {
-      await AsyncStorage.setItem(REQUIRE_PASSWORD_CHANGE_KEY, "true");
-    } else {
-      await AsyncStorage.removeItem(REQUIRE_PASSWORD_CHANGE_KEY);
-    }
-
-    return requirePasswordChange;
-  } catch (err: any) {
-    console.warn("[Auth] ⚠️ Error calling /api/auth/login-check:", err?.message, "— falling back to AsyncStorage");
-    const stored = await AsyncStorage.getItem(REQUIRE_PASSWORD_CHANGE_KEY);
-    return stored === "true";
+async function persistRequirePasswordChangeFlag(value: boolean): Promise<void> {
+  if (value) {
+    await AsyncStorage.setItem(REQUIRE_PASSWORD_CHANGE_KEY, "true");
+  } else {
+    await AsyncStorage.removeItem(REQUIRE_PASSWORD_CHANGE_KEY);
   }
 }
 
@@ -135,14 +105,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (sessionData?.user) {
           console.log("[Auth] ✅ Session valid, user:", sessionData.user.email);
 
-          // Fetch fresh requirePasswordChange flag from backend
-          const requirePasswordChange = await fetchRequirePasswordChangeFlag(token);
+          // Restore requirePasswordChange from AsyncStorage (set during login)
+          const storedFlag = await AsyncStorage.getItem(REQUIRE_PASSWORD_CHANGE_KEY);
+          const requirePasswordChange = storedFlag === "true";
           const restoredUser: User = {
             ...(sessionData.user as User),
             requirePasswordChange,
           };
           setUser(restoredUser);
-          console.log("[Auth] 🔑 requirePasswordChange (from /api/user/flags):", requirePasswordChange);
+          console.log("[Auth] 🔑 requirePasswordChange (from AsyncStorage):", requirePasswordChange);
           
           // Load userRole from storage
           const storedRole = await AsyncStorage.getItem("userRole");
@@ -222,77 +193,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
-      console.log("[Auth] 🔐 Signing in with email:", email);
+      console.log("[Auth] 🔐 POST /api/auth/login — signing in with email:", email);
       
-      const response = await fetch(`${BACKEND_URL}/api/auth/sign-in/email`, {
+      const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
         method: "POST",
-        headers: buildAuthHeaders(),
-        body: JSON.stringify({
-          email,
-          password,
-          rememberMe: true,
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          "Origin": BACKEND_URL,
+        },
+        body: JSON.stringify({ email, password }),
       });
       
-      const responseText = await response.text();
       console.log("[Auth] 📥 Response status:", response.status);
       
       if (!response.ok) {
+        const responseText = await response.text();
         console.error("[Auth] ❌ Login failed:", response.status, responseText);
-        let errorMsg = "Erro ao fazer login";
-        
+
+        // 401 always means bad credentials — never show a generic 500 message
+        if (response.status === 401) {
+          throw new Error("Email ou senha inválidos");
+        }
+
+        // For any other non-2xx, try to extract a message but never expose 5xx internals
+        let errorMsg = "Erro ao fazer login. Tente novamente.";
         try {
           const errJson = JSON.parse(responseText);
           if (errJson.message) errorMsg = errJson.message;
-          if (errJson.error) errorMsg = errJson.error;
-          if (errJson.code === "INVALID_EMAIL_OR_PASSWORD") {
-            errorMsg = "Email ou senha incorretos";
-          }
-        } catch (parseErr) {
-          if (responseText && responseText.length > 0 && responseText.length < 200) {
-            errorMsg = responseText;
-          }
+          else if (errJson.error) errorMsg = errJson.error;
+        } catch {
+          // not JSON — keep generic message
         }
-        
-        if (response.status === 401) {
-          errorMsg = "Email ou senha incorretos";
-        } else if (response.status === 404) {
-          errorMsg = "Conta não encontrada. Verifique seu email ou crie uma nova conta.";
-        } else if (response.status === 500) {
-          errorMsg = "Erro ao fazer login. Verifique seu email e senha e tente novamente.";
-        }
-        
         throw new Error(errorMsg);
       }
       
       let responseData: any;
       try {
-        responseData = JSON.parse(responseText);
-      } catch (parseErr) {
-        console.error("[Auth] ❌ Failed to parse response as JSON");
+        responseData = await response.json();
+      } catch {
+        console.error("[Auth] ❌ Failed to parse login response as JSON");
         throw new Error("Resposta inválida do servidor");
       }
       
       console.log("[Auth] ✅ Login response received");
-      
-      let token: string | null = null;
-      let user: User | null = null;
-      
-      if (responseData?.session?.token) {
-        token = responseData.session.token;
-      } else if (responseData?.token) {
-        token = responseData.token;
-      } else if (responseData?.data?.session?.token) {
-        token = responseData.data.session.token;
-      } else if (responseData?.data?.token) {
-        token = responseData.data.token;
-      }
-      
-      if (responseData?.user) {
-        user = responseData.user as User;
-      } else if (responseData?.data?.user) {
-        user = responseData.data.user as User;
-      }
+
+      const token: string | null = responseData?.token ?? null;
+      const user: User | null = responseData?.user ? (responseData.user as User) : null;
       
       if (!token) {
         console.error("[Auth] ❌ No token in response!");
@@ -308,15 +254,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[Auth] 💾 Saving token...");
       await setBearerToken(token);
 
-      // Fetch fresh requirePasswordChange flag from backend (source of truth)
-      console.log("[Auth] 🚩 About to call fetchRequirePasswordChangeFlag with token length:", token.length);
-      let requirePasswordChange = false;
-      try {
-        requirePasswordChange = await fetchRequirePasswordChangeFlag(token);
-      } catch (flagErr: any) {
-        console.error("[Auth] ❌ fetchRequirePasswordChangeFlag threw:", flagErr?.message);
-      }
-      console.log("[Auth] 🚩 requirePasswordChange result:", requirePasswordChange);
+      // requirePasswordChange comes directly from the login response user object
+      const requirePasswordChange = !!(user as any).must_change_password;
+      console.log("[Auth] 🚩 requirePasswordChange from login response:", requirePasswordChange);
+      await persistRequirePasswordChangeFlag(requirePasswordChange);
 
       const userWithFlag: User = { ...user, requirePasswordChange };
       console.log("[Auth] ✅ Setting user:", user.email, "requirePasswordChange:", requirePasswordChange);
@@ -326,7 +267,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[Auth] 🔍 Determining user role...");
       await determineUserRole(token);
       
-      console.log("[Auth] ✅ Login complete — user.requirePasswordChange:", requirePasswordChange);
+      console.log("[Auth] ✅ Login complete — requirePasswordChange:", requirePasswordChange);
       
     } catch (error: any) {
       console.error("[Auth] ❌ Email sign in failed:", error?.message || error);

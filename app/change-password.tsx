@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from "react";
-import { Stack, useRouter } from "expo-router";
+import React, { useState } from "react";
+import { Stack, useRouter, useLocalSearchParams } from "expo-router";
 import {
   View,
   Text,
@@ -16,25 +16,31 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, spacing, borderRadius, shadows } from "@/styles/commonStyles";
 import { IconSymbol } from "@/components/IconSymbol";
-import { apiPost } from "@/utils/api";
+import { BACKEND_URL } from "@/utils/api";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function ChangePasswordScreen() {
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const { clearRequirePasswordChange } = useAuth();
+  const { user, clearRequirePasswordChange } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams<{ email?: string; fromForgotPassword?: string }>();
+
+  // Email comes from route params (forgot-password flow) or from the logged-in user
+  const emailToUse = params.email || user?.email || "";
 
   const handleChangePassword = async () => {
     console.log("[ChangePassword] User pressed 'Salvar nova senha' button");
     setError("");
 
-    if (!newPassword || !confirmPassword) {
+    if (!currentPassword || !newPassword || !confirmPassword) {
       setError("Por favor, preencha todos os campos");
       return;
     }
@@ -49,13 +55,50 @@ export default function ChangePasswordScreen() {
       return;
     }
 
+    if (!emailToUse) {
+      setError("Email não encontrado. Faça login novamente.");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      console.log("[API] POST /api/password/change-password — sending request...");
-      await apiPost("/api/password/change-password", { newPassword });
-      console.log("[ChangePassword] Password changed successfully");
+      console.log("[API] POST /api/auth/change-password — sending request for email:", emailToUse);
 
+      const response = await fetch(`${BACKEND_URL}/api/auth/change-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: emailToUse,
+          currentPassword,
+          newPassword,
+        }),
+      });
+
+      console.log("[ChangePassword] Response status:", response.status);
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error("[ChangePassword] Error response:", response.status, text);
+
+        if (response.status === 401) {
+          setError("Senha atual incorreta");
+          return;
+        }
+
+        let errorMsg = "Erro ao alterar senha. Tente novamente.";
+        try {
+          const errJson = JSON.parse(text);
+          if (errJson.message) errorMsg = errJson.message;
+          else if (errJson.error) errorMsg = errJson.error;
+        } catch {
+          // not JSON — keep generic message
+        }
+        setError(errorMsg);
+        return;
+      }
+
+      console.log("[ChangePassword] Password changed successfully");
       await clearRequirePasswordChange();
       console.log("[ChangePassword] requirePasswordChange cleared — navigating to /(tabs)");
 
@@ -69,9 +112,8 @@ export default function ChangePasswordScreen() {
         },
       ]);
     } catch (err: any) {
-      console.error("[ChangePassword] Password change error:", err);
-      const errorMessage = err?.message || "Erro ao alterar senha";
-      setError(errorMessage);
+      console.error("[ChangePassword] Network error:", err);
+      setError("Erro de conexão. Verifique sua internet e tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -125,6 +167,42 @@ export default function ChangePasswordScreen() {
             ) : null}
 
             <View style={styles.form}>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Senha atual</Text>
+                <View style={styles.inputContainer}>
+                  <IconSymbol
+                    ios_icon_name="lock.fill"
+                    android_material_icon_name="lock"
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Sua senha atual ou provisória"
+                    placeholderTextColor={colors.textSecondary}
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                    secureTextEntry={!showCurrentPassword}
+                    editable={!loading}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    onPress={() => {
+                      console.log("[ChangePassword] User toggled current password visibility");
+                      setShowCurrentPassword(!showCurrentPassword);
+                    }}
+                    style={styles.eyeButton}
+                  >
+                    <IconSymbol
+                      ios_icon_name={showCurrentPassword ? "eye.slash.fill" : "eye.fill"}
+                      android_material_icon_name={showCurrentPassword ? "visibility-off" : "visibility"}
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Nova senha</Text>
                 <View style={[styles.inputContainer, passwordTooShort && styles.inputError]}>

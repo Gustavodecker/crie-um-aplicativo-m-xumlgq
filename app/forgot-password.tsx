@@ -22,7 +22,7 @@ export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   const router = useRouter();
 
@@ -43,9 +43,9 @@ export default function ForgotPasswordScreen() {
     setError("");
 
     try {
-      console.log("[API] POST /api/password/forgot-password — sending request for email:", email);
+      console.log("[API] POST /api/auth/forgot-password — sending request for email:", email);
 
-      const response = await fetch(`${BACKEND_URL}/api/password/forgot-password`, {
+      const response = await fetch(`${BACKEND_URL}/api/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim() }),
@@ -53,14 +53,44 @@ export default function ForgotPasswordScreen() {
 
       console.log("[ForgotPassword] Response status:", response.status);
 
-      // Always show success regardless of whether email exists (security best practice)
-      setSuccess(true);
+      if (!response.ok) {
+        const text = await response.text();
+        console.error("[ForgotPassword] Error response:", response.status, text);
+        let errorMsg = "Erro ao solicitar nova senha. Tente novamente.";
+        try {
+          const errJson = JSON.parse(text);
+          if (errJson.message) errorMsg = errJson.message;
+          else if (errJson.error) errorMsg = errJson.error;
+        } catch {
+          // not JSON — keep generic message
+        }
+        setError(errorMsg);
+        return;
+      }
+
+      const data = await response.json();
+      const receivedTempPassword = data?.tempPassword ?? null;
+      console.log("[ForgotPassword] Success — tempPassword received:", !!receivedTempPassword);
+      setTempPassword(receivedTempPassword);
     } catch (err: any) {
       console.error("[ForgotPassword] Network error:", err);
       setError("Erro de conexão. Verifique sua internet e tente novamente.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGoToChangePassword = () => {
+    console.log("[ForgotPassword] User pressed 'Alterar senha agora' — navigating to /change-password");
+    router.replace({
+      pathname: "/change-password",
+      params: { email: email.trim(), fromForgotPassword: "true" },
+    });
+  };
+
+  const handleGoToLogin = () => {
+    console.log("[ForgotPassword] User pressed 'Voltar para o login' after success");
+    router.replace("/auth");
   };
 
   return (
@@ -75,7 +105,7 @@ export default function ForgotPasswordScreen() {
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
           >
-            {!success ? (
+            {!tempPassword ? (
               <TouchableOpacity style={styles.backButton} onPress={handleBack}>
                 <ChevronLeft size={20} color={colors.primary} />
                 <Text style={styles.backButtonText}>Voltar</Text>
@@ -109,17 +139,35 @@ export default function ForgotPasswordScreen() {
               </View>
             ) : null}
 
-            {success ? (
-              <View style={styles.successContainer}>
-                <IconSymbol
-                  ios_icon_name="checkmark.circle.fill"
-                  android_material_icon_name="check_circle"
-                  size={24}
-                  color={colors.success}
-                />
-                <Text style={styles.successText}>
-                  Se o email estiver cadastrado, você receberá uma nova senha por email.
-                </Text>
+            {tempPassword ? (
+              <View style={styles.successSection}>
+                <View style={styles.successContainer}>
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle.fill"
+                    android_material_icon_name="check_circle"
+                    size={24}
+                    color={colors.success}
+                  />
+                  <Text style={styles.successText}>
+                    Senha provisória gerada com sucesso!
+                  </Text>
+                </View>
+
+                <View style={styles.tempPasswordBox}>
+                  <Text style={styles.tempPasswordLabel}>Sua senha provisória é:</Text>
+                  <Text style={styles.tempPasswordValue}>{tempPassword}</Text>
+                  <Text style={styles.tempPasswordHint}>
+                    Use esta senha para fazer login. Você será solicitada a criar uma nova senha em seguida.
+                  </Text>
+                </View>
+
+                <TouchableOpacity style={styles.button} onPress={handleGoToChangePassword}>
+                  <Text style={styles.buttonText}>Alterar senha agora</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.linkButton} onPress={handleGoToLogin}>
+                  <Text style={styles.linkText}>Voltar para o login</Text>
+                </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.form}>
@@ -156,18 +204,6 @@ export default function ForgotPasswordScreen() {
                 </TouchableOpacity>
               </View>
             )}
-
-            {success ? (
-              <TouchableOpacity
-                style={styles.returnButton}
-                onPress={() => {
-                  console.log("[ForgotPassword] User pressed 'Voltar para o login' after success");
-                  router.replace("/auth");
-                }}
-              >
-                <Text style={styles.returnButtonText}>Voltar para o login</Text>
-              </TouchableOpacity>
-            ) : null}
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -261,6 +297,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+  linkButton: {
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+  },
+  linkText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: "500",
+  },
   errorContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -275,32 +320,49 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: 14,
   },
+  successSection: {
+    gap: spacing.lg,
+  },
   successContainer: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     backgroundColor: colors.success + "20",
-    padding: spacing.lg,
+    padding: spacing.md,
     borderRadius: borderRadius.md,
     gap: spacing.sm,
-    marginBottom: spacing.lg,
   },
   successText: {
     flex: 1,
     color: colors.text,
     fontSize: 15,
-    lineHeight: 22,
-  },
-  returnButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: "center",
-    marginTop: spacing.md,
-    ...shadows.md,
-  },
-  returnButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
     fontWeight: "600",
+  },
+  tempPasswordBox: {
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    alignItems: "center",
+    gap: spacing.sm,
+    borderWidth: 2,
+    borderColor: colors.primary + "40",
+    ...shadows.sm,
+  },
+  tempPasswordLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: "500",
+  },
+  tempPasswordValue: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: colors.primary,
+    letterSpacing: 4,
+  },
+  tempPasswordHint: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 18,
+    marginTop: spacing.xs,
   },
 });
