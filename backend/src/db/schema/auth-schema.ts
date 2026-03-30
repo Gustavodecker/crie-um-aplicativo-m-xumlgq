@@ -7,6 +7,8 @@ export const user = pgTable("user", {
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
   requirePasswordChange: boolean("require_password_change").default(false).notNull(),
+  mustChangePassword: boolean("must_change_password").default(false).notNull(),
+  tempPasswordExpiresAt: timestamp("temp_password_expires_at"),
   role: text("role"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")

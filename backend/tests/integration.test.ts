@@ -172,7 +172,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: userEmail,
-        password: "Password123!",
+        password: "TestPassword123!",
       }),
     });
     await expectStatus(res, 200);
@@ -415,6 +415,54 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  // ===== Forgot Password =====
+
+  test("Request forgot password with valid email returns 200", async () => {
+    const res = await api("/api/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.message).toBeDefined();
+  });
+
+  test("Request forgot password with nonexistent email returns 200", async () => {
+    const res = await api("/api/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "nonexistent-forgot@example.com",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.message).toBeDefined();
+  });
+
+  test("Request forgot password without email returns 400", async () => {
+    const res = await api("/api/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Request forgot password with invalid email format returns 400", async () => {
+    const res = await api("/api/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "not-a-valid-email",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
   // ===== Fix Mother Account =====
 
   test("Fix mother account with nonexistent email returns 404", async () => {
@@ -453,6 +501,23 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 401);
   });
 
+  test("Check login status returns 200", async () => {
+    const res = await authenticatedApi("/api/login-check", authToken, {
+      method: "POST",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(typeof data.mustChangePassword).toBe("boolean");
+    expect(data.userId).toBeDefined();
+  });
+
+  test("Check login status without auth returns 401", async () => {
+    const res = await api("/api/login-check", {
+      method: "POST",
+    });
+    await expectStatus(res, 401);
+  });
+
   test("Set password without auth returns 401", async () => {
     const res = await api("/api/user/set-password", {
       method: "POST",
@@ -488,6 +553,52 @@ describe("API Integration Tests", () => {
 
   test("Set password with too short password returns 400", async () => {
     const res = await authenticatedApi("/api/user/set-password", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        newPassword: "short",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  // ===== Change Password =====
+
+  test("Change password successfully returns 200", async () => {
+    const res = await authenticatedApi("/api/change-password", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        newPassword: "changedPassword123",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.message).toBeDefined();
+  });
+
+  test("Change password without auth returns 401", async () => {
+    const res = await api("/api/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        newPassword: "newPassword789",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Change password without newPassword returns 400", async () => {
+    const res = await authenticatedApi("/api/change-password", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Change password with too short password returns 400", async () => {
+    const res = await authenticatedApi("/api/change-password", authToken, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
