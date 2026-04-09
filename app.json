@@ -4,11 +4,11 @@
     "slug": "crie-um-aplicativo-m",
     "version": "1.0.71",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/app-icon-jln.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/app-icon-afq.png",
+      "image": "./assets/images/app-icon-jln.png",
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
@@ -23,7 +23,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/app-icon-afq.png",
+        "foregroundImage": "./assets/images/app-icon-jln.png",
         "backgroundColor": "#000000"
       },
       "package": "com.todanoite.baby",
