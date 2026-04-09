@@ -2,7 +2,7 @@
   "expo": {
     "name": "crie-um-aplicativo-m",
     "slug": "crie-um-aplicativo-m",
-    "version": "1.0.71",
+    "version": "1.0.72",
     "orientation": "portrait",
     "icon": "./assets/images/app-icon-jln.png",
     "userInterfaceStyle": "automatic",
