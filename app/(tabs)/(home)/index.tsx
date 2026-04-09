@@ -17,7 +17,7 @@ import {
 import { IconSymbol } from "@/components/IconSymbol";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { ConsultantProfileCard } from "@/components/ConsultantProfileCard";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { IOSDatePickerModal } from "@/components/IOSDatePickerModal";
 import { Stack, useRouter } from "expo-router";
 import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
 import { useAuth } from "@/contexts/AuthContext";
@@ -398,32 +398,32 @@ export default function ConsultantDashboardScreen() {
   };
 
   const handleTimeChange = (event: any, selectedDate?: Date) => {
+    // Android only: picker closes on selection
     if (Platform.OS === "android") {
       setShowTimePicker(false);
+      if (event.type === "dismissed" || !selectedDate || !timePickerField) return;
+      applyTimeSelection(selectedDate);
     }
+  };
 
-    if (event.type === "dismissed") {
-      setShowTimePicker(false);
-      return;
+  const applyTimeSelection = (date: Date) => {
+    if (!timePickerField) return;
+    const hours = date.getHours().toString().padStart(2, "0");
+    const minutes = date.getMinutes().toString().padStart(2, "0");
+    const timeString = `${hours}:${minutes}`;
+    console.log("[index] Time confirmed:", timeString, "field:", timePickerField);
+    if (timePickerField.startsWith("nap-")) {
+      const [, napId, field] = timePickerField.split("-");
+      handleUpdateNap(napId, field, timeString);
+    } else if (timePickerField.startsWith("night-")) {
+      const field = timePickerField.replace("night-", "");
+      handleUpdateNightSleep(field, timeString);
     }
+  };
 
-    if (selectedDate && timePickerField) {
-      const hours = selectedDate.getHours().toString().padStart(2, "0");
-      const minutes = selectedDate.getMinutes().toString().padStart(2, "0");
-      const timeString = `${hours}:${minutes}`;
-
-      if (timePickerField.startsWith("nap-")) {
-        const [, napId, field] = timePickerField.split("-");
-        handleUpdateNap(napId, field, timeString);
-      } else if (timePickerField.startsWith("night-")) {
-        const field = timePickerField.replace("night-", "");
-        handleUpdateNightSleep(field, timeString);
-      }
-
-      if (Platform.OS === "ios") {
-        setShowTimePicker(false);
-      }
-    }
+  const handleTimeConfirm = (date: Date) => {
+    setShowTimePicker(false);
+    applyTimeSelection(date);
   };
 
   const handleArchiveBaby = async (babyId: string, babyName: string) => {
@@ -906,15 +906,15 @@ export default function ConsultantDashboardScreen() {
           </View>
         </ScrollView>
 
-        {showTimePicker && (
-          <DateTimePicker
-            value={timePickerValue}
-            mode="time"
-            is24Hour={true}
-            display={Platform.OS === "ios" ? "spinner" : "default"}
-            onChange={handleTimeChange}
-          />
-        )}
+        <IOSDatePickerModal
+          visible={showTimePicker}
+          value={timePickerValue}
+          mode="time"
+          is24Hour={true}
+          onChange={handleTimeChange}
+          onConfirm={handleTimeConfirm}
+          onCancel={() => setShowTimePicker(false)}
+        />
 
         <ConfirmModal
           visible={confirmDelete.visible}

@@ -16,7 +16,7 @@ import { Stack, useRouter } from "expo-router";
 import { IconSymbol } from "@/components/IconSymbol";
 import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
 import { apiPost } from "@/utils/api";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { IOSDatePickerModal } from "@/components/IOSDatePickerModal";
 import * as Clipboard from "expo-clipboard";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -73,19 +73,15 @@ export default function RegisterBabyScreen() {
   const handleDateChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === "android") {
       setShowDatePicker(false);
+      if (event.type === "dismissed") return;
+      if (selectedDate) setBirthDate(selectedDate);
     }
+  };
 
-    if (event.type === "dismissed") {
-      setShowDatePicker(false);
-      return;
-    }
-
-    if (selectedDate) {
-      setBirthDate(selectedDate);
-      if (Platform.OS === "ios") {
-        setShowDatePicker(false);
-      }
-    }
+  const handleDateConfirm = (date: Date) => {
+    console.log("[register-baby] Date confirmed:", date.toISOString());
+    setBirthDate(date);
+    setShowDatePicker(false);
   };
 
   const handleCopyPassword = async () => {
@@ -381,15 +377,15 @@ export default function RegisterBabyScreen() {
         </View>
       </ScrollView>
 
-      {showDatePicker && (
-        <DateTimePicker
-          value={birthDate}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={handleDateChange}
-          maximumDate={new Date()}
-        />
-      )}
+      <IOSDatePickerModal
+        visible={showDatePicker}
+        value={birthDate}
+        mode="date"
+        maximumDate={new Date()}
+        onChange={handleDateChange}
+        onConfirm={handleDateConfirm}
+        onCancel={() => setShowDatePicker(false)}
+      />
 
       {/* Success Modal - web-compatible, no Alert.alert() */}
       <Modal

@@ -15,7 +15,7 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { IconSymbol } from "@/components/IconSymbol";
 import { ConfirmModal } from "@/components/ConfirmModal";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { IOSDatePickerModal } from "@/components/IOSDatePickerModal";
 import * as DocumentPicker from "expo-document-picker";
 import { colors, spacing, borderRadius, typography } from "@/styles/commonStyles";
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete, BACKEND_URL, getBearerToken } from "@/utils/api";
@@ -86,19 +86,15 @@ export default function ContractDetailsScreen() {
   const handleDateChange = (event: any, selectedDate?: Date) => {
     if (Platform.OS === "android") {
       setShowDatePicker(false);
+      if (event.type === "dismissed") return;
+      if (selectedDate) setStartDate(selectedDate);
     }
+  };
 
-    if (event.type === "dismissed") {
-      setShowDatePicker(false);
-      return;
-    }
-
-    if (selectedDate) {
-      setStartDate(selectedDate);
-      if (Platform.OS === "ios") {
-        setShowDatePicker(false);
-      }
-    }
+  const handleDateConfirm = (date: Date) => {
+    console.log("[contract-details.ios] Date confirmed:", date.toISOString());
+    setStartDate(date);
+    setShowDatePicker(false);
   };
 
   const handlePickDocument = async () => {
@@ -483,14 +479,14 @@ export default function ContractDetailsScreen() {
         )}
       </ScrollView>
 
-      {showDatePicker && (
-        <DateTimePicker
-          value={startDate}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={handleDateChange}
-        />
-      )}
+      <IOSDatePickerModal
+        visible={showDatePicker}
+        value={startDate}
+        mode="date"
+        onChange={handleDateChange}
+        onConfirm={handleDateConfirm}
+        onCancel={() => setShowDatePicker(false)}
+      />
 
       <ConfirmModal
         visible={showDeleteModal}

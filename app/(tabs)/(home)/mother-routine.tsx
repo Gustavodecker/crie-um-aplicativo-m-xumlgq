@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { apiGet, apiPost, apiPut, apiDelete } from "@/utils/api";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { IOSDatePickerModal } from "@/components/IOSDatePickerModal";
 
 interface Baby {
   id: string;
@@ -709,31 +709,41 @@ export default function MotherRoutineScreen() {
     setShowTimePicker(true);
   };
 
-  const handleTimeChange = async (event: any, date?: Date) => {
+  const handleTimeChange = (event: any, date?: Date) => {
+    // Android only: picker closes on selection
     if (Platform.OS === "android") {
       setShowTimePicker(false);
+      if (event.type === "dismissed" || !date || !currentTimeField) return;
+      applyTimeSelection(date);
     }
-    
-    if (date && currentTimeField) {
-      const hours = String(date.getHours()).padStart(2, "0");
-      const minutes = String(date.getMinutes()).padStart(2, "0");
-      const timeString = `${hours}:${minutes}`;
-      
-      if (currentTimeField === "wakeUpTime") {
-        await handleUpdateWakeUpTime(timeString);
-      } else if (currentTimeField.startsWith("nap_") && currentNapId) {
-        const field = currentTimeField.split("_")[1];
-        await handleUpdateNap(currentNapId, field, timeString);
-      } else if (currentTimeField.startsWith("night_")) {
-        const field = currentTimeField.split("_")[1];
-        await handleUpdateNightSleep(field, timeString);
-      } else if (currentTimeField.startsWith("waking_")) {
-        const parts = currentTimeField.split("_");
-        const wakingId = parts[1];
-        const field = parts[2];
-        await handleUpdateWaking(wakingId, field, timeString);
-      }
+  };
+
+  const applyTimeSelection = async (date: Date) => {
+    if (!currentTimeField) return;
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const timeString = `${hours}:${minutes}`;
+    console.log("[mother-routine] Time confirmed:", timeString, "field:", currentTimeField);
+
+    if (currentTimeField === "wakeUpTime") {
+      await handleUpdateWakeUpTime(timeString);
+    } else if (currentTimeField.startsWith("nap_") && currentNapId) {
+      const field = currentTimeField.split("_")[1];
+      await handleUpdateNap(currentNapId, field, timeString);
+    } else if (currentTimeField.startsWith("night_")) {
+      const field = currentTimeField.split("_")[1];
+      await handleUpdateNightSleep(field, timeString);
+    } else if (currentTimeField.startsWith("waking_")) {
+      const parts = currentTimeField.split("_");
+      const wakingId = parts[1];
+      const field = parts[2];
+      await handleUpdateWaking(wakingId, field, timeString);
     }
+  };
+
+  const handleTimeConfirm = (date: Date) => {
+    setShowTimePicker(false);
+    applyTimeSelection(date);
   };
 
   if (loading) {
@@ -1217,14 +1227,15 @@ export default function MotherRoutineScreen() {
         </View>
       </ScrollView>
 
-      {showTimePicker && (
-        <DateTimePicker
-          value={selectedTime}
-          mode="time"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={handleTimeChange}
-        />
-      )}
+      <IOSDatePickerModal
+        visible={showTimePicker}
+        value={selectedTime}
+        mode="time"
+        is24Hour={true}
+        onChange={handleTimeChange}
+        onConfirm={handleTimeConfirm}
+        onCancel={() => setShowTimePicker(false)}
+      />
 
       <ConfirmModal
         visible={showDeleteConfirm}
