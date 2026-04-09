@@ -26,7 +26,7 @@ interface IOSDatePickerModalProps {
 }
 
 /**
- * On iOS, wraps DateTimePicker in a white bottom-sheet modal so the spinner
+ * On iOS, wraps DateTimePicker in a dark gray bottom-sheet modal so the spinner
  * wheels are always readable regardless of the screen's background color.
  * On Android, renders the native picker directly (no modal wrapper needed).
  */
@@ -88,6 +88,8 @@ export function IOSDatePickerModal({
         onPress={onCancel}
       />
       <View style={styles.sheet}>
+        {/* Drag handle */}
+        <View style={styles.handle} />
         {/* Header toolbar */}
         <View style={styles.toolbar}>
           <TouchableOpacity onPress={onCancel} style={styles.toolbarButton}>
@@ -117,7 +119,7 @@ export function IOSDatePickerModal({
             minimumDate={minimumDate}
             is24Hour={is24Hour}
             onChange={handleChange}
-            themeVariant="light"
+            themeVariant="dark"
             style={styles.picker}
           />
         </View>
@@ -135,17 +137,31 @@ export function IOSDatePickerModal({
   );
 }
 
+const DARK_BG = "#2C2C2E";
+const DARK_TOOLBAR = "#2C2C2E";
+const DARK_SEPARATOR = "#48484A";
+const DARK_HANDLE = "#636366";
+
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: "rgba(0,0,0,0.55)",
   },
   sheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: DARK_BG,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingBottom: 34, // safe area bottom
     overflow: "hidden",
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: DARK_HANDLE,
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 4,
   },
   toolbar: {
     flexDirection: "row",
@@ -153,7 +169,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: DARK_TOOLBAR,
   },
   toolbarButton: {
     minWidth: 80,
@@ -161,32 +177,32 @@ const styles = StyleSheet.create({
   toolbarTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: colors.text,
+    color: "#FFFFFF",
     textAlign: "center",
     flex: 1,
   },
   cancelText: {
     fontSize: 16,
-    color: colors.textSecondary,
+    color: "#EBEBF5CC",
     fontWeight: "500",
   },
   confirmText: {
     fontSize: 16,
-    color: colors.primary,
+    color: "#4DB6FF",
     fontWeight: "600",
     textAlign: "right",
   },
   divider: {
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: DARK_SEPARATOR,
   },
   pickerContainer: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: DARK_BG,
     alignItems: "center",
   },
   picker: {
     width: "100%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: DARK_BG,
   },
   confirmButton: {
     marginHorizontal: spacing.lg,
