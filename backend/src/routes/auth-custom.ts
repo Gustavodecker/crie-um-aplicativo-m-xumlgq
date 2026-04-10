@@ -47,26 +47,22 @@ export function registerCustomAuthRoutes(app: App) {
                 id: { type: 'string' },
                 name: { type: 'string' },
                 email: { type: 'string' },
-                emailVerified: { type: 'boolean' },
-                image: { type: ['string', 'null'] },
-                createdAt: { type: 'string' },
-                updatedAt: { type: 'string' },
               },
             },
           },
         },
-        409: {
+        400: {
           description: 'Email already exists',
           type: 'object',
           properties: {
-            error: { type: 'string' },
+            message: { type: 'string' },
           },
         },
         500: {
           description: 'Internal server error',
           type: 'object',
           properties: {
-            error: { type: 'string' },
+            message: { type: 'string' },
           },
         },
       },
@@ -87,8 +83,8 @@ export function registerCustomAuthRoutes(app: App) {
       });
 
       if (existingUser) {
-        app.logger.warn({ email: normalizedEmail }, 'Sign-up failed - email already exists');
-        return reply.status(409).send({ error: 'Email already exists' });
+        app.logger.warn('Sign-up failed - email already exists');
+        return reply.status(400).send({ message: 'Este e-mail já está cadastrado.' });
       }
 
       app.logger.debug({ email: normalizedEmail }, 'Email available, hashing password');
@@ -143,7 +139,7 @@ export function registerCustomAuthRoutes(app: App) {
         updatedAt: now,
       });
 
-      app.logger.info({ userId, email: normalizedEmail }, 'Sign-up successful, session created');
+      app.logger.info({ userId }, 'Sign-up successful, session created');
 
       return reply.status(201).send({
         token: sessionToken,
@@ -151,15 +147,11 @@ export function registerCustomAuthRoutes(app: App) {
           id: userId,
           name,
           email: normalizedEmail,
-          emailVerified: true,
-          image: null,
-          createdAt: now.toISOString(),
-          updatedAt: now.toISOString(),
         },
       });
     } catch (error: unknown) {
-      app.logger.error({ err: error, email: normalizedEmail }, 'Unexpected error during sign-up');
-      return reply.status(500).send({ error: 'Internal server error' });
+      app.logger.error({ err: error }, 'Unexpected error during sign-up');
+      return reply.status(500).send({ message: 'Erro interno do servidor' });
     }
   });
 
@@ -193,6 +185,7 @@ export function registerCustomAuthRoutes(app: App) {
                 email: { type: 'string' },
                 role: { type: ['string', 'null'] },
                 must_change_password: { type: 'boolean' },
+                require_password_change: { type: 'boolean' },
               },
             },
           },
@@ -201,14 +194,14 @@ export function registerCustomAuthRoutes(app: App) {
           description: 'Invalid email or password',
           type: 'object',
           properties: {
-            error: { type: 'string' },
+            message: { type: 'string' },
           },
         },
         500: {
           description: 'Internal server error',
           type: 'object',
           properties: {
-            error: { type: 'string' },
+            message: { type: 'string' },
           },
         },
       },
@@ -229,8 +222,8 @@ export function registerCustomAuthRoutes(app: App) {
       });
 
       if (!user) {
-        app.logger.warn({ email: normalizedEmail }, 'Login failed - user not found');
-        return reply.status(401).send({ error: 'Invalid email or password' });
+        app.logger.warn('Login failed - user not found');
+        return reply.status(401).send({ message: 'Email ou senha inválidos' });
       }
 
       app.logger.debug({ userId: user.id, email: normalizedEmail }, 'User found, looking up credential account');
@@ -244,8 +237,8 @@ export function registerCustomAuthRoutes(app: App) {
       });
 
       if (!credentialAccount || !credentialAccount.password) {
-        app.logger.warn({ userId: user.id, email: normalizedEmail }, 'Login failed - no credential account or password');
-        return reply.status(401).send({ error: 'Invalid email or password' });
+        app.logger.warn({ userId: user.id }, 'Login failed - no credential account or password');
+        return reply.status(401).send({ message: 'Email ou senha inválidos' });
       }
 
       app.logger.debug({ userId: user.id, accountId: credentialAccount.id }, 'Credential account found, verifying password');
@@ -268,8 +261,8 @@ export function registerCustomAuthRoutes(app: App) {
       }
 
       if (!passwordValid) {
-        app.logger.warn({ userId: user.id, email: normalizedEmail }, 'Login failed - invalid password');
-        return reply.status(401).send({ error: 'Invalid email or password' });
+        app.logger.warn({ userId: user.id }, 'Login failed - invalid password');
+        return reply.status(401).send({ message: 'Email ou senha inválidos' });
       }
 
       app.logger.debug({ userId: user.id }, 'Password verified successfully');
@@ -308,11 +301,113 @@ export function registerCustomAuthRoutes(app: App) {
           email: user.email,
           role: user.role,
           must_change_password: user.mustChangePassword,
+          require_password_change: user.requirePasswordChange,
         },
       });
     } catch (error: unknown) {
-      app.logger.error({ err: error, email: normalizedEmail }, 'Unexpected error during login');
-      return reply.status(500).send({ error: 'Internal server error' });
+      app.logger.error({ err: error }, 'Unexpected error during login');
+      return reply.status(500).send({ message: 'Erro interno do servidor' });
+    }
+  });
+
+  // ==========================================
+  // GET /api/auth/session
+  // Retrieve current user session from Bearer token
+  // ==========================================
+  app.fastify.get('/api/auth/session', {
+    schema: {
+      description: 'Get current user session from Bearer token',
+      tags: ['auth'],
+      response: {
+        200: {
+          description: 'Session retrieved successfully',
+          type: 'object',
+          properties: {
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                email: { type: 'string' },
+                name: { type: 'string' },
+                role: { type: ['string', 'null'] },
+                must_change_password: { type: 'boolean' },
+                require_password_change: { type: 'boolean' },
+              },
+            },
+          },
+        },
+        401: {
+          description: 'Unauthorized or session expired',
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+          },
+        },
+        500: {
+          description: 'Internal server error',
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ): Promise<void> => {
+    const authHeader = request.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      app.logger.warn('Session retrieval failed - missing or invalid authorization header');
+      return reply.status(401).send({ message: 'Unauthorized' });
+    }
+
+    const token = authHeader.slice(7); // Remove "Bearer " prefix
+    app.logger.info({ tokenPrefix: token.substring(0, 8) }, 'GET /api/auth/session - retrieving session');
+
+    try {
+      // Look up session by token
+      const session = await app.db.query.session.findFirst({
+        where: eq(authSchema.session.token, token),
+      });
+
+      if (!session) {
+        app.logger.warn({ tokenPrefix: token.substring(0, 8) }, 'Session not found');
+        return reply.status(401).send({ message: 'Session not found' });
+      }
+
+      // Verify session is not expired
+      if (new Date() > new Date(session.expiresAt)) {
+        app.logger.warn({ sessionId: session.id }, 'Session expired');
+        return reply.status(401).send({ message: 'Session expired' });
+      }
+
+      // Look up user by session's user_id
+      const user = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.id, session.userId),
+      });
+
+      if (!user) {
+        app.logger.error({ userId: session.userId }, 'User not found for session');
+        return reply.status(401).send({ message: 'Unauthorized' });
+      }
+
+      app.logger.info({ userId: user.id }, 'Session retrieved successfully');
+
+      return reply.status(200).send({
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          must_change_password: user.mustChangePassword,
+          require_password_change: user.requirePasswordChange,
+        },
+      });
+    } catch (error: unknown) {
+      app.logger.error({ err: error }, 'Error retrieving session');
+      return reply.status(500).send({ message: 'Erro interno do servidor' });
     }
   });
 
@@ -614,5 +709,5 @@ export function registerCustomAuthRoutes(app: App) {
     }
   });
 
-  app.logger.info('Custom auth endpoints registered at /api/auth/login, /api/auth/forgot-password, /api/auth/change-password');
+  app.logger.info('Custom auth endpoints registered at /api/auth/sign-up, /api/auth/login, /api/auth/session, /api/auth/forgot-password, /api/auth/change-password');
 }

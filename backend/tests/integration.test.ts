@@ -749,7 +749,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         babyId: babyId,
-        startDate: "2026-02-22",
+        startDate: "2026-03-15",
         durationDays: 30,
         status: "active",
         contractPdfUrl: null,
@@ -1163,7 +1163,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         babyId: babyId,
-        date: "2026-02-22",
+        date: "2026-04-05",
         wakeUpTime: "07:00",
         motherObservations: "Baby slept well",
       }),
