@@ -877,7 +877,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         babyId: babyId,
-        startDate: "2026-02-22",
+        startDate: "2026-03-15",
         durationDays: 30,
         status: "active",
       }),
@@ -913,7 +913,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         babyId: "invalid-uuid",
-        startDate: "2026-02-22",
+        startDate: "2026-03-15",
         durationDays: 30,
         status: "active",
       }),
@@ -953,7 +953,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         babyId: newBaby.id,
-        startDate: "2024-08-15",
+        startDate: "2026-03-15",
         durationDays: 30,
         status: "active",
       }),
@@ -1064,7 +1064,7 @@ describe("API Integration Tests", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         babyId: newBaby.id,
-        startDate: "2026-03-01",
+        startDate: "2026-03-15",
         durationDays: 30,
         status: "active",
       }),
