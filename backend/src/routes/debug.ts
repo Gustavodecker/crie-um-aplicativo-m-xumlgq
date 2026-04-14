@@ -402,6 +402,255 @@ export function registerDebugRoutes(app: App) {
     }
   });
 
+  // POST /api/debug/cleanup-user - Delete all data for specific user (gustavo.miguel@msn.com)
+  app.fastify.post('/api/debug/cleanup-user', {
+    schema: {
+      description: 'Delete all data for gustavo.miguel@msn.com user while respecting foreign key constraints',
+      tags: ['debug'],
+      response: {
+        200: {
+          description: 'User data deleted successfully',
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+            userId: { type: ['string', 'null'] },
+            deletionDetails: {
+              type: 'object',
+              additionalProperties: { type: 'number' },
+            },
+          },
+        },
+        404: {
+          description: 'User not found',
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+          },
+        },
+        500: {
+          description: 'Internal server error',
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+            message: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const targetEmail = 'gustavo.miguel@msn.com';
+    app.logger.warn({ targetEmail }, 'USER_CLEANUP: Starting cleanup for specific user');
+
+    try {
+      // Step 1: Find the user by email
+      const user = await app.db.query.user.findFirst({
+        where: eq(authSchema.user.email, targetEmail),
+      });
+
+      if (!user) {
+        app.logger.info({ targetEmail }, 'USER_CLEANUP: User not found');
+        return reply.status(404).send({ message: `User with email ${targetEmail} not found` });
+      }
+
+      app.logger.warn({ userId: user.id, email: targetEmail }, 'USER_CLEANUP: User found, starting cascade deletion');
+
+      const deletionDetails: Record<string, number> = {
+        night_wakings: 0,
+        naps: 0,
+        night_sleep: 0,
+        daily_routines: 0,
+        orientations: 0,
+        contracts: 0,
+        babies: 0,
+        sleep_windows_config: 0,
+        consultants: 0,
+        verification: 0,
+        account: 0,
+        session: 0,
+        user: 0,
+      };
+
+      // Step 2: Find and delete consultant-related data
+      const consultant = await app.db.query.consultants.findFirst({
+        where: eq(appSchema.consultants.userId, user.id),
+      });
+
+      if (consultant) {
+        app.logger.debug({ consultantId: consultant.id }, 'USER_CLEANUP: Found consultant');
+
+        // Get all babies for this consultant
+        const consultantBabies = await app.db.query.babies.findMany({
+          where: eq(appSchema.babies.consultantId, consultant.id),
+        });
+
+        // For each baby, delete all nested data
+        for (const baby of consultantBabies) {
+          const routines = await app.db.query.dailyRoutines.findMany({
+            where: eq(appSchema.dailyRoutines.babyId, baby.id),
+          });
+
+          for (const routine of routines) {
+            // Delete night_wakings
+            const nightSleeps = await app.db.query.nightSleep.findMany({
+              where: eq(appSchema.nightSleep.routineId, routine.id),
+            });
+
+            for (const nightSleep of nightSleeps) {
+              const result = await app.db.execute(
+                `DELETE FROM night_wakings WHERE night_sleep_id = '${nightSleep.id}'`
+              ) as any;
+              deletionDetails.night_wakings += result?.rowCount || 0;
+            }
+
+            // Delete night_sleep
+            const nsResult = await app.db.execute(
+              `DELETE FROM night_sleep WHERE routine_id = '${routine.id}'`
+            ) as any;
+            deletionDetails.night_sleep += nsResult?.rowCount || 0;
+
+            // Delete naps
+            const nResult = await app.db.execute(
+              `DELETE FROM naps WHERE routine_id = '${routine.id}'`
+            ) as any;
+            deletionDetails.naps += nResult?.rowCount || 0;
+          }
+
+          // Delete daily_routines
+          const drResult = await app.db.execute(
+            `DELETE FROM daily_routines WHERE baby_id = '${baby.id}'`
+          ) as any;
+          deletionDetails.daily_routines += drResult?.rowCount || 0;
+
+          // Delete orientations
+          const oResult = await app.db.execute(
+            `DELETE FROM orientations WHERE baby_id = '${baby.id}'`
+          ) as any;
+          deletionDetails.orientations += oResult?.rowCount || 0;
+
+          // Delete contracts
+          const cResult = await app.db.execute(
+            `DELETE FROM contracts WHERE baby_id = '${baby.id}'`
+          ) as any;
+          deletionDetails.contracts += cResult?.rowCount || 0;
+        }
+
+        // Delete babies
+        const bResult = await app.db.execute(
+          `DELETE FROM babies WHERE consultant_id = '${consultant.id}'`
+        ) as any;
+        deletionDetails.babies += bResult?.rowCount || 0;
+
+        // Delete sleep_windows_config
+        const swResult = await app.db.execute(
+          `DELETE FROM sleep_windows_config WHERE consultant_id = '${consultant.id}'`
+        ) as any;
+        deletionDetails.sleep_windows_config += swResult?.rowCount || 0;
+
+        // Delete consultant
+        const consResult = await app.db.execute(
+          `DELETE FROM consultants WHERE id = '${consultant.id}'`
+        ) as any;
+        deletionDetails.consultants += consResult?.rowCount || 0;
+      }
+
+      // Step 3: Delete babies where user is the mother (linked to other consultants)
+      const motherBabies = await app.db.query.babies.findMany({
+        where: eq(appSchema.babies.motherUserId, user.id),
+      });
+
+      for (const baby of motherBabies) {
+        const routines = await app.db.query.dailyRoutines.findMany({
+          where: eq(appSchema.dailyRoutines.babyId, baby.id),
+        });
+
+        for (const routine of routines) {
+          const nightSleeps = await app.db.query.nightSleep.findMany({
+            where: eq(appSchema.nightSleep.routineId, routine.id),
+          });
+
+          for (const nightSleep of nightSleeps) {
+            const result = await app.db.execute(
+              `DELETE FROM night_wakings WHERE night_sleep_id = '${nightSleep.id}'`
+            ) as any;
+            deletionDetails.night_wakings += result?.rowCount || 0;
+          }
+
+          const nsResult = await app.db.execute(
+            `DELETE FROM night_sleep WHERE routine_id = '${routine.id}'`
+          ) as any;
+          deletionDetails.night_sleep += nsResult?.rowCount || 0;
+
+          const nResult = await app.db.execute(
+            `DELETE FROM naps WHERE routine_id = '${routine.id}'`
+          ) as any;
+          deletionDetails.naps += nResult?.rowCount || 0;
+        }
+
+        const drResult = await app.db.execute(
+          `DELETE FROM daily_routines WHERE baby_id = '${baby.id}'`
+        ) as any;
+        deletionDetails.daily_routines += drResult?.rowCount || 0;
+
+        const oResult = await app.db.execute(
+          `DELETE FROM orientations WHERE baby_id = '${baby.id}'`
+        ) as any;
+        deletionDetails.orientations += oResult?.rowCount || 0;
+
+        const cResult = await app.db.execute(
+          `DELETE FROM contracts WHERE baby_id = '${baby.id}'`
+        ) as any;
+        deletionDetails.contracts += cResult?.rowCount || 0;
+      }
+
+      // Delete babies where user is mother
+      const mbResult = await app.db.execute(
+        `DELETE FROM babies WHERE mother_user_id = '${user.id}'`
+      ) as any;
+      deletionDetails.babies += mbResult?.rowCount || 0;
+
+      // Step 4: Delete verification entries
+      const vResult = await app.db.execute(
+        `DELETE FROM verification WHERE identifier = '${targetEmail}'`
+      ) as any;
+      deletionDetails.verification = vResult?.rowCount || 0;
+
+      // Step 5: Delete auth sessions
+      const sResult = await app.db.execute(
+        `DELETE FROM session WHERE user_id = '${user.id}'`
+      ) as any;
+      deletionDetails.session = sResult?.rowCount || 0;
+
+      // Step 6: Delete auth accounts
+      const aResult = await app.db.execute(
+        `DELETE FROM account WHERE user_id = '${user.id}'`
+      ) as any;
+      deletionDetails.account = aResult?.rowCount || 0;
+
+      // Step 7: Delete the user
+      const uResult = await app.db.execute(
+        `DELETE FROM "user" WHERE id = '${user.id}'`
+      ) as any;
+      deletionDetails.user = uResult?.rowCount || 0;
+
+      app.logger.warn(
+        { userId: user.id, email: targetEmail, deletionDetails },
+        'USER_CLEANUP: Deletion completed successfully'
+      );
+
+      return reply.status(200).send({
+        message: `Successfully deleted all data for user ${targetEmail}`,
+        userId: user.id,
+        deletionDetails,
+      });
+    } catch (error) {
+      app.logger.error({ err: error, targetEmail }, 'USER_CLEANUP: Fatal error');
+      return reply.status(500).send({
+        error: 'Failed to cleanup user data',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   // POST /api/debug/cleanup-all-data - Delete all data from specified tables (preserves schema)
   app.fastify.post('/api/debug/cleanup-all-data', {
     schema: {
