@@ -170,6 +170,9 @@ app.withAuth({
       });
     },
   },
+  // OAuth providers (Google, GitHub, Apple) are automatically enabled via framework proxy
+  // No additional configuration needed - they work out of the box
+  // Available at: POST /api/auth/sign-in/social
 });
 
 // Register custom auth routes AFTER app.withAuth() to extend Better Auth functionality

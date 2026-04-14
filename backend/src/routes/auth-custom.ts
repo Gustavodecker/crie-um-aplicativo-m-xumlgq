@@ -666,22 +666,30 @@ export function registerCustomAuthRoutes(app: App) {
         const errorMsg = compareError instanceof Error ? compareError.message : String(compareError);
         app.logger.error({
           userId: user.id,
-          email: normalizedEmail,
           err: compareError,
         }, 'Password comparison threw exception');
         return reply.status(500).send({ error: 'Internal server error' });
       }
 
       if (!currentPasswordValid) {
-        app.logger.warn({ userId: user.id, email: normalizedEmail }, 'Change password - current password is incorrect');
+        app.logger.warn({ userId: user.id }, 'Change password - current password is incorrect');
         return reply.status(401).send({ error: 'Current password is incorrect' });
       }
 
       app.logger.debug({ userId: user.id }, 'Current password verified');
 
-      // Hash new password
-      const bcrypt = await import('bcryptjs');
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      // Hash new password using bcryptjs (consistent with Better Auth's approach)
+      let hashedPassword: string;
+      try {
+        const bcrypt = await import('bcryptjs');
+        hashedPassword = await bcrypt.hash(newPassword, 10);
+      } catch (hashError: unknown) {
+        app.logger.error({
+          userId: user.id,
+          err: hashError,
+        }, 'Failed to hash new password');
+        return reply.status(500).send({ error: 'Internal server error' });
+      }
 
       app.logger.debug({ userId: user.id, email: normalizedEmail }, 'New password hashed, updating account');
 

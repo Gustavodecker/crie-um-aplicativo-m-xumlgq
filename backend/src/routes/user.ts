@@ -3,8 +3,6 @@ import { createCustomRequireAuth } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, and } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
-import bcrypt from 'bcrypt';
-import { hashPassword, verifyPassword } from 'better-auth/crypto';
 
 /**
  * User Routes
@@ -85,13 +83,14 @@ export function registerUserRoutes(app: App) {
         return reply.status(500).send({ error: 'Internal server error' });
       }
 
-      // Hash the new password using Better Auth's hash function
-      app.logger.info({ userId }, 'Hashing new password using Better Auth');
+      // Hash the new password using bcryptjs
+      app.logger.info({ userId }, 'Hashing new password using bcryptjs');
 
       let hashedPassword: string;
 
       try {
-        hashedPassword = await hashPassword(newPassword);
+        const bcrypt = await import('bcryptjs');
+        hashedPassword = await bcrypt.hash(newPassword, 10);
         app.logger.info({ userId, hashLength: hashedPassword.length }, 'New password hashed successfully');
       } catch (hashError) {
         app.logger.error({ err: hashError, userId, errorMsg: (hashError as Error).message }, 'Failed to hash new password');

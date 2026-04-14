@@ -84,6 +84,129 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 400);
   });
 
+  // ===== Auth Session & Password Management =====
+
+  test("Get current session with valid auth", async () => {
+    const res = await authenticatedApi("/api/auth/session", authToken);
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.user).toBeDefined();
+    expect(data.user.id).toBe(userId);
+    expect(data.user.email).toBe(userEmail);
+    expect(typeof data.user.must_change_password).toBe("boolean");
+    expect(typeof data.user.require_password_change).toBe("boolean");
+  });
+
+  test("Get current session without auth returns 401", async () => {
+    const res = await api("/api/auth/session");
+    await expectStatus(res, 401);
+  });
+
+  test("Get current session with invalid token returns 401", async () => {
+    const res = await authenticatedApi("/api/auth/session", "invalid-token-xyz");
+    await expectStatus(res, 401);
+  });
+
+  test("Forgot password for existing user returns 200", async () => {
+    const res = await api("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.tempPassword).toBeDefined();
+    expect(typeof data.tempPassword).toBe("string");
+  });
+
+  test("Forgot password without required email returns 400", async () => {
+    const res = await api("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Forgot password for nonexistent email returns 404", async () => {
+    const res = await api("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "nonexistent-user-xyz@example.com",
+      }),
+    });
+    await expectStatus(res, 404);
+  });
+
+  test("Change password successfully", async () => {
+    const res = await authenticatedApi("/api/auth/change-password", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        currentPassword: "newPassword456",
+        newPassword: "changedPassword789",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
+  test("Change password with incorrect current password returns 401", async () => {
+    const res = await authenticatedApi("/api/auth/change-password", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        currentPassword: "wrongPassword123",
+        newPassword: "newPassword999",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Change password without auth returns 401", async () => {
+    const res = await api("/api/auth/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        currentPassword: "currentPassword",
+        newPassword: "newPassword",
+      }),
+    });
+    await expectStatus(res, 401);
+  });
+
+  test("Change password without required fields returns 400", async () => {
+    const res = await authenticatedApi("/api/auth/change-password", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        currentPassword: "current",
+      }),
+    });
+    await expectStatus(res, 400);
+  });
+
+  test("Change password for nonexistent user returns 404", async () => {
+    const res = await authenticatedApi("/api/auth/change-password", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: "nonexistent-user-xyz@example.com",
+        currentPassword: "currentPassword",
+        newPassword: "newPassword",
+      }),
+    });
+    await expectStatus(res, 404);
+  });
+
   // ===== Init Endpoints =====
 
   test("Initialize consultant profile", async () => {
