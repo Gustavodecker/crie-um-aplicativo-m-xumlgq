@@ -1,7 +1,7 @@
 import type { App } from '../index.js';
 import { createCustomRequireAuth } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
 
 /**
@@ -70,6 +70,7 @@ export function registerUserRoutes(app: App) {
             eq(authSchema.account.userId, userId),
             eq(authSchema.account.providerId, 'credential')
           ),
+          orderBy: [desc(authSchema.account.createdAt)],
         });
 
         if (!credentialAccount) {
@@ -97,39 +98,38 @@ export function registerUserRoutes(app: App) {
         return reply.status(500).send({ error: 'Internal server error' });
       }
 
-      // Update password and clear flag in atomic transaction
+      // Update password in account table
       try {
-        await app.db.transaction(async (tx) => {
-          app.logger.debug({ userId, accountId: credentialAccount.id }, 'Updating account password in transaction');
+        app.logger.debug({ userId, accountId: credentialAccount.id }, 'Updating account password');
 
-          const accountUpdateResult = await tx.update(authSchema.account)
-            .set({ password: hashedPassword })
-            .where(eq(authSchema.account.id, credentialAccount.id))
-            .returning();
+        const accountUpdateResult = await app.db.update(authSchema.account)
+          .set({ password: hashedPassword })
+          .where(eq(authSchema.account.id, credentialAccount.id))
+          .returning();
 
-          if (!accountUpdateResult.length) {
-            throw new Error('Failed to update account password - no rows affected');
-          }
+        if (!accountUpdateResult.length) {
+          app.logger.error({ userId, accountId: credentialAccount.id }, 'Failed to update account password - no rows affected');
+          return reply.status(500).send({ error: 'Internal server error' });
+        }
 
-          app.logger.debug({ userId, accountId: credentialAccount.id }, 'Password updated in account');
+        app.logger.debug({ userId, accountId: credentialAccount.id }, 'Password updated in account');
 
-          app.logger.debug({ userId }, 'Clearing requirePasswordChange flag in transaction');
+        // Clear requirePasswordChange flag
+        app.logger.debug({ userId }, 'Clearing requirePasswordChange flag');
 
-          const userUpdateResult = await tx.update(authSchema.user)
-            .set({ requirePasswordChange: false })
-            .where(eq(authSchema.user.id, userId))
-            .returning();
+        const userUpdateResult = await app.db.update(authSchema.user)
+          .set({ requirePasswordChange: false })
+          .where(eq(authSchema.user.id, userId))
+          .returning();
 
-          if (!userUpdateResult.length) {
-            throw new Error('Failed to clear requirePasswordChange flag - no rows affected');
-          }
+        if (!userUpdateResult.length) {
+          app.logger.error({ userId }, 'Failed to clear requirePasswordChange flag - no rows affected');
+          return reply.status(500).send({ error: 'Internal server error' });
+        }
 
-          app.logger.debug({ userId }, 'Cleared requirePasswordChange flag');
-        });
-
-        app.logger.info({ userId, accountId: credentialAccount.id }, 'Password set successfully in transaction');
-      } catch (transactionError) {
-        app.logger.error({ err: transactionError, userId, accountId: credentialAccount.id }, 'Failed to set password in transaction');
+        app.logger.info({ userId, accountId: credentialAccount.id }, 'Password set successfully');
+      } catch (updateError) {
+        app.logger.error({ err: updateError, userId, accountId: credentialAccount.id }, 'Failed to set password');
         return reply.status(500).send({ error: 'Internal server error' });
       }
 

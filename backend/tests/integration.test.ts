@@ -141,6 +141,19 @@ describe("API Integration Tests", () => {
     await expectStatus(res, 404);
   });
 
+  test("Reset password for change-password test", async () => {
+    const res = await authenticatedApi("/api/user/set-password", authToken, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        newPassword: "newPassword456",
+      }),
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+  });
+
   test("Change password successfully", async () => {
     const res = await authenticatedApi("/api/auth/change-password", authToken, {
       method: "POST",
