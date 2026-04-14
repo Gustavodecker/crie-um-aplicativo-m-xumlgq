@@ -2,6 +2,7 @@ import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { eq, desc, and } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
+import * as appSchema from '../db/schema/schema.js';
 
 export function registerDebugRoutes(app: App) {
   // GET /api/debug/juju-diagnosis - Diagnostic endpoint for juju@teste.com user
@@ -398,6 +399,100 @@ export function registerDebugRoutes(app: App) {
     } catch (error) {
       app.logger.error({ err: error, email }, 'Check hash: Error inspecting hash');
       return reply.status(500).send({ error: 'Failed to check hash' });
+    }
+  });
+
+  // POST /api/debug/cleanup-all-data - Delete all data from specified tables (preserves schema)
+  app.fastify.post('/api/debug/cleanup-all-data', {
+    schema: {
+      description: 'Delete all data from specified tables while preserving schema (respects foreign key constraints)',
+      tags: ['debug'],
+      response: {
+        200: {
+          description: 'Data deleted successfully',
+          type: 'object',
+          properties: {
+            message: { type: 'string' },
+            deletedTables: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  table: { type: 'string' },
+                  rowsDeleted: { type: 'number' },
+                },
+              },
+            },
+          },
+        },
+        500: {
+          description: 'Internal server error',
+          type: 'object',
+          properties: {
+            error: { type: 'string' },
+            message: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    app.logger.warn({}, 'CLEANUP: Starting data deletion from all tables');
+
+    try {
+      const results: Array<{ table: string; rowsDeleted: number }> = [];
+
+      // Delete in order respecting foreign key constraints (leaves to root)
+      const deletionTables = [
+        'night_wakings',
+        'night_sleep',
+        'naps',
+        'daily_routines',
+        'orientations',
+        'contracts',
+        'sleep_windows_config',
+        'babies',
+        'consultants',
+      ];
+
+      for (const tableName of deletionTables) {
+        try {
+          // Use raw SQL for reliable deletion and row count
+          const result = await app.db.execute(`DELETE FROM ${tableName}`) as any;
+          const rowsAffected = result?.rows?.length || 0;
+
+          results.push({
+            table: tableName,
+            rowsDeleted: rowsAffected,
+          });
+
+          app.logger.info(
+            { table: tableName, rowsDeleted: rowsAffected },
+            `CLEANUP: Deleted ${rowsAffected} rows from ${tableName}`
+          );
+        } catch (tableError) {
+          app.logger.error(
+            { err: tableError, table: tableName },
+            `CLEANUP: Error deleting from ${tableName}`
+          );
+          throw tableError;
+        }
+      }
+
+      app.logger.warn(
+        { tablesDeleted: results.length, totalRowsDeleted: results.reduce((sum, r) => sum + r.rowsDeleted, 0) },
+        'CLEANUP: Data deletion completed successfully'
+      );
+
+      return reply.status(200).send({
+        message: 'All data deleted successfully. Schema preserved.',
+        deletedTables: results,
+      });
+    } catch (error) {
+      app.logger.error({ err: error }, 'CLEANUP: Fatal error during data deletion');
+      return reply.status(500).send({
+        error: 'Failed to cleanup data',
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
   });
 }

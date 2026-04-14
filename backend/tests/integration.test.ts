@@ -2811,4 +2811,14 @@ describe("API Integration Tests", () => {
     );
     await expectStatus(res, 401);
   });
+
+  test("Cleanup all data returns 200", async () => {
+    const res = await api("/api/debug/cleanup-all-data", {
+      method: "POST",
+    });
+    await expectStatus(res, 200);
+    const data = await res.json();
+    expect(data.message).toBeDefined();
+    expect(Array.isArray(data.deletedTables)).toBe(true);
+  });
 });
