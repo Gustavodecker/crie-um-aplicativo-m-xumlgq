@@ -1,6 +1,6 @@
 import type { App } from '../index.js';
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import * as authSchema from '../db/schema/auth-schema.js';
 import { resend } from '@specific-dev/framework';
 import crypto from 'crypto';
@@ -234,6 +234,7 @@ export function registerCustomAuthRoutes(app: App) {
           eq(authSchema.account.userId, user.id),
           eq(authSchema.account.providerId, 'credential')
         ),
+        orderBy: [desc(authSchema.account.createdAt)],
       });
 
       if (!credentialAccount || !credentialAccount.password) {
@@ -478,6 +479,7 @@ export function registerCustomAuthRoutes(app: App) {
           eq(authSchema.account.userId, user.id),
           eq(authSchema.account.providerId, 'credential')
         ),
+        orderBy: [desc(authSchema.account.createdAt)],
       });
 
       if (!credentialAccount) {
@@ -647,6 +649,7 @@ export function registerCustomAuthRoutes(app: App) {
           eq(authSchema.account.userId, user.id),
           eq(authSchema.account.providerId, 'credential')
         ),
+        orderBy: [desc(authSchema.account.createdAt)],
       });
 
       if (!credentialAccount || !credentialAccount.password) {
@@ -694,19 +697,31 @@ export function registerCustomAuthRoutes(app: App) {
       app.logger.debug({ userId: user.id, email: normalizedEmail }, 'New password hashed, updating account');
 
       // Update password in account table
-      await app.db.update(authSchema.account)
+      const accountUpdateResult = await app.db.update(authSchema.account)
         .set({ password: hashedPassword })
-        .where(eq(authSchema.account.id, credentialAccount.id));
+        .where(eq(authSchema.account.id, credentialAccount.id))
+        .returning();
+
+      if (!accountUpdateResult.length) {
+        app.logger.error({ userId: user.id, accountId: credentialAccount.id }, 'Failed to update account password - no rows affected');
+        return reply.status(500).send({ error: 'Internal server error' });
+      }
 
       app.logger.debug({ userId: user.id }, 'Account password updated, clearing must_change_password flags');
 
       // Clear password change flags
-      await app.db.update(authSchema.user)
+      const userUpdateResult = await app.db.update(authSchema.user)
         .set({
           mustChangePassword: false,
           tempPasswordExpiresAt: null,
         })
-        .where(eq(authSchema.user.id, user.id));
+        .where(eq(authSchema.user.id, user.id))
+        .returning();
+
+      if (!userUpdateResult.length) {
+        app.logger.error({ userId: user.id }, 'Failed to clear password change flags - no rows affected');
+        return reply.status(500).send({ error: 'Internal server error' });
+      }
 
       app.logger.info({ userId: user.id, email: normalizedEmail }, 'Password changed successfully');
 
