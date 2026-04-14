@@ -122,39 +122,14 @@ app.logger.info(
 app.withStorage();
 
 // Enable authentication with Better Auth
-// Configuration includes mobile app support with flexible Origin handling
-// Session Management Configuration:
-// - 30 day session expiration (extended from default)
-// - 24 hour session update age (automatic refresh)
-// - 90 day refresh token expiration
-// - Cookie-based session persistence
-// - Non-strict validation (prevent unexpected logouts)
-// - Cookie caching enabled for performance
+// Uses Specular framework defaults for:
+// - Session management and expiration
+// - Mobile app support with Origin header handling
+// - OAuth providers (Google, Apple) via framework proxy
+// - CORS and trusted origins configuration
 //
-// CORS Configuration for Mobile Apps:
-// - Accepts all origins including mobile apps via wildcard ["*"]
-// - Mobile apps (React Native/Expo) without Origin header supported via middleware
-// - Middleware adds "http://localhost" origin for requests without Origin header
-// - Authentication is protected by session tokens, NOT Origin header validation
-// - Security comes from token-based authentication, not CORS origin checks
-//
-// IMPORTANT: Better Auth reserves all /api/auth/* paths and must register them first
-// This ensures all endpoints including password reset, email verification, etc. are available
-//
-// Environment Variables (see .env.example):
-// - SESSION_EXPIRATION_TIME: Session duration in ms (default: 30 days)
-// - REFRESH_TOKEN_EXPIRATION_TIME: Refresh token duration in ms (default: 90 days)
-// - SESSION_UPDATE_AGE: Activity refresh interval in ms (default: 24 hours)
-// - COOKIE_MAX_AGE: Cookie expiration in seconds (default: 30 days)
-// - COOKIE_DOMAIN: Cross-subdomain cookie domain (default: current domain)
-// - SESSION_STRICT: Enable strict validation (default: false)
-// - SESSION_COOKIE_CACHE: Enable cookie caching (default: true)
-
+// Email/password authentication with password reset email configuration
 app.withAuth({
-  // Accept all origins - security is via token validation, not origin checking
-  // Wildcard allows web browsers, mobile apps (via middleware), and any API client
-  trustedOrigins: ["*"],
-  // Configure password reset email
   emailAndPassword: {
     sendResetPassword: async ({ user, url }) => {
       resend.emails.send({
@@ -170,9 +145,6 @@ app.withAuth({
       });
     },
   },
-  // OAuth providers (Google, GitHub, Apple) are automatically enabled via framework proxy
-  // No additional configuration needed - they work out of the box
-  // Available at: POST /api/auth/sign-in/social
 });
 
 // Register custom auth routes AFTER app.withAuth() to extend Better Auth functionality
@@ -180,8 +152,8 @@ app.withAuth({
 registerCustomAuthRoutes(app);
 
 app.logger.info(
-  { trustedOrigins: ["*"], mobileSupport: 'enabled', securityModel: 'token-based' },
-  'Better Auth initialized with mobile app support - all origins accepted'
+  { authEnabled: true, providers: ['email/password', 'google', 'apple'], passwordReset: true },
+  'Better Auth initialized with email/password and OAuth providers'
 );
 
 // Log successful auth initialization
