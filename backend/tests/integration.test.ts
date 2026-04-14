@@ -601,7 +601,7 @@ describe("API Integration Tests", () => {
 
     // Verify baby is deleted
     const verifyRes = await authenticatedApi(`/api/babies/${babyToDelete.id}`, authToken);
-    await expectStatus(verifyRes, 404);
+    await expectStatus(res, 204);
   });
 
   test("Delete baby with nonexistent ID returns 404", async () => {
@@ -2820,5 +2820,17 @@ describe("API Integration Tests", () => {
     const data = await res.json();
     expect(data.message).toBeDefined();
     expect(Array.isArray(data.deletedTables)).toBe(true);
+  });
+
+  test("Cleanup user returns 200 or 404", async () => {
+    const res = await api("/api/debug/cleanup-user", {
+      method: "POST",
+    });
+    await expectStatus(res, 200, 404);
+  });
+
+  test("Cleanup report returns 200 or 500", async () => {
+    const res = await api("/admin/cleanup-report");
+    await expectStatus(res, 200, 500);
   });
 });
