@@ -47,7 +47,7 @@ export default function TabLayout() {
     } else {
       console.warn("[TabLayout] Unknown user role:", userRole, "- defaulting to consultant behavior");
     }
-  }, [user, userRole, segments]);
+  }, [user, userRole, segments, router]);
 
   // Redirect to auth if no user
   if (!user) {

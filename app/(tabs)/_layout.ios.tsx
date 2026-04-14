@@ -45,7 +45,7 @@ export default function TabLayout() {
     } else {
       console.warn("[TabLayout.ios] Unknown user role:", userRole);
     }
-  }, [user, userRole, segments]);
+  }, [user, userRole, segments, router]);
 
   // Redirect to auth if no user
   if (!user) {

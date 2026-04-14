@@ -53,7 +53,7 @@ function NavigationGuard({ children }: { children: React.ReactNode }) {
       console.log("[RootLayout] ✅ User logged in, redirecting to /(tabs)");
       router.replace("/(tabs)");
     }
-  }, [user, loading, segments]);
+  }, [user, loading, segments, router]);
 
   // Show loading indicator while initializing
   if (loading) {
