@@ -129,8 +129,10 @@ app.withStorage();
 // - CORS and trusted origins configuration
 //
 // Email/password authentication with password reset email configuration
+// Note: requireEmailVerification is disabled to allow sign-in for existing users
 app.withAuth({
   emailAndPassword: {
+    requireEmailVerification: false,
     sendResetPassword: async ({ user, url }) => {
       resend.emails.send({
         from: "onboarding@resend.dev",
