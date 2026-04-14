@@ -193,9 +193,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
-      console.log("[Auth] 🔐 POST /api/auth/login — signing in with email:", email);
+      console.log("[Auth] 🔐 POST /api/auth/sign-in/email — signing in with email:", email);
       
-      const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
+      const response = await fetch(`${BACKEND_URL}/api/auth/sign-in/email`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -237,8 +237,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("[Auth] ✅ Login response received");
 
-      const token: string | null = responseData?.token ?? null;
-      const user: User | null = responseData?.user ? (responseData.user as User) : null;
+      // Better Auth sign-in/email returns { token, user } or { session: { token }, user }
+      const token: string | null =
+        responseData?.token ??
+        responseData?.session?.token ??
+        responseData?.data?.token ??
+        responseData?.data?.session?.token ??
+        null;
+      const user: User | null = responseData?.user
+        ? (responseData.user as User)
+        : responseData?.data?.user
+        ? (responseData.data.user as User)
+        : null;
       
       if (!token) {
         console.error("[Auth] ❌ No token in response!");

@@ -23,7 +23,7 @@ let _cachedToken: string | null | undefined = undefined; // undefined = not yet 
  * that pattern breaks Android AAB release builds where __DEV__ is false and
  * Constants.expoConfig may not be populated correctly.
  */
-export const API_BASE_URL = "https://vd284j6ghmt7ptu9a786q2pch6we53st.app.specular.dev";
+export const API_BASE_URL = "https://9u7ksvbnuevx9cnmv7yrcq5drxe4tgzh.app.specular.dev";
 
 /**
  * BACKEND_URL is always identical to API_BASE_URL.
