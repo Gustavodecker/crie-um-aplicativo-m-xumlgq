@@ -2,7 +2,7 @@ import { createApplication, resend } from "@specific-dev/framework";
 import * as appSchema from './db/schema/schema.js';
 import * as authSchema from './db/schema/auth-schema.js';
 import { sessionConfig } from './config/session.js';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 // Import route registration functions
 import { registerCustomAuthRoutes } from './routes/auth-custom.js';
@@ -495,6 +495,87 @@ app.fastify.addHook('onReady', () => {
         );
       } catch (err: unknown) {
         app.logger.error({ err }, 'Error in Step 5 account_id fixes');
+      }
+
+      // ==========================================
+      // STEP 6: Diagnostic check for gustavo.miguel@msn.com
+      // ==========================================
+      app.logger.info('Step 6: Verifying gustavo.miguel@msn.com account state');
+
+      try {
+        const targetEmail = 'gustavo.miguel@msn.com';
+        const targetUserId = 'W3pmMW98C4eGZgmZ1YbY1SmK40SoqtfH';
+
+        const gustavoUser = await app.db.query.user.findFirst({
+          where: eq(authSchema.user.email, targetEmail),
+        });
+
+        if (gustavoUser) {
+          const userId = String(gustavoUser.id);
+
+          // Find the credential account for this user
+          const gustavoAccount = await app.db.query.account.findFirst({
+            where: and(
+              eq(authSchema.account.userId, userId),
+              eq(authSchema.account.providerId, 'credential')
+            ),
+          });
+
+          const passwordValid = gustavoAccount?.password?.startsWith('$2') ?? false;
+
+          app.logger.info(
+            {
+              userId,
+              email: targetEmail,
+              expectedUserId: targetUserId,
+              userIdMatches: userId === targetUserId,
+              emailVerified: gustavoUser.emailVerified,
+              credentialAccountExists: !!gustavoAccount,
+              credentialAccountId: gustavoAccount?.id,
+              passwordValid,
+              passwordPrefix: gustavoAccount?.password?.substring(0, 7) || 'NONE',
+            },
+            'gustavo.miguel@msn.com account state after migration'
+          );
+
+          // If credential account is missing or invalid, delete the account so user can re-register
+          if (!gustavoAccount || !passwordValid) {
+            app.logger.warn(
+              {
+                userId,
+                email: targetEmail,
+                credentialAccountExists: !!gustavoAccount,
+                passwordValid,
+              },
+              'gustavo.miguel@msn.com has invalid or missing credential account - user should re-register'
+            );
+
+            // Delete the invalid account row if it exists with no valid password
+            if (gustavoAccount && !passwordValid) {
+              try {
+                await app.db.delete(authSchema.account)
+                  .where(eq(authSchema.account.id, gustavoAccount.id));
+
+                app.logger.warn(
+                  { accountId: gustavoAccount.id, userId },
+                  'Deleted invalid credential account for gustavo.miguel@msn.com'
+                );
+              } catch (delErr: unknown) {
+                app.logger.error(
+                  { err: delErr, accountId: gustavoAccount.id },
+                  'Failed to delete invalid credential account'
+                );
+              }
+            }
+          }
+        } else {
+          app.logger.warn(
+            { email: targetEmail, userId: targetUserId },
+            'gustavo.miguel@msn.com user not found in database'
+          );
+        }
+      } catch (err: unknown) {
+        app.logger.error({ err }, 'Error checking gustavo.miguel@msn.com state');
       }
 
       // ==========================================
