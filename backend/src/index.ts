@@ -6,6 +6,7 @@ import { eq, and } from 'drizzle-orm';
 
 // Import route registration functions
 import { registerCustomAuthRoutes } from './routes/auth-custom.js';
+import { registerHealthRoutes } from './routes/health.js';
 import { registerInitRoutes } from './routes/init.js';
 import { registerUserRoutes } from './routes/user.js';
 import { registerConsultantRoutes } from './routes/consultant.js';
@@ -179,6 +180,7 @@ app.fastify.addHook('onError', async (request, reply, error) => {
 });
 
 // Register all other routes (custom auth routes already registered above)
+registerHealthRoutes(app, app.fastify);
 registerInitRoutes(app);
 registerUserRoutes(app);
 registerConsultantRoutes(app);
