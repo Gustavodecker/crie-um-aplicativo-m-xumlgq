@@ -475,12 +475,72 @@ export function registerCustomAuthRoutes(app: App) {
 
     try {
       // Look up user by email
-      const user = await app.db.query.user.findFirst({
+      let user = await app.db.query.user.findFirst({
         where: eq(authSchema.user.email, normalizedEmail),
       });
 
       if (!user) {
-        app.logger.warn({ email: normalizedEmail }, 'Forgot password - user not found');
+        app.logger.warn({ email: normalizedEmail }, 'Forgot password - user not found in user table, checking accounts');
+
+        // Check if there's a credential account for this email but missing user row
+        // This handles orphaned accounts where the user row was deleted or never created
+        const orphanedAccount = await app.db.query.account.findFirst({
+          where: and(
+            eq(authSchema.account.accountId, normalizedEmail),
+            eq(authSchema.account.providerId, 'credential')
+          ),
+        });
+
+        if (orphanedAccount) {
+          app.logger.warn(
+            { email: normalizedEmail, accountUserId: orphanedAccount.userId },
+            'Found orphaned credential account - creating missing user row on-the-fly'
+          );
+
+          // Create the missing user row
+          try {
+            const now = new Date();
+            const displayName = normalizedEmail.split('@')[0]; // Use email prefix as fallback name
+
+            await app.db.insert(authSchema.user).values({
+              id: orphanedAccount.userId,
+              email: normalizedEmail,
+              name: displayName,
+              emailVerified: true,
+              requirePasswordChange: false,
+              mustChangePassword: false,
+              createdAt: now,
+              updatedAt: now,
+            });
+
+            app.logger.info(
+              { userId: orphanedAccount.userId, email: normalizedEmail },
+              'Created missing user row for orphaned credential account'
+            );
+
+            // Now retrieve the newly created user
+            user = await app.db.query.user.findFirst({
+              where: eq(authSchema.user.id, orphanedAccount.userId),
+            });
+          } catch (creationErr: unknown) {
+            const creationErrorMsg = creationErr instanceof Error ? creationErr.message : String(creationErr);
+            app.logger.error(
+              { err: creationErr, email: normalizedEmail, userId: orphanedAccount.userId },
+              'Error creating missing user row for orphaned account'
+            );
+            return reply.status(500).send({
+              error: 'Internal server error',
+              details: 'Failed to repair account: ' + creationErrorMsg,
+            });
+          }
+        } else {
+          app.logger.warn({ email: normalizedEmail }, 'Forgot password - user not found and no orphaned account exists');
+          return reply.status(404).send({ error: 'Email not found' });
+        }
+      }
+
+      if (!user) {
+        app.logger.error({ email: normalizedEmail }, 'Forgot password - user still not found after repair attempt');
         return reply.status(404).send({ error: 'Email not found' });
       }
 

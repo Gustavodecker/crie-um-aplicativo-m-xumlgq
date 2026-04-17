@@ -660,6 +660,105 @@ app.fastify.addHook('onReady', () => {
       }
 
       // ==========================================
+      // STEP 7: Repair missing user rows from orphaned credential accounts
+      // ==========================================
+      app.logger.info('Step 7: Checking for orphaned credential accounts and creating missing user rows');
+
+      try {
+        // Find all credential accounts
+        const allCredentialAccounts = await app.db.select()
+          .from(authSchema.account)
+          .where(eq(authSchema.account.providerId, 'credential'));
+
+        let missingUserRowsCreated = 0;
+        const missingUserErrors: Array<{ accountId: string; email: string; error: string }> = [];
+
+        for (const account of allCredentialAccounts) {
+          try {
+            const accountEmail = String(account.accountId);
+            const accountUserId = String(account.userId);
+
+            // Check if user row exists for this account
+            const existingUser = await app.db.query.user.findFirst({
+              where: eq(authSchema.user.id, accountUserId),
+            });
+
+            if (!existingUser) {
+              app.logger.warn(
+                {
+                  accountId: account.id,
+                  userId: accountUserId,
+                  email: accountEmail,
+                },
+                'Found orphaned credential account - user row missing'
+              );
+
+              // Create the missing user row
+              const now = new Date();
+              const displayName = accountEmail.split('@')[0]; // Use email prefix as fallback name
+
+              await app.db.insert(authSchema.user).values({
+                id: accountUserId,
+                email: accountEmail,
+                name: displayName,
+                emailVerified: true,
+                requirePasswordChange: false,
+                mustChangePassword: false,
+                createdAt: now,
+                updatedAt: now,
+              });
+
+              missingUserRowsCreated++;
+              app.logger.info(
+                {
+                  userId: accountUserId,
+                  email: accountEmail,
+                  displayName,
+                },
+                'Created missing user row for orphaned credential account'
+              );
+            }
+          } catch (userCreationErr: unknown) {
+            const accountEmail = String(account.accountId);
+            const errorMsg: string = userCreationErr instanceof Error ? userCreationErr.message : String(userCreationErr);
+            missingUserErrors.push({
+              accountId: account.id,
+              email: accountEmail,
+              error: errorMsg,
+            });
+            app.logger.error(
+              { err: userCreationErr, accountId: account.id, email: accountEmail },
+              'Error creating missing user row for orphaned credential account'
+            );
+          }
+        }
+
+        if (missingUserRowsCreated > 0) {
+          app.logger.info(
+            { createdCount: missingUserRowsCreated, totalCredentialAccounts: allCredentialAccounts.length },
+            'Step 7 complete: Fixed missing user rows'
+          );
+        } else {
+          app.logger.info(
+            { totalCredentialAccounts: allCredentialAccounts.length },
+            'Step 7 complete: No missing user rows found'
+          );
+        }
+
+        if (missingUserErrors.length > 0) {
+          app.logger.warn(
+            { errors: missingUserErrors },
+            'Step 7 encountered errors while creating user rows'
+          );
+        }
+      } catch (step7Error: unknown) {
+        app.logger.error(
+          { err: step7Error },
+          'Error during Step 7 - repair missing user rows'
+        );
+      }
+
+      // ==========================================
       // Migration Summary
       // ==========================================
       app.logger.info(
