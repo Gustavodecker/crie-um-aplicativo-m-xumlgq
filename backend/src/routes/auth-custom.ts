@@ -306,8 +306,21 @@ export function registerCustomAuthRoutes(app: App) {
         },
       });
     } catch (error: unknown) {
-      app.logger.error({ err: error }, 'Unexpected error during login');
-      return reply.status(500).send({ message: 'Erro interno do servidor' });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      app.logger.error(
+        {
+          err: error,
+          errorMessage,
+          errorStack,
+          email: normalizedEmail,
+        },
+        'Unexpected error during login'
+      );
+      return reply.status(500).send({
+        error: 'Internal server error',
+        details: errorMessage,
+      });
     }
   });
 
