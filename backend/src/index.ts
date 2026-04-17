@@ -200,11 +200,90 @@ registerDebugRoutes(app);
 // - Fixes corrupted password hashes from previous versions
 // - Creates missing credential accounts for all mothers
 // - Ensures all mothers have email_verified = true
+// - Fixes email_verified for ALL users (required for sign-in)
+// - Fixes account user_id mismatches for credential accounts
 // Runs ASYNCHRONOUSLY in the background to not block server startup
 app.fastify.addHook('onReady', () => {
   setImmediate(async () => {
     try {
       app.logger.info('Starting comprehensive credential account migration');
+
+      // ==========================================
+      // STEP 0: Critical SQL fixes for email_verified and account user_id
+      // ==========================================
+      app.logger.info('Step 0: Running critical SQL fixes for data integrity');
+
+      try {
+        // Fix 1: Set email_verified = true for ALL users
+        // Better Auth sign-in requires email_verified = true
+        const allUsers = await app.db.select().from(authSchema.user);
+        let emailVerifiedCount = 0;
+        for (const u of allUsers) {
+          if (!u.emailVerified) {
+            await app.db.update(authSchema.user)
+              .set({ emailVerified: true })
+              .where(eq(authSchema.user.id, u.id));
+            emailVerifiedCount++;
+          }
+        }
+
+        if (emailVerifiedCount > 0) {
+          app.logger.info(
+            { count: emailVerifiedCount },
+            'Fixed email_verified for users'
+          );
+        }
+
+        // Fix 2: Fix account user_id mismatches for credential accounts
+        // For credential accounts, account_id stores the user's email
+        // Ensure account.user_id matches user.id where account.account_id = user.email
+        const credentialAccountsToCheck = await app.db.select()
+          .from(authSchema.account)
+          .where(eq(authSchema.account.providerId, 'credential'));
+
+        const userList = await app.db.select().from(authSchema.user);
+        const userEmailMap = new Map<string, string>();
+        for (const user of userList) {
+          userEmailMap.set(user.email.toLowerCase(), user.id);
+        }
+
+        let accountUserIdFixCount = 0;
+        for (const account of credentialAccountsToCheck) {
+          const expectedUserId = userEmailMap.get(String(account.accountId).toLowerCase());
+          if (expectedUserId && account.userId !== expectedUserId) {
+            app.logger.warn(
+              {
+                accountId: account.id,
+                currentUserId: account.userId,
+                expectedUserId,
+                email: account.accountId,
+              },
+              'Fixing credential account user_id mismatch'
+            );
+            await app.db.update(authSchema.account)
+              .set({ userId: expectedUserId })
+              .where(eq(authSchema.account.id, account.id));
+            accountUserIdFixCount++;
+          }
+        }
+
+        if (accountUserIdFixCount > 0) {
+          app.logger.info(
+            { count: accountUserIdFixCount },
+            'Fixed account user_id mismatches'
+          );
+        }
+
+        app.logger.info(
+          { emailVerifiedCount, accountUserIdFixCount },
+          'Step 0 complete: Critical data integrity fixes'
+        );
+      } catch (step0Error: unknown) {
+        app.logger.error(
+          { err: step0Error },
+          'Error during Step 0 critical data fixes'
+        );
+      }
 
       const bcrypt = await import('bcryptjs');
       const defaultPassword = 'todanoite123';
